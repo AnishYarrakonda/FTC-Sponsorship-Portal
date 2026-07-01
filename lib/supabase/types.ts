@@ -170,6 +170,8 @@ export type Database = {
           coppa_acknowledged: boolean
           created_at: string
           date_of_birth: string | null
+          denial_reason: string | null
+          denied_at: string | null
           email: string
           full_name: string
           id: string
@@ -193,9 +195,11 @@ export type Database = {
           coppa_acknowledged?: boolean
           created_at?: string
           date_of_birth?: string | null
+          denial_reason?: string | null
+          denied_at?: string | null
           email: string
           full_name: string
-          id: string
+          id?: string
           pending_team_data?: Json | null
           phone_number?: string | null
           referral_source?: string | null
@@ -216,6 +220,8 @@ export type Database = {
           coppa_acknowledged?: boolean
           created_at?: string
           date_of_birth?: string | null
+          denial_reason?: string | null
+          denied_at?: string | null
           email?: string
           full_name?: string
           id?: string
@@ -252,6 +258,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      request_throttle: {
+        Row: {
+          count: number
+          key: string
+          window_start: string
+        }
+        Insert: {
+          count?: number
+          key: string
+          window_start: string
+        }
+        Update: {
+          count?: number
+          key?: string
+          window_start?: string
+        }
+        Relationships: []
       }
       sponsor_applications: {
         Row: {
@@ -433,6 +457,7 @@ export type Database = {
           local_connection_notes: string | null
           requested_amount_cents: number
           resend_message_id: string | null
+          reserved_amount_cents: number
           reviewed_at: string | null
           reviewed_by: string | null
           season: string | null
@@ -456,6 +481,7 @@ export type Database = {
           local_connection_notes?: string | null
           requested_amount_cents?: number
           resend_message_id?: string | null
+          reserved_amount_cents?: number
           reviewed_at?: string | null
           reviewed_by?: string | null
           season?: string | null
@@ -479,6 +505,7 @@ export type Database = {
           local_connection_notes?: string | null
           requested_amount_cents?: number
           resend_message_id?: string | null
+          reserved_amount_cents?: number
           reviewed_at?: string | null
           reviewed_by?: string | null
           season?: string | null
@@ -574,13 +601,17 @@ export type Database = {
           build_system: string | null
           cad_software: string | null
           city: string | null
+          coach_experience: string | null
           coach_photo_url: string | null
+          community_endorsements: string | null
           community_interest_text: string | null
           control_system: string | null
           created_at: string
           deleted_at: string | null
           drivetrain: string | null
+          events_hosted: number | null
           financial_ask_cents: number
+          founded_year: number | null
           ftc_team_number: number | null
           github_link: string | null
           id: string
@@ -591,24 +622,29 @@ export type Database = {
           organization: string | null
           outreach_summary: string | null
           owner_id: string
+          past_sponsors: string[]
+          press_links: Json
           programming: string | null
           proudest_mechanism_name: string | null
           proudest_mechanism_problem: string | null
           proudest_mechanism_solution: string | null
           public: boolean
+          seasons_competed: number | null
           seed_funding_goals_cents: number | null
           sensors: string[] | null
           slug: string
           state: string | null
           status: Database["public"]["Enums"]["team_status"]
+          students_reached: number | null
           subteam_breakdown: string | null
           tagline: string | null
           tax_status: Database["public"]["Enums"]["tax_status_type"]
-          team_members: Json | null
           team_name: string
+          team_size: number | null
           technical_summary: string | null
           updated_at: string
           visual_pitch_items: Json
+          volunteer_hours: number | null
           youtube_url: string | null
         }
         Insert: {
@@ -617,13 +653,17 @@ export type Database = {
           build_system?: string | null
           cad_software?: string | null
           city?: string | null
+          coach_experience?: string | null
           coach_photo_url?: string | null
+          community_endorsements?: string | null
           community_interest_text?: string | null
           control_system?: string | null
           created_at?: string
           deleted_at?: string | null
           drivetrain?: string | null
+          events_hosted?: number | null
           financial_ask_cents?: number
+          founded_year?: number | null
           ftc_team_number?: number | null
           github_link?: string | null
           id?: string
@@ -634,24 +674,29 @@ export type Database = {
           organization?: string | null
           outreach_summary?: string | null
           owner_id: string
+          past_sponsors?: string[]
+          press_links?: Json
           programming?: string | null
           proudest_mechanism_name?: string | null
           proudest_mechanism_problem?: string | null
           proudest_mechanism_solution?: string | null
           public?: boolean
+          seasons_competed?: number | null
           seed_funding_goals_cents?: number | null
           sensors?: string[] | null
           slug: string
           state?: string | null
           status?: Database["public"]["Enums"]["team_status"]
+          students_reached?: number | null
           subteam_breakdown?: string | null
           tagline?: string | null
           tax_status?: Database["public"]["Enums"]["tax_status_type"]
-          team_members?: Json | null
           team_name: string
+          team_size?: number | null
           technical_summary?: string | null
           updated_at?: string
           visual_pitch_items?: Json
+          volunteer_hours?: number | null
           youtube_url?: string | null
         }
         Update: {
@@ -660,13 +705,17 @@ export type Database = {
           build_system?: string | null
           cad_software?: string | null
           city?: string | null
+          coach_experience?: string | null
           coach_photo_url?: string | null
+          community_endorsements?: string | null
           community_interest_text?: string | null
           control_system?: string | null
           created_at?: string
           deleted_at?: string | null
           drivetrain?: string | null
+          events_hosted?: number | null
           financial_ask_cents?: number
+          founded_year?: number | null
           ftc_team_number?: number | null
           github_link?: string | null
           id?: string
@@ -677,24 +726,29 @@ export type Database = {
           organization?: string | null
           outreach_summary?: string | null
           owner_id?: string
+          past_sponsors?: string[]
+          press_links?: Json
           programming?: string | null
           proudest_mechanism_name?: string | null
           proudest_mechanism_problem?: string | null
           proudest_mechanism_solution?: string | null
           public?: boolean
+          seasons_competed?: number | null
           seed_funding_goals_cents?: number | null
           sensors?: string[] | null
           slug?: string
           state?: string | null
           status?: Database["public"]["Enums"]["team_status"]
+          students_reached?: number | null
           subteam_breakdown?: string | null
           tagline?: string | null
           tax_status?: Database["public"]["Enums"]["tax_status_type"]
-          team_members?: Json | null
           team_name?: string
+          team_size?: number | null
           technical_summary?: string | null
           updated_at?: string
           visual_pitch_items?: Json
+          volunteer_hours?: number | null
           youtube_url?: string | null
         }
         Relationships: [
@@ -916,6 +970,12 @@ export type Database = {
         }
         Returns: Json
       }
+      check_throttle: {
+        Args: { p_key: string; p_limit: number; p_window: string }
+        Returns: boolean
+      }
+      current_profile_id: { Args: never; Returns: string }
+      expire_overdue_submissions: { Args: never; Returns: Json }
       increment_sponsor_funding: {
         Args: { amount: number; sponsor_uuid: string }
         Returns: undefined
@@ -927,6 +987,14 @@ export type Database = {
           p_decision: string
           p_partial_amount_cents?: number
           p_token_hash: string
+        }
+        Returns: Json
+      }
+      release_submission_reservation: {
+        Args: {
+          p_new_status: string
+          p_reason?: string
+          p_submission_id: string
         }
         Returns: Json
       }

@@ -136,6 +136,25 @@ export const teamOnboardingSchema = z.object({
     })
   ).max(25).default([]),
   coachPhotoUrl: z.preprocess((value) => emptyToUndefined(value), z.string().url().optional().nullable()),
+
+  // Portfolio redesign (migration 0054) — Team Story & People
+  foundedYear: z.number().int().min(1992, 'FTC started in 1992').max(2100).optional(),
+  teamSize: z.number().int().nonnegative().max(200, 'Team size looks too large').optional(),
+  seasonsCompeted: z.number().int().nonnegative().max(50).optional(),
+  coachExperience: z.string().trim().max(1000, 'Must be 1000 characters or fewer').optional(),
+  // Credibility
+  pastSponsors: z.array(z.string().trim().min(1).max(120, 'Sponsor name is too long')).max(25).default([]),
+  pressLinks: z.array(
+    z.object({
+      label: z.string().trim().min(1, 'Label required').max(120, 'Label is too long'),
+      url: z.string().trim().url('Press links must be valid URLs'),
+    })
+  ).max(15, 'Please limit press links to 15').default([]),
+  communityEndorsements: richTextField(null, 2000, null, 'Must be 2000 characters or fewer').optional(),
+  // Community & Ethics Impact
+  studentsReached: z.number().int().nonnegative().optional(),
+  eventsHosted: z.number().int().nonnegative().optional(),
+  volunteerHours: z.number().int().nonnegative().optional(),
 }).superRefine((data, ctx) => {
   if (data.status === 'existing' && !data.ftcTeamNumber) {
     ctx.addIssue({

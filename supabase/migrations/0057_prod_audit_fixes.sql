@@ -1,4 +1,8 @@
+-- (Renumbered from 00211_prod_audit_fixes.sql — the 5-digit version broke the
+-- Supabase CLI's migration ordering. Content already applied to prod; idempotent.)
+
 -- C6: Explicit RLS policy on submission_access_tokens
+DROP POLICY IF EXISTS "sat_deny_all" ON submission_access_tokens;
 CREATE POLICY "sat_deny_all" ON submission_access_tokens FOR ALL USING (false) WITH CHECK (false);
 
 -- C9: Missing indexes on hot submission columns

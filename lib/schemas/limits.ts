@@ -24,6 +24,10 @@ export const LIMITS = {
   subteamBreakdown: 1000,
   manufacturing: 500,
   softwareName: 120,
+  coachExperience: 1000,
+  communityEndorsements: 2000,
+  pastSponsorName: 120,
+  pressLinkLabel: 120,
 } as const
 
 export type LimitKey = keyof typeof LIMITS
