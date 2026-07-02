@@ -6,11 +6,12 @@ import { achievementSchema, type AchievementInput } from '@/lib/schemas/achievem
 import { validateFTCTeam, type FTCTeam } from '@/lib/ftc-roster'
 import { redirect } from 'next/navigation'
 import { requireAuth } from '@/lib/actions-utils'
+import { mapDbError } from '@/lib/errors'
 
-function parseList(value: string | string[] | null | undefined): string[] {
-  if (!value) return []
-  if (Array.isArray(value)) return value.map(v => v.trim()).filter(Boolean)
-  return value.split(',').map(v => v.trim()).filter(Boolean)
+function normalizePressLinks(
+  links: TeamOnboardingInput['pressLinks'] | undefined
+): { label: string; url: string }[] {
+  return (links || []).map(link => ({ label: link.label.trim(), url: link.url.trim() }))
 }
 
 function normalizeBudgetItems(
@@ -82,25 +83,27 @@ export async function createTeam(data: TeamOnboardingInput) {
     seed_funding_goals_cents: payloadData.seedFundingGoalsCents ?? 0,
     technical_summary: payloadData.technicalSummary?.trim() || null,
     outreach_summary: payloadData.outreachSummary?.trim() || null,
-    drivetrain: payloadData.drivetrain?.trim() || null,
-    build_system: payloadData.buildSystem?.trim() || null,
-    programming: payloadData.programming?.trim() || null,
     media_urls: payloadData.mediaUrls || [],
     youtube_url: payloadData.youtubeUrl || null,
     budget_items: normalizedBudgetItems,
     financial_ask_cents: totalAsk,
-    cad_software: payloadData.cadSoftware?.trim() || null,
-    control_system: payloadData.controlSystem?.trim() || null,
-    sensors: parseList(payloadData.sensors),
     github_link: payloadData.githubLink?.trim() || null,
-    autonomous_description: payloadData.autonomousDescription?.trim() || null,
     subteam_breakdown: payloadData.subteamBreakdown?.trim() || null,
-    manufacturing_capabilities: parseList(payloadData.manufacturingCapabilities),
     visual_pitch_items: payloadData.visualPitchItems ?? [],
-    proudest_mechanism_name: payloadData.proudestMechanismName?.trim() || null,
-    proudest_mechanism_problem: payloadData.proudestMechanismProblem?.trim() || null,
-    proudest_mechanism_solution: payloadData.proudestMechanismSolution?.trim() || null,
     coach_photo_url: payloadData.coachPhotoUrl ?? null,
+    // Team Story & People
+    founded_year: payloadData.foundedYear ?? null,
+    team_size: payloadData.teamSize ?? null,
+    seasons_competed: payloadData.seasonsCompeted ?? null,
+    coach_experience: payloadData.coachExperience?.trim() || null,
+    // Credibility
+    past_sponsors: payloadData.pastSponsors ?? [],
+    press_links: normalizePressLinks(payloadData.pressLinks),
+    community_endorsements: payloadData.communityEndorsements?.trim() || null,
+    // Community & Ethics Impact
+    students_reached: payloadData.studentsReached ?? null,
+    events_hosted: payloadData.eventsHosted ?? null,
+    volunteer_hours: payloadData.volunteerHours ?? null,
   }
 
   // Keep onboarding idempotent: one owner should map to one team profile.
@@ -126,7 +129,7 @@ export async function createTeam(data: TeamOnboardingInput) {
       .single()
 
     if (updateError) {
-      return { error: updateError.message }
+      return { error: mapDbError(updateError, 'team.create.update') }
     }
     teamId = updated.id
   } else {
@@ -137,7 +140,7 @@ export async function createTeam(data: TeamOnboardingInput) {
       .single()
 
     if (error) {
-      return { error: error.message }
+      return { error: mapDbError(error, 'team.create.insert') }
     }
     teamId = team.id
   }
@@ -195,7 +198,7 @@ export async function uploadTeamLogo(teamId: string, formData: FormData) {
     .eq('id', teamId)
     .eq('owner_id', user.id)
 
-  if (updateError) return { error: updateError.message }
+  if (updateError) return { error: mapDbError(updateError, 'team.uploadLogo') }
 
   return { success: true, url: urlData.publicUrl }
 }
@@ -225,9 +228,6 @@ export async function updateTeam(id: string, data: Partial<TeamOnboardingInput>)
   if (data.seedFundingGoalsCents !== undefined) updatePayload.seed_funding_goals_cents = data.seedFundingGoalsCents
   if (data.technicalSummary !== undefined) updatePayload.technical_summary = data.technicalSummary?.trim() || null
   if (data.outreachSummary !== undefined) updatePayload.outreach_summary = data.outreachSummary?.trim() || null
-  if (data.drivetrain !== undefined) updatePayload.drivetrain = data.drivetrain?.trim() || null
-  if (data.buildSystem !== undefined) updatePayload.build_system = data.buildSystem?.trim() || null
-  if (data.programming !== undefined) updatePayload.programming = data.programming?.trim() || null
   if (data.mediaUrls !== undefined) updatePayload.media_urls = data.mediaUrls
   if (data.youtubeUrl !== undefined) updatePayload.youtube_url = data.youtubeUrl || null
 
@@ -239,20 +239,23 @@ export async function updateTeam(id: string, data: Partial<TeamOnboardingInput>)
     updatePayload.financial_ask_cents = data.financialAskCents
   }
 
-  if (data.cadSoftware !== undefined) updatePayload.cad_software = data.cadSoftware?.trim() || null
-  if (data.controlSystem !== undefined) updatePayload.control_system = data.controlSystem?.trim() || null
-  if (data.sensors !== undefined) updatePayload.sensors = parseList(data.sensors as string | string[] | undefined | null)
   if (data.githubLink !== undefined) updatePayload.github_link = data.githubLink?.trim() || null
-  if (data.autonomousDescription !== undefined) updatePayload.autonomous_description = data.autonomousDescription?.trim() || null
   if (data.subteamBreakdown !== undefined) updatePayload.subteam_breakdown = data.subteamBreakdown?.trim() || null
-  if (data.manufacturingCapabilities !== undefined) {
-    updatePayload.manufacturing_capabilities = parseList(data.manufacturingCapabilities as string | string[] | undefined | null)
-  }
   if (data.visualPitchItems !== undefined) updatePayload.visual_pitch_items = data.visualPitchItems
-  if (data.proudestMechanismName !== undefined) updatePayload.proudest_mechanism_name = data.proudestMechanismName?.trim() || null
-  if (data.proudestMechanismProblem !== undefined) updatePayload.proudest_mechanism_problem = data.proudestMechanismProblem?.trim() || null
-  if (data.proudestMechanismSolution !== undefined) updatePayload.proudest_mechanism_solution = data.proudestMechanismSolution?.trim() || null
   if (data.coachPhotoUrl !== undefined) updatePayload.coach_photo_url = data.coachPhotoUrl || null
+  // Team Story & People
+  if (data.foundedYear !== undefined) updatePayload.founded_year = data.foundedYear ?? null
+  if (data.teamSize !== undefined) updatePayload.team_size = data.teamSize ?? null
+  if (data.seasonsCompeted !== undefined) updatePayload.seasons_competed = data.seasonsCompeted ?? null
+  if (data.coachExperience !== undefined) updatePayload.coach_experience = data.coachExperience?.trim() || null
+  // Credibility
+  if (data.pastSponsors !== undefined) updatePayload.past_sponsors = data.pastSponsors ?? []
+  if (data.pressLinks !== undefined) updatePayload.press_links = normalizePressLinks(data.pressLinks)
+  if (data.communityEndorsements !== undefined) updatePayload.community_endorsements = data.communityEndorsements?.trim() || null
+  // Community & Ethics Impact
+  if (data.studentsReached !== undefined) updatePayload.students_reached = data.studentsReached ?? null
+  if (data.eventsHosted !== undefined) updatePayload.events_hosted = data.eventsHosted ?? null
+  if (data.volunteerHours !== undefined) updatePayload.volunteer_hours = data.volunteerHours ?? null
 
   if (Object.keys(updatePayload).length === 0) {
     return { success: true }
@@ -265,7 +268,7 @@ export async function updateTeam(id: string, data: Partial<TeamOnboardingInput>)
     .eq('owner_id', user.id)
 
   if (error) {
-    return { error: error.message }
+    return { error: mapDbError(error, 'team.update') }
   }
 
   // Handle achievements sync. Only rewrite when the content actually changed, so an
@@ -358,7 +361,7 @@ export async function addAchievement(teamId: string, data: AchievementInput) {
     })
 
   if (error) {
-    return { error: error.message }
+    return { error: mapDbError(error, 'team.addAchievement') }
   }
 
   return { success: true }

@@ -3,13 +3,13 @@ import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { HeroBlock } from '@/components/portfolio/sections/hero-block'
-import { MissionBlock } from '@/components/portfolio/sections/mission-block'
-import { RobotBlock } from '@/components/portfolio/sections/robot-block'
-import { MechanismBlock } from '@/components/portfolio/sections/mechanism-block'
-import { OutreachBlock } from '@/components/portfolio/sections/outreach-block'
 import { AchievementsBlock } from '@/components/portfolio/sections/achievements-block'
-import { MediaBlock } from '@/components/portfolio/sections/media-block'
+import { StoryBlock } from '@/components/portfolio/sections/story-block'
+import { CredibilityBlock, type PressLink } from '@/components/portfolio/sections/credibility-block'
+import { ImpactBlock } from '@/components/portfolio/sections/impact-block'
 import { BudgetBlock } from '@/components/portfolio/sections/budget-block'
+import { MediaBlock } from '@/components/portfolio/sections/media-block'
+import { EngineeringBlock } from '@/components/portfolio/sections/engineering-block'
 
 interface Props {
   params: Promise<{ slug: string }>
@@ -58,12 +58,14 @@ export default async function PublicTeamPortfolio({ params }: Props) {
     .from('team_achievements')
     .select('*')
     .eq('team_id', team.id)
-    .order('season_label', { ascending: false })
+    .order('season', { ascending: false })
 
   const budgetItems = (team.budget_items ?? []) as {
     label: string; qty: number; unit_cost_cents: number; total_cents: number
   }[]
   const mediaUrls = (team.media_urls ?? []) as string[]
+  const pastSponsors = (team.past_sponsors ?? []) as string[]
+  const pressLinks = (team.press_links ?? []) as PressLink[]
 
   return (
     <div className="min-h-screen text-foreground">
@@ -96,44 +98,58 @@ export default async function PublicTeamPortfolio({ params }: Props) {
 
         <div className="border-t border-border" />
 
-        <MissionBlock
+        {/* 1. Achievements & Awards */}
+        <AchievementsBlock achievements={achievements ?? []} />
+
+        {/* 2. Team Story & People */}
+        <StoryBlock
           missionStatement={team.mission_statement}
+          foundedYear={team.founded_year}
+          teamSize={team.team_size}
+          seasonsCompeted={team.seasons_competed}
+          coachExperience={team.coach_experience}
+          subteamBreakdown={team.subteam_breakdown}
+          coachPhotoUrl={team.coach_photo_url}
+        />
+
+        {/* 3. Credibility */}
+        <CredibilityBlock
+          pastSponsors={pastSponsors}
+          pressLinks={pressLinks}
+          communityEndorsements={team.community_endorsements}
+          taxStatus={team.tax_status}
+          organization={team.organization}
+          ftcTeamNumber={team.ftc_team_number}
+        />
+
+        {/* 4. Community & Ethics Impact */}
+        <ImpactBlock
+          outreachSummary={team.outreach_summary}
+          studentsReached={team.students_reached}
+          eventsHosted={team.events_hosted}
+          volunteerHours={team.volunteer_hours}
           communityInterestText={team.community_interest_text}
         />
 
-        <RobotBlock
-          technicalSummary={team.technical_summary}
-          drivetrain={team.drivetrain}
-          buildSystem={team.build_system}
-          programming={team.programming}
-          cadSoftware={team.cad_software}
-          controlSystem={team.control_system}
-          githubLink={team.github_link}
+        {/* 5. Goals & Funding Ask */}
+        <BudgetBlock
+          items={budgetItems}
+          totalCents={team.financial_ask_cents ?? 0}
+          sustainabilityPlan={team.sustainability_plan}
+          seedFundingGoalsCents={team.status === 'incubator' ? team.seed_funding_goals_cents : null}
         />
 
-        <MechanismBlock
-          mechanismName={team.proudest_mechanism_name}
-          mechanismProblem={team.proudest_mechanism_problem}
-          mechanismSolution={team.proudest_mechanism_solution}
-          autonomousDescription={team.autonomous_description}
-        />
-
-        <OutreachBlock
-          outreachSummary={team.outreach_summary}
-          studentInterestCount={team.student_interest_count}
-        />
-
-        <AchievementsBlock achievements={achievements ?? []} />
-
+        {/* 6. Media */}
         <MediaBlock
           mediaUrls={mediaUrls}
           youtubeUrl={team.youtube_url}
           teamName={team.team_name}
         />
 
-        <BudgetBlock
-          items={budgetItems}
-          totalCents={team.financial_ask_cents ?? 0}
+        {/* 7. Robot & Engineering (slim, optional) */}
+        <EngineeringBlock
+          technicalSummary={team.technical_summary}
+          githubLink={team.github_link}
         />
 
         {/* Footer CTA */}

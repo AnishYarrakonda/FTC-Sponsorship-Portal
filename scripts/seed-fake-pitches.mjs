@@ -125,17 +125,24 @@ const TEAMS = [
     mission_statement:
       'A student-led FTC team building competitive robots while running STEM outreach for underrepresented communities in the South Bay.',
     technical_summary:
-      'Custom swerve drivetrain, dual-motor linear lift, and a vision-assisted autonomous routine using AprilTag localization.',
-    autonomous_description:
-      'AprilTag-localized auto scoring 3 specimens in 30 s at 90%+ consistency.',
-    drivetrain: 'Custom swerve',
-    control_system: 'REV Control Hub',
-    build_system: 'goBILDA + custom CNC',
-    cad_software: 'Onshape',
-    programming: 'Java / FTC SDK',
-    manufacturing_capabilities: ['3D printing', 'CNC routing', 'Laser cutting'],
+      'Custom swerve drive, dual-motor linear lift, and a vision-assisted auto routine using AprilTag localization.',
+    github_link: 'https://github.com/example/quantum-foxes',
     outreach_summary:
       'Ran 6 community workshops reaching 200+ students this season; mentoring two new rookie teams in our district.',
+    founded_year: 2019,
+    team_size: 14,
+    seasons_competed: 6,
+    coach_experience: '6th season mentoring FTC; mechanical engineer with a decade in industry.',
+    past_sponsors: ['Bay Area Machine Works', 'Rotary Club of San Jose'],
+    press_links: [
+      { label: 'Mercury News: Students build robots and futures', url: 'https://example.com/quantum-foxes-press' },
+    ],
+    community_endorsements:
+      '“This team transformed our after-school STEM program.” — Principal, Lincoln High School',
+    students_reached: 200,
+    events_hosted: 6,
+    volunteer_hours: 180,
+    subteam_breakdown: 'Build, Programming, Outreach, Business.',
     financial_ask_cents: 750_000,
     seed_funding_goals_cents: 500_000,
     tagline: 'Engineering the future, one match at a time.',
@@ -154,17 +161,24 @@ const TEAMS = [
     mission_statement:
       'Iron Aviators exists to show underrepresented students that engineering is for them. Every season we field a competitive robot AND mentor two rookie teams.',
     technical_summary:
-      'Four-bar linkage endgame climber, dead-wheel odometry for autonomous, and a custom vision pipeline for sample detection.',
-    autonomous_description:
-      'Odometry-based auto scoring 4 samples in 28 s with 90% repeatability.',
-    drivetrain: 'Mecanum',
-    control_system: 'REV Control Hub + Expansion Hub',
-    build_system: 'goBILDA + 3D-printed brackets',
-    cad_software: 'Onshape',
-    programming: 'Java / FTC SDK + OpenCV',
-    manufacturing_capabilities: ['FDM 3D printing', 'Laser cutting'],
+      'Four-bar linkage endgame climber, dead-wheel odometry, and a custom vision pipeline for sample detection.',
+    github_link: 'https://github.com/example/iron-aviators',
     outreach_summary:
       'Co-hosted a Saturday robotics camp with Roosevelt STEM Academy reaching 120 Title I students.',
+    founded_year: 2021,
+    team_size: 11,
+    seasons_competed: 4,
+    coach_experience: '4 seasons coaching FTC; controls engineer and Roosevelt STEM Academy alum.',
+    past_sponsors: ['Austin Tooling Co.'],
+    press_links: [
+      { label: 'Austin Chronicle: STEM Academy camp feature', url: 'https://example.com/iron-aviators-press' },
+    ],
+    community_endorsements:
+      '“Iron Aviators onboarded three rookie teams in our district — real leadership.” — District STEM Coordinator',
+    students_reached: 120,
+    events_hosted: 4,
+    volunteer_hours: 140,
+    subteam_breakdown: 'Mechanical, Software, Outreach.',
     financial_ask_cents: 600_000,
     seed_funding_goals_cents: 400_000,
     tagline: 'Lifting limits — on robots and on students.',
@@ -184,16 +198,24 @@ const TEAMS = [
       'A student-run team that blends rigorous engineering with community education, holding free quarterly workshops for Bay Area middle-schoolers.',
     technical_summary:
       'Differential swerve prototype, PIDF-tuned slides, and a Limelight 3 vision system for AprilTag targeting.',
-    autonomous_description:
-      'AprilTag-guided auto reliably scores 5 specimens in the first 30 s.',
-    drivetrain: 'Differential swerve (prototype)',
-    control_system: 'REV Control Hub',
-    build_system: 'Custom CNC + goBILDA',
-    cad_software: 'Fusion 360',
-    programming: 'Java / FTC SDK + Limelight',
-    manufacturing_capabilities: ['CNC routing', 'FDM 3D printing', 'Waterjet (school shop)'],
+    github_link: 'https://github.com/example/volt-vanguard',
     outreach_summary:
       'Quarterly STEM workshops at Title I middle schools across San Francisco, reaching 350+ students this season.',
+    founded_year: 2017,
+    team_size: 18,
+    seasons_competed: 8,
+    coach_experience: '8 seasons coaching; software lead at an SF robotics startup and FIRST alum.',
+    past_sponsors: ['Bayline Software', 'Golden Gate Credit Union', 'Mission Hardware'],
+    press_links: [
+      { label: 'SF Standard: Free robotics workshops for middle-schoolers', url: 'https://example.com/volt-vanguard-press' },
+      { label: 'FIRST spotlight: Volt Vanguard outreach', url: 'https://example.com/volt-vanguard-first' },
+    ],
+    community_endorsements:
+      '“Volt Vanguard’s library clubs are the most requested program we run.” — SF Public Library, Branch Manager',
+    students_reached: 350,
+    events_hosted: 8,
+    volunteer_hours: 320,
+    subteam_breakdown: 'Design, Fabrication, Software, Community.',
     financial_ask_cents: 850_000,
     seed_funding_goals_cents: 600_000,
     tagline: 'High voltage. High ambition.',
@@ -263,9 +285,9 @@ const SUBMISSIONS = [
     custom_pitch_alignment:
       "Your company prioritizes industrial automation pathways — Iron Aviators' four-bar linkage climber and dead-wheel odometry system were designed end-to-end by students who want careers in mechanical and controls engineering. We are a direct pipeline for the talent you want to see in the field.",
     specific_needs_statement:
-      'We are requesting $6,000 to cover: travel to the Austin Regional ($3,200), Limelight 3 vision module for our autonomous upgrade ($400), replacement goBILDA structural parts ($800), and a team laptop for on-field programming and debugging ($1,600).',
+      'We are requesting $6,000 to cover: travel to the Austin Regional ($3,200), a Limelight 3 vision module upgrade ($400), replacement goBILDA structural parts ($800), and a team laptop for on-field programming and debugging ($1,600).',
     local_connection_notes:
-      "Roosevelt STEM Academy has a formal partnership with Austin-area manufacturing firms. A dev testing sponsorship would be highlighted in our school's annual STEM showcase, reaching 600+ families.",
+      "Roosevelt STEM Academy has a formal partnership with Austin-area industrial firms. A dev testing sponsorship would be highlighted in our school's annual STEM showcase, reaching 600+ families.",
     submitted_at: daysAgo(7),
     sent_at: daysAgo(6),
   },

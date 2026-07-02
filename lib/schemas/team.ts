@@ -1,10 +1,6 @@
 import { z } from 'zod'
 import DOMPurify from 'isomorphic-dompurify'
-
-// Legacy exports kept for any import sites; values no longer enforce DB enums
-export const DRIVETRAIN_OPTIONS = ['mecanum', 'swerve', 'tank', 'other'] as const
-export const BUILD_SYSTEM_OPTIONS = ['gobilda', 'rev', 'custom', 'other'] as const
-export const PROGRAMMING_OPTIONS = ['java', 'blocks', 'other'] as const
+import { LIMITS } from './limits'
 
 const locationRegex = /^[A-Za-z][A-Za-z .'-]{1,79}$/
 const emptyToUndefined = (value: unknown) => {
@@ -76,12 +72,9 @@ export const teamOnboardingSchema = z.object({
   sustainabilityPlan: z.string().trim().max(2000, 'Must be 2000 characters or fewer').optional(),
   seedFundingGoalsCents: z.number().int().nonnegative().optional(),
 
-  technicalSummary: richTextField(null, 2000, null, 'Must be 2000 characters or fewer').optional(),
-  outreachSummary: richTextField(null, 2000, null, 'Must be 2000 characters or fewer').optional(),
-  // Free-form text fields — DB columns changed to plain TEXT in migration 0024
-  drivetrain: z.string().trim().max(120).optional(),
-  buildSystem: z.string().trim().max(120).optional(),
-  programming: z.string().trim().max(120).optional(),
+  // Robot & Engineering (slim, optional): a single narrative summary + code link.
+  technicalSummary: richTextField(null, LIMITS.technical, null, 'Must be 2000 characters or fewer').optional(),
+  outreachSummary: richTextField(null, LIMITS.outreach, null, 'Must be 2000 characters or fewer').optional(),
   mediaUrls: z.array(
     z.string().trim().url('Media URLs must be valid URLs').refine((u) => {
       try {
@@ -107,10 +100,6 @@ export const teamOnboardingSchema = z.object({
     })
   ).max(50, 'Please limit budget items to 50').default([]),
   financialAskCents: z.number().int().nonnegative().default(0),
-  cadSoftware: z.string().trim().max(200).optional(),
-  controlSystem: z.string().trim().max(200).optional(),
-  // Comma-separated free-form text; converted to text[] by the action
-  sensors: z.string().trim().max(400).optional(),
   githubLink: z.preprocess((value) => emptyToUndefined(value),
     z.string().url().refine((u) => {
       try {
@@ -119,13 +108,7 @@ export const teamOnboardingSchema = z.object({
       } catch { return false }
     }, { message: 'GitHub link must be on github.com or gist.github.com' }).optional()
   ),
-  autonomousDescription: z.string().trim().max(750).optional(),
-  proudestMechanismName: z.string().trim().max(200).optional(),
-  proudestMechanismProblem: z.string().trim().max(1000).optional(),
-  proudestMechanismSolution: z.string().trim().max(1000).optional(),
-  subteamBreakdown: z.string().trim().max(1000).optional(),
-  // Comma-separated free-form text; converted to text[] by the action
-  manufacturingCapabilities: z.string().trim().max(500).optional(),
+  subteamBreakdown: z.string().trim().max(LIMITS.subteamBreakdown).optional(),
   visualPitchItems: z.array(z.object({ url: z.string().trim().url(), caption: z.string().trim().max(100) })).max(20).default([]),
   achievements: z.array(
     z.object({
@@ -141,16 +124,16 @@ export const teamOnboardingSchema = z.object({
   foundedYear: z.number().int().min(1992, 'FTC started in 1992').max(2100).optional(),
   teamSize: z.number().int().nonnegative().max(200, 'Team size looks too large').optional(),
   seasonsCompeted: z.number().int().nonnegative().max(50).optional(),
-  coachExperience: z.string().trim().max(1000, 'Must be 1000 characters or fewer').optional(),
+  coachExperience: z.string().trim().max(LIMITS.coachExperience, 'Must be 1000 characters or fewer').optional(),
   // Credibility
-  pastSponsors: z.array(z.string().trim().min(1).max(120, 'Sponsor name is too long')).max(25).default([]),
+  pastSponsors: z.array(z.string().trim().min(1).max(LIMITS.pastSponsorName, 'Sponsor name is too long')).max(25).default([]),
   pressLinks: z.array(
     z.object({
-      label: z.string().trim().min(1, 'Label required').max(120, 'Label is too long'),
+      label: z.string().trim().min(1, 'Label required').max(LIMITS.pressLinkLabel, 'Label is too long'),
       url: z.string().trim().url('Press links must be valid URLs'),
     })
   ).max(15, 'Please limit press links to 15').default([]),
-  communityEndorsements: richTextField(null, 2000, null, 'Must be 2000 characters or fewer').optional(),
+  communityEndorsements: richTextField(null, LIMITS.communityEndorsements, null, 'Must be 2000 characters or fewer').optional(),
   // Community & Ethics Impact
   studentsReached: z.number().int().nonnegative().optional(),
   eventsHosted: z.number().int().nonnegative().optional(),

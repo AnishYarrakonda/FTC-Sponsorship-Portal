@@ -68,10 +68,28 @@ const team = {
   mission_statement:
     'We are a student-led FTC team building competitive robots while running STEM outreach across North Texas.',
   technical_summary:
-    'Custom swerve drivetrain, dual-motor linear lift, and a vision-assisted autonomous routine.',
+    'Custom swerve drive, dual-motor linear lift, and a vision-assisted auto routine.',
   outreach_summary:
     'Ran 6 community workshops reaching 400+ students this season.',
   community_interest_text: 'Mentoring two new rookie teams in our district.',
+  subteam_breakdown: 'Build, Programming, Outreach, Business.',
+  founded_year: 2020,
+  team_size: 12,
+  seasons_competed: 5,
+  coach_experience: '5th season mentoring FTC; software engineer and North Texas FIRST volunteer.',
+  past_sponsors: ['Plano Precision Machining', 'North Texas STEM Fund'],
+  press_links: [
+    { label: 'Plano Star: Local robotics team mentors rookies', url: 'https://news.example/exodius' },
+  ],
+  community_endorsements:
+    '“Exodius runs the best student workshops in our district.” — Plano ISD STEM Coordinator',
+  students_reached: 400,
+  events_hosted: 6,
+  volunteer_hours: 220,
+  sustainability_plan: 'Recurring local sponsorships and workshop fees carry the team between seasons.',
+  github_link: 'https://github.com/example/exodius',
+  coach_photo_url: null,
+  visual_pitch_items: [],
   tax_status: '501c3',
   status: 'existing',
   public: true,
@@ -109,7 +127,7 @@ function makeSubmission(id: string, over: Record<string, unknown>) {
     season: '2025-26',
     requested_amount_cents: 250_000,
     custom_pitch_alignment:
-      'Your precision-machining focus maps directly onto our drivetrain build season.',
+      'Your precision-machining focus maps directly onto our build season.',
     specific_needs_statement:
       'CNC time and four NEO motors to finish the swerve modules before regionals.',
     local_connection_notes: 'Two of our mentors are alumni of your apprenticeship program.',

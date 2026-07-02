@@ -47,10 +47,32 @@ type SponsorTeam = {
   state?: string | null
   organization?: string | null
   mission_statement?: string | null
-  manufacturing_capabilities?: string[] | null
   team_achievements?: TeamAchievement[] | null
   financial_ask_cents: number
   website?: string | null
+  founded_year?: number | null
+  team_size?: number | null
+  seasons_competed?: number | null
+  coach_experience?: string | null
+  past_sponsors?: string[] | null
+  press_links?: { label: string; url: string }[] | null
+  community_endorsements?: string | null
+  outreach_summary?: string | null
+  students_reached?: number | null
+  events_hosted?: number | null
+  volunteer_hours?: number | null
+  technical_summary?: string | null
+  github_link?: string | null
+}
+
+function safeHttpUrl(url: unknown): string | null {
+  if (typeof url !== 'string') return null
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.href : null
+  } catch {
+    return null
+  }
 }
 
 export function SponsorReviewShell({ submission, team }: { submission: any; team: any }) {
@@ -61,6 +83,23 @@ export function SponsorReviewShell({ submission, team }: { submission: any; team
   const [feedback, setFeedback] = useState('')
   const [showConfirm, setShowConfirm] = useState<'approved' | 'declined' | 'changes_requested' | null>(null)
   const sponsorCompany = submissionData?.sponsors?.company_name || 'your company'
+
+  const achievements = teamData?.team_achievements ?? []
+  const pastSponsors = teamData?.past_sponsors ?? []
+  const pressLinks = (teamData?.press_links ?? [])
+    .map((p) => ({ label: p.label, url: safeHttpUrl(p.url) }))
+    .filter((p): p is { label: string; url: string } => !!p.url)
+  const impactStats = [
+    teamData?.students_reached ? { label: 'Students reached', value: teamData.students_reached } : null,
+    teamData?.events_hosted ? { label: 'Events hosted', value: teamData.events_hosted } : null,
+    teamData?.volunteer_hours ? { label: 'Volunteer hours', value: teamData.volunteer_hours } : null,
+  ].filter(Boolean) as { label: string; value: number }[]
+  const storyFacts = [
+    teamData?.founded_year ? `Founded ${teamData.founded_year}` : null,
+    teamData?.team_size ? `${teamData.team_size} students` : null,
+    teamData?.seasons_competed ? `${teamData.seasons_competed} season${teamData.seasons_competed === 1 ? '' : 's'} competed` : null,
+  ].filter(Boolean) as string[]
+  const githubUrl = safeHttpUrl(teamData?.github_link)
 
   const handleDecision = (status: 'approved' | 'declined' | 'changes_requested') => {
     startTransition(async () => {
@@ -143,41 +182,109 @@ export function SponsorReviewShell({ submission, team }: { submission: any; team
             </CardContent>
           </Card>
 
-          {/* Team Portfolio Tabs/Sections */}
-          <div className="space-y-6 pt-4">
+          {/* Team Portfolio — achievements, credibility, and impact first */}
+          <div className="space-y-8 pt-4">
             <h2 className="text-xl font-medium tracking-tight border-b border-border pb-3">Team Portfolio</h2>
-            
-            <div className="grid gap-8 sm:grid-cols-2">
-              <div className="space-y-3">
-                <Label className="text-[13px] text-muted-foreground">Mission Statement</Label>
-                <p className="text-[15px] leading-relaxed text-foreground">{teamData?.mission_statement || 'No mission statement provided.'}</p>
-              </div>
-              <div className="space-y-3">
-                <Label className="text-[13px] text-muted-foreground">Technical Capabilities</Label>
-                <div className="flex flex-wrap gap-2">
-                  {teamData?.manufacturing_capabilities?.map((cap: string) => (
-                    <span key={cap} className="px-2.5 py-1 bg-secondary text-secondary-foreground rounded-md text-[11px] font-medium uppercase tracking-wider">
-                      {cap}
-                    </span>
-                  )) || <span className="text-[15px] text-muted-foreground italic">None listed</span>}
-                </div>
-              </div>
-            </div>
 
-            <div className="space-y-4 pt-4">
-              <Label className="text-[13px] text-muted-foreground">Recent Achievements</Label>
+            {/* 1. Achievements & Awards */}
+            <div className="space-y-4">
+              <Label className="text-[13px] text-muted-foreground">Achievements &amp; Awards</Label>
               <div className="grid gap-3">
-                {teamData?.team_achievements?.map((ach) => (
+                {achievements.length > 0 ? achievements.map((ach) => (
                   <div key={ach.id} className="p-4 rounded-xl border border-border bg-card flex items-start gap-4 shadow-sm">
                     <Award className="h-5 w-5 text-amber-500 shrink-0" strokeWidth={1.5} />
                     <div className="min-w-0">
                       <div className="text-[15px] font-medium text-foreground">{ach.award || ach.event_name}</div>
-                      <div className="text-[13px] text-muted-foreground mt-0.5">{ach.season} • {ach.description}</div>
+                      <div className="text-[13px] text-muted-foreground mt-0.5">
+                        {[ach.season, ach.award ? ach.event_name : null, ach.description].filter(Boolean).join(' • ')}
+                      </div>
                     </div>
                   </div>
-                )) || <div className="text-[15px] text-muted-foreground italic">No achievements listed.</div>}
+                )) : <div className="text-[15px] text-muted-foreground italic">No achievements listed.</div>}
               </div>
             </div>
+
+            {/* 2. Team Story & People */}
+            <div className="space-y-3">
+              <Label className="text-[13px] text-muted-foreground">Team Story &amp; People</Label>
+              {storyFacts.length > 0 && (
+                <p className="text-[13px] font-medium text-foreground">{storyFacts.join(' • ')}</p>
+              )}
+              <p className="text-[15px] leading-relaxed text-foreground">{teamData?.mission_statement || 'No mission statement provided.'}</p>
+              {teamData?.coach_experience && (
+                <p className="text-[13px] leading-relaxed text-muted-foreground">
+                  <span className="font-medium text-foreground">Coaching: </span>
+                  {teamData.coach_experience}
+                </p>
+              )}
+            </div>
+
+            {/* 3. Credibility */}
+            {(pastSponsors.length > 0 || pressLinks.length > 0 || teamData?.community_endorsements) && (
+              <div className="space-y-3">
+                <Label className="text-[13px] text-muted-foreground">Credibility</Label>
+                {pastSponsors.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {pastSponsors.map((cap) => (
+                      <span key={cap} className="px-2.5 py-1 bg-secondary text-secondary-foreground rounded-md text-[11px] font-medium uppercase tracking-wider">
+                        {cap}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {pressLinks.length > 0 && (
+                  <ul className="space-y-1">
+                    {pressLinks.map((p) => (
+                      <li key={p.url}>
+                        <a href={p.url} target="_blank" rel="noreferrer" className="text-[13px] text-primary hover:underline">
+                          {p.label} ↗
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {teamData?.community_endorsements && (
+                  <p className="text-[13px] leading-relaxed text-muted-foreground italic border-l-2 border-border pl-3">
+                    {htmlToPlainText(teamData.community_endorsements)}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* 4. Community & Ethics Impact */}
+            {(impactStats.length > 0 || teamData?.outreach_summary) && (
+              <div className="space-y-3">
+                <Label className="text-[13px] text-muted-foreground">Community Impact</Label>
+                {impactStats.length > 0 && (
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    {impactStats.map((s) => (
+                      <div key={s.label} className="rounded-xl border border-border bg-card p-3 text-center shadow-sm">
+                        <p className="text-xl font-semibold tabular-nums text-foreground">{s.value.toLocaleString()}</p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">{s.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {teamData?.outreach_summary && (
+                  <p className="text-[15px] leading-relaxed text-foreground">{htmlToPlainText(teamData.outreach_summary)}</p>
+                )}
+              </div>
+            )}
+
+            {/* 7. Robot & Engineering (slim, optional) */}
+            {(teamData?.technical_summary || githubUrl) && (
+              <div className="space-y-2 rounded-xl border border-border/70 bg-card/60 p-4">
+                <Label className="text-[11px] uppercase tracking-widest text-muted-foreground font-mono">Robot &amp; Engineering</Label>
+                {teamData?.technical_summary && (
+                  <p className="text-[13px] leading-relaxed text-muted-foreground">{htmlToPlainText(teamData.technical_summary)}</p>
+                )}
+                {githubUrl && (
+                  <a href={githubUrl} target="_blank" rel="noreferrer" className="text-[13px] text-primary hover:underline">
+                    View code on GitHub →
+                  </a>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
