@@ -178,9 +178,9 @@ export default function SubmissionEmail({
 
           <Hr style={hr} />
           <Text style={footer}>
-            This proposal was verified and dispatched by the FTC Sponsorship Portal team. You
+            This proposal was verified and dispatched by the FTC Matchmaker team. You
             received it because your organization is registered as a prospective FTC robotics
-            sponsor with the FTC Sponsorship Portal.
+            sponsor with the FTC Matchmaker.
             {taxLabel ? ' Contributions may be tax-deductible — consult your tax advisor.' : ''}
           </Text>
 

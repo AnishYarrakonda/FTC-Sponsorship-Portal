@@ -260,7 +260,7 @@ export async function requestDataExport(): Promise<{ error?: string; message?: s
     const { error: sendError } = await resend.emails.send({
       from: env.RESEND_FROM_EMAIL,
       to: user.email,
-      subject: 'Your FTC Sponsorship Portal data export',
+      subject: 'Your FTC Matchmaker data export',
       text:
         'Attached is a JSON export of the data we hold for your account, including your ' +
         'profile, team portfolio, submissions, notifications, and activity log. ' +

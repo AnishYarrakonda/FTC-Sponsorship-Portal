@@ -9,7 +9,7 @@ export default function PrivacyPolicyPage() {
       <div className="prose prose-invert">
         <h2>1. Introduction</h2>
         <p>
-          The FTC Sponsorship Portal ("we," "our," or "us") is committed to protecting the privacy of its users. This policy outlines how we collect, use, and safeguard information.
+          The FTC Matchmaker ("we," "our," or "us") is committed to protecting the privacy of its users. This policy outlines how we collect, use, and safeguard information.
         </p>
 
         <h2>2. COPPA Compliance & Student Data</h2>

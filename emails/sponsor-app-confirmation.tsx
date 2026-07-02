@@ -49,10 +49,10 @@ export default function SponsorAppConfirmation({
             Reviews typically take 3–5 business days. We&rsquo;ll reach out at this email address
             with next steps. No further action is needed from you right now.
           </Text>
-          <Text style={text}>— The FTC Sponsorship Portal team</Text>
+          <Text style={text}>— The FTC Matchmaker team</Text>
           <Hr style={hr} />
           <Text style={footer}>
-            FTC Sponsorship Portal · You received this email because you applied to sponsor FTC
+            FTC Matchmaker · You received this email because you applied to sponsor FTC
             teams.
           </Text>
         </Container>

@@ -47,10 +47,10 @@ export default function NotificationEmail({
               {ctaLabel || 'Open the portal'}
             </Button>
           ) : null}
-          <Text style={text}>— The FTC Sponsorship Portal team</Text>
+          <Text style={text}>— The FTC Matchmaker team</Text>
           <Hr style={hr} />
           <Text style={footer}>
-            FTC Sponsorship Portal · You received this email because you have an account on the
+            FTC Matchmaker · You received this email because you have an account on the
             portal; it mirrors an alert waiting in your portal inbox.
           </Text>
         </Container>

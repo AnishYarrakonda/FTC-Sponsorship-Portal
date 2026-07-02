@@ -9,7 +9,7 @@ export default function TermsOfServicePage() {
       <div className="prose prose-invert">
         <h2>1. Acceptance of Terms</h2>
         <p>
-          By creating an account on the FTC Sponsorship Portal, you agree to comply with these terms. This platform connects FIRST Tech Challenge (FTC) robotics teams with potential corporate sponsors.
+          By creating an account on the FTC Matchmaker, you agree to comply with these terms. This platform connects FIRST Tech Challenge (FTC) robotics teams with potential corporate sponsors.
         </p>
 
         <h2>2. Eligibility</h2>

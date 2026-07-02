@@ -26,7 +26,7 @@ export const CoachDenialEmail = ({
   return (
     <Html>
       <Head />
-      <Preview>Update required for your FTC Sponsorship Portal application</Preview>
+      <Preview>Update required for your FTC Matchmaker application</Preview>
       <Body style={main}>
         <Container style={container}>
           <Heading style={h1}>Application Update Required</Heading>
@@ -34,7 +34,7 @@ export const CoachDenialEmail = ({
           <Text style={text}>Hi {coachName},</Text>
           
           <Text style={text}>
-            Thank you for applying to join the FTC Sponsorship Portal. We have reviewed your application and, unfortunately, we are unable to verify your account at this time.
+            Thank you for applying to join the FTC Matchmaker. We have reviewed your application and, unfortunately, we are unable to verify your account at this time.
           </Text>
 
           <Section style={reasonBox}>
@@ -50,10 +50,10 @@ export const CoachDenialEmail = ({
             Log In and Re-apply
           </Button>
 
-          <Text style={text}>— The FTC Sponsorship Portal team</Text>
+          <Text style={text}>— The FTC Matchmaker team</Text>
           <Hr style={hr} />
           <Text style={footer}>
-            FTC Sponsorship Portal · You received this email because you applied for a coach
+            FTC Matchmaker · You received this email because you applied for a coach
             account on the portal. If you believe this was a mistake or need further assistance,
             please contact our support team.
           </Text>

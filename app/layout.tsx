@@ -13,7 +13,7 @@ const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-serif" })
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" })
 
 export const metadata: Metadata = {
-  title: "FTC Matchmaker · Sponsorship Portal",
+  title: "FTC Matchmaker",
   description: "The moderated sponsorship pipeline for FIRST Tech Challenge teams. Build a verified portfolio, send admin-reviewed pitches, and connect with sponsors.",
 }
 
