@@ -624,8 +624,10 @@ export type Database = {
           slug: string
           state: string | null
           status: Database["public"]["Enums"]["team_status"]
+          student_interest_count: number | null
           students_reached: number | null
           subteam_breakdown: string | null
+          sustainability_plan: string | null
           tagline: string | null
           tax_status: Database["public"]["Enums"]["tax_status_type"]
           team_name: string
@@ -665,8 +667,10 @@ export type Database = {
           slug: string
           state?: string | null
           status?: Database["public"]["Enums"]["team_status"]
+          student_interest_count?: number | null
           students_reached?: number | null
           subteam_breakdown?: string | null
+          sustainability_plan?: string | null
           tagline?: string | null
           tax_status?: Database["public"]["Enums"]["tax_status_type"]
           team_name: string
@@ -706,8 +710,10 @@ export type Database = {
           slug?: string
           state?: string | null
           status?: Database["public"]["Enums"]["team_status"]
+          student_interest_count?: number | null
           students_reached?: number | null
           subteam_breakdown?: string | null
+          sustainability_plan?: string | null
           tagline?: string | null
           tax_status?: Database["public"]["Enums"]["tax_status_type"]
           team_name?: string
