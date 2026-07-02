@@ -31,7 +31,7 @@ export function RoleRedirectBanner() {
       <div className="flex items-start gap-2.5 text-sm">
         <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.5} />
         <p className="text-foreground">
-          You don&apos;t have access to the {label} area — here&apos;s your dashboard instead.
+          {`You don't have access to the ${label} area — here's your dashboard instead.`}
           <span className="block text-xs text-muted-foreground mt-0.5">
             If you think this is a mistake, contact support.
           </span>

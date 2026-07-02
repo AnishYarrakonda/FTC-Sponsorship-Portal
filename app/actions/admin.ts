@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import * as Sentry from '@sentry/nextjs'
 import { createInAppNotification, sendCoachVerificationEmail, sendCoachDenialEmail } from '@/lib/notify'
 import { requireAdmin } from '@/lib/actions-utils'
 import { mapDbError } from '@/lib/errors'
@@ -55,6 +56,8 @@ export async function verifyCoach(coachId: string, verified: boolean) {
     entity_id: coachId,
   })
 
+  let provisioningWarning: string | undefined
+
   if (verified) {
     const coachName = coachProfile?.full_name ?? 'Coach'
     
@@ -71,11 +74,18 @@ export async function verifyCoach(coachId: string, verified: boolean) {
       const rawStatus = (payloadData.status as string) || 'existing'
       const status = rawStatus === 'existing' && !ftcTeamNumber ? 'incubator' : rawStatus
 
+      const teamName = ((payloadData.teamName as string | undefined) || '').trim()
+      // slug is NOT NULL UNIQUE with no DB default — derive it here (same rule
+      // as the 0046 backfill), uniquified with a random suffix on collision.
+      const baseSlug = (teamName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'team')
+        + (ftcTeamNumber ? `-${ftcTeamNumber}` : '')
+
       const teamPayload = {
         owner_id: coachId,
         status,
         ftc_team_number: ftcTeamNumber,
-        team_name: ((payloadData.teamName as string | undefined) || '').trim(),
+        team_name: teamName,
+        slug: baseSlug,
         organization: (payloadData.organization as string | undefined)?.trim() || null,
         city: ((payloadData.city as string | undefined) || '').trim(),
         state: ((payloadData.state as string | undefined) || '').trim(),
@@ -85,11 +95,19 @@ export async function verifyCoach(coachId: string, verified: boolean) {
         seed_funding_goals_cents: (payloadData.seedFundingGoalsCents as number | undefined) ?? 0,
       }
 
-      const { error: teamError } = await adminClient.from('teams').insert(teamPayload as never)
+      let { error: teamError } = await adminClient.from('teams').insert(teamPayload as never)
+      if (teamError?.code === '23505') {
+        // slug collision — retry once with a random suffix
+        ;({ error: teamError } = await adminClient
+          .from('teams')
+          .insert({ ...teamPayload, slug: `${baseSlug}-${Math.random().toString(36).slice(2, 8)}` } as never))
+      }
       if (teamError) {
-        // Don't fail the verification (the coach IS verified) — pending data is
-        // kept so the dashboard auto-provisioning fallback retries on first load.
+        // The coach IS verified; keep pending data for retry and tell the admin.
         console.error('[verifyCoach] team provisioning failed:', teamError)
+        Sentry.captureException(new Error(`[verifyCoach] team provisioning failed: ${teamError.message}`))
+        provisioningWarning =
+          'Coach verified, but their team could not be created automatically. Ask them to re-save their portfolio, or contact support.'
       } else {
         await adminClient.from('profiles').update({ pending_team_data: null }).eq('id', coachId)
       }
@@ -110,7 +128,7 @@ export async function verifyCoach(coachId: string, verified: boolean) {
   revalidatePath('/coaches')
   revalidatePath('/analytics')
   revalidatePath('/admin')
-  return { success: true }
+  return { success: true, ...(provisioningWarning ? { warning: provisioningWarning } : {}) }
 }
 
 export async function denyCoach(coachId: string, reason: string) {
