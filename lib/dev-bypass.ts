@@ -131,15 +131,15 @@ const DATA: Record<string, any[]> = {
     {
       id: 's1', status: 'pending', team_id: 't1', sponsor_id: 'sp1',
       requested_amount_cents: 250_000, created_at: iso(0), updated_at: iso(0),
-      custom_pitch_alignment: 'Acme’s precision-machining focus maps directly onto our drivetrain build season.',
+      custom_pitch_alignment: 'Acme’s precision-machining focus maps directly onto our build season.',
       specific_needs_statement: 'CNC time and four NEO motors to finish the swerve modules before regionals.',
-      teams: { team_name: 'Exodius', ftc_team_number: 31579, state: 'TX', status: 'active', mission_statement: 'Grow access to competitive robotics across North Texas.', technical_summary: 'Custom swerve drive, vision-assisted scoring, modular intake.', outreach_summary: 'Run 6 STEM workshops a year reaching 400+ students.', financial_ask_cents: 250_000, budget_items: budgetItems },
+      teams: { team_name: 'Exodius', ftc_team_number: 31579, state: 'TX', status: 'active', mission_statement: 'Grow access to competitive robotics across North Texas.', technical_summary: 'Custom swerve drive, vision-assisted scoring, modular intake.', outreach_summary: 'Run 6 STEM workshops a year reaching 400+ students.', founded_year: 2020, team_size: 12, seasons_competed: 5, coach_experience: '5th season mentoring FTC.', past_sponsors: ['Plano Precision Machining'], press_links: [{ label: 'Plano Star feature', url: 'https://news.example/exodius' }], community_endorsements: '“Best student workshops in our district.” — Plano ISD STEM Coordinator', students_reached: 400, events_hosted: 6, volunteer_hours: 220, financial_ask_cents: 250_000, budget_items: budgetItems },
       sponsors: { company_name: 'Acme Robotics' },
     },
     {
       id: 's2', status: 'pending', team_id: 't2', sponsor_id: 'sp2',
       requested_amount_cents: 180_000, created_at: iso(1), updated_at: iso(1),
-      custom_pitch_alignment: 'TechNova’s software mission aligns with our autonomous scoring pipeline.',
+      custom_pitch_alignment: 'TechNova’s software mission aligns with our vision-based scoring pipeline.',
       specific_needs_statement: 'Funding for a depth camera and an onboard compute module.',
       teams: { team_name: 'Robo Knights', ftc_team_number: 21044, state: 'TX', status: 'active', mission_statement: 'Mentor rookie teams in our district.', technical_summary: 'Computer-vision auton, linear-slide lift.', outreach_summary: 'Host an annual scrimmage for 8 local teams.', financial_ask_cents: 180_000, budget_items: budgetItems },
       sponsors: { company_name: 'TechNova' },
@@ -147,7 +147,7 @@ const DATA: Record<string, any[]> = {
     {
       id: 's3', status: 'approved', team_id: 't3', sponsor_id: 'sp1',
       requested_amount_cents: 300_000, created_at: iso(9), updated_at: iso(4),
-      custom_pitch_alignment: 'Shared focus on manufacturing apprenticeships.',
+      custom_pitch_alignment: 'Shared focus on skilled-trades apprenticeships.',
       specific_needs_statement: 'Materials and travel for the championship.',
       teams: { team_name: 'Steel Comets', ftc_team_number: 14502, state: 'TX', status: 'active', mission_statement: 'Build a pipeline to the trades.', technical_summary: 'Welded chassis, dual-stage shooter.', outreach_summary: 'Partner with two high schools.', financial_ask_cents: 300_000, budget_items: budgetItems },
       sponsors: { company_name: 'Acme Robotics' },

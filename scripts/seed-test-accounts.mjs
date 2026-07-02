@@ -243,6 +243,23 @@ async function main() {
       state: 'TX',
       mission_statement: 'A test team for development and QA purposes.',
       tax_status: 'None',
+      // Portfolio redesign fields (migration 0054)
+      founded_year: 2021,
+      team_size: 10,
+      seasons_competed: 3,
+      coach_experience: '3 seasons coaching FTC; QA engineer by day.',
+      past_sponsors: ['Dev Hardware Supply', 'QA Community Fund'],
+      press_links: [
+        { label: 'Dev Gazette: Test team ships robots', url: 'https://example.com/dev-test-team' },
+      ],
+      community_endorsements: '“A reliable, well-run program.” — Dev School Principal',
+      students_reached: 150,
+      events_hosted: 4,
+      volunteer_hours: 90,
+      outreach_summary: 'Hosted 4 workshops for local middle-schoolers this season.',
+      subteam_breakdown: 'Build, Programming, Outreach.',
+      technical_summary: 'Mecanum drive with a two-stage lift and webcam-based scoring alignment.',
+      github_link: 'https://github.com/example/dev-test-team',
     })
     .select('id')
     .single()
