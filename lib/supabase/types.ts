@@ -742,8 +742,8 @@ export type Database = {
           decision_type: string
           id: string
           sponsor_id: string
-          submission_id: string
-          team_id: string
+          submission_id: string | null
+          team_id: string | null
         }
         Insert: {
           actor_type: string
@@ -752,8 +752,8 @@ export type Database = {
           decision_type: string
           id?: string
           sponsor_id: string
-          submission_id: string
-          team_id: string
+          submission_id?: string | null
+          team_id?: string | null
         }
         Update: {
           actor_type?: string
@@ -762,8 +762,8 @@ export type Database = {
           decision_type?: string
           id?: string
           sponsor_id?: string
-          submission_id?: string
-          team_id?: string
+          submission_id?: string | null
+          team_id?: string | null
         }
         Relationships: [
           {
