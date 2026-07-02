@@ -3,42 +3,64 @@ import { Resend } from 'resend'
 import { createHash } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { env } from '@/lib/env'
+import * as Sentry from '@sentry/nextjs'
 
 const resend = new Resend(env.RESEND_API_KEY)
 
-export async function dispatchApprovedSubmission(submissionId: string, accessToken?: string) {
-  const supabase = createAdminClient()
+export type DispatchResult = { success: boolean; error?: string }
 
-  const { data: submission } = await supabase
-    .from('submissions')
-    .select(`
-      *,
-      teams:team_id (
-        *,
-        profiles:owner_id (email, full_name)
-      ),
-      sponsors:sponsor_id (
-        *
-      )
-    `)
-    .eq('id', submissionId)
-    .single()
+function dispatchFailure(err: unknown, submissionId: string): DispatchResult {
+  const message = err instanceof Error ? err.message
+    : err && typeof err === 'object' && 'message' in err ? String((err as { message: unknown }).message)
+    : String(err)
+  console.error('[dispatch] Failed to dispatch email', err)
+  Sentry.captureException(
+    err instanceof Error ? err : new Error(`[dispatch] ${message}`),
+    { extra: { submissionId } }
+  )
+  return { success: false, error: message }
+}
 
-  if (!submission || !submission.sponsors || !submission.teams) {
-    console.error('[dispatch] Submission not found or missing relations')
-    return { error: 'Submission not found' }
-  }
-
-  const sponsor = submission.sponsors as unknown as Record<string, unknown>
-  const team = submission.teams as unknown as Record<string, unknown>
-
-  const viewerUrl = accessToken
-    ? `${env.NEXT_PUBLIC_APP_URL}/sponsor-view/${accessToken}`
-    : null
-
-  const subject = `Verified FTC Robotics Sponsorship Proposal: Team ${team.ftc_team_number ?? 'Incubator'} (${team.state})`
-
+/**
+ * Admin-gated sponsor outreach. This is the ONLY path that may email a pitch to
+ * a sponsor. Never throws — always resolves to a DispatchResult so callers can
+ * surface a warning when the outreach email could not be sent.
+ */
+export async function dispatchApprovedSubmission(
+  submissionId: string,
+  accessToken?: string
+): Promise<DispatchResult> {
   try {
+    const supabase = createAdminClient()
+
+    const { data: submission } = await supabase
+      .from('submissions')
+      .select(`
+        *,
+        teams:team_id (
+          *,
+          profiles:owner_id (email, full_name)
+        ),
+        sponsors:sponsor_id (
+          *
+        )
+      `)
+      .eq('id', submissionId)
+      .single()
+
+    if (!submission || !submission.sponsors || !submission.teams) {
+      return dispatchFailure(new Error('Submission not found or missing relations'), submissionId)
+    }
+
+    const sponsor = submission.sponsors as unknown as Record<string, unknown>
+    const team = submission.teams as unknown as Record<string, unknown>
+
+    const viewerUrl = accessToken
+      ? `${env.NEXT_PUBLIC_APP_URL}/sponsor-view/${accessToken}`
+      : null
+
+    const subject = `Verified FTC Robotics Sponsorship Proposal: Team ${team.ftc_team_number ?? 'Incubator'} (${team.state})`
+
     const result = await resend.emails.send({
       from: env.RESEND_FROM_EMAIL,
       to: sponsor.contact_email as string,
@@ -76,8 +98,11 @@ export async function dispatchApprovedSubmission(submissionId: string, accessTok
 
     if (result.error) {
       console.error('[dispatch] Failed to send email to', sponsor.contact_email, result.error)
+      return dispatchFailure(result.error, submissionId)
     }
+
+    return { success: true }
   } catch (e) {
-    console.error('[dispatch] Failed to dispatch email', e)
+    return dispatchFailure(e, submissionId)
   }
 }

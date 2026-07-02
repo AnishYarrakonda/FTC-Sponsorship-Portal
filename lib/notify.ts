@@ -4,14 +4,57 @@ import SponsorAppConfirmation from '@/emails/sponsor-app-confirmation'
 import HandshakeEmail from '@/emails/handshake-email'
 import CoachVerificationEmail from '@/emails/coach-verification-email'
 import CoachSignupWelcomeEmail from '@/emails/coach-signup-welcome'
+import CoachDenialEmail from '@/emails/coach-denial-email'
 import NotificationEmail from '@/emails/notification-email'
 import { Resend } from 'resend'
 import { createHash } from 'crypto'
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { env } from '@/lib/env'
+import * as Sentry from '@sentry/nextjs'
 
 const resend = new Resend(env.RESEND_API_KEY)
+
+/**
+ * Every sender in this module resolves to this shape and NEVER throws.
+ * Failures are reported to Sentry; callers can (but are not required to)
+ * inspect `success` to surface a warning when a decision-critical email
+ * could not be delivered.
+ */
+export type NotifyResult = { success: boolean; error?: string }
+
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message
+  if (err && typeof err === 'object' && 'message' in err) {
+    return String((err as { message: unknown }).message)
+  }
+  return String(err)
+}
+
+/** Log + report a notify failure to Sentry and return the failed result. */
+function notifyFailure(context: string, err: unknown): NotifyResult {
+  const message = errorMessage(err)
+  console.error(`[notify] ${context} failed`, err)
+  Sentry.captureException(
+    err instanceof Error ? err : new Error(`[notify:${context}] ${message}`),
+    { extra: { context } }
+  )
+  return { success: false, error: message }
+}
+
+/** Send via Resend, mapping both thrown errors and `result.error` to a NotifyResult. */
+async function sendViaResend(
+  context: string,
+  payload: Parameters<typeof resend.emails.send>[0],
+  options?: Parameters<typeof resend.emails.send>[1]
+): Promise<NotifyResult> {
+  try {
+    const { error } = await resend.emails.send(payload, options)
+    if (error) return notifyFailure(context, error)
+    return { success: true }
+  } catch (err) {
+    return notifyFailure(context, err)
+  }
+}
 
 async function getAdminNotificationRecipients() {
   const configured = env.ADMIN_NOTIFICATION_EMAILS
@@ -39,7 +82,7 @@ export async function sendSubmissionDecisionEmail(
   submissionId: string,
   decision: 'approved' | 'declined' | 'changes_requested',
   feedback?: string
-) {
+): Promise<NotifyResult> {
   try {
     const supabase = createAdminClient()
     const { data: submission } = await supabase
@@ -48,7 +91,9 @@ export async function sendSubmissionDecisionEmail(
       .eq('id', submissionId)
       .single()
 
-    if (!submission) return
+    if (!submission) {
+      return notifyFailure('sendSubmissionDecisionEmail', new Error(`Submission ${submissionId} not found`))
+    }
 
     const team = submission.teams as any
     const sponsor = submission.sponsors as any
@@ -61,9 +106,11 @@ export async function sendSubmissionDecisionEmail(
       changes_requested: 'Changes requested on your submission',
     }
 
-    if (!coachEmail) return
+    if (!coachEmail) {
+      return notifyFailure('sendSubmissionDecisionEmail', new Error(`No coach email for submission ${submissionId}`))
+    }
 
-    await resend.emails.send({
+    return await sendViaResend('sendSubmissionDecisionEmail', {
       from: env.RESEND_FROM_EMAIL,
       to: coachEmail,
       subject: config[decision],
@@ -75,7 +122,7 @@ export async function sendSubmissionDecisionEmail(
       }),
     })
   } catch (err) {
-    console.error('[notify] sendSubmissionDecisionEmail failed', err)
+    return notifyFailure('sendSubmissionDecisionEmail', err)
   }
 }
 
@@ -84,12 +131,14 @@ export async function sendCredentialUploadAlert(
   _coachId: string,
   coachName: string,
   coachEmail: string
-) {
+): Promise<NotifyResult> {
   try {
     const recipients = await getAdminNotificationRecipients()
-    if (recipients.length === 0) return
+    if (recipients.length === 0) {
+      return notifyFailure('sendCredentialUploadAlert', new Error('No admin notification recipients configured'))
+    }
 
-    await resend.emails.send({
+    return await sendViaResend('sendCredentialUploadAlert', {
       from: env.RESEND_FROM_EMAIL,
       to: recipients,
       subject: `Action Required: New Coach Credentials (${coachName})`,
@@ -100,12 +149,15 @@ export async function sendCredentialUploadAlert(
       }),
     })
   } catch (err) {
-    console.error('[notify] sendCredentialUploadAlert failed', err)
+    return notifyFailure('sendCredentialUploadAlert', err)
   }
 }
 
 /** Send "Match Made" emails to both sponsor and coach after an acceptance. */
-export async function sendHandshakeEmail(submissionId: string, amountCents: number) {
+export async function sendHandshakeEmail(
+  submissionId: string,
+  amountCents: number
+): Promise<NotifyResult> {
   try {
     const supabase = createAdminClient()
     const { data: submission } = await supabase
@@ -121,7 +173,9 @@ export async function sendHandshakeEmail(submissionId: string, amountCents: numb
       .eq('id', submissionId)
       .single()
 
-    if (!submission) return
+    if (!submission) {
+      return notifyFailure('sendHandshakeEmail', new Error(`Submission ${submissionId} not found`))
+    }
 
     const team = submission.teams as unknown as Record<string, unknown>
     const sponsor = submission.sponsors as unknown as Record<string, unknown>
@@ -135,9 +189,9 @@ export async function sendHandshakeEmail(submissionId: string, amountCents: numb
       coachEmail: coachProfile.email,
     }
 
-    await Promise.all([
+    const [coachResult, sponsorResult] = await Promise.all([
       // To coach
-      resend.emails.send({
+      sendViaResend('sendHandshakeEmail(coach)', {
         from: env.RESEND_FROM_EMAIL,
         to: coachProfile.email,
         subject: `Match Made! ${sponsor.company_name} will sponsor your team for $${(amountCents / 100).toFixed(2)}`,
@@ -146,7 +200,7 @@ export async function sendHandshakeEmail(submissionId: string, amountCents: numb
         idempotencyKey: createHash('sha256').update(submissionId + 'handshake-coach').digest('hex'),
       }),
       // To sponsor
-      resend.emails.send({
+      sendViaResend('sendHandshakeEmail(sponsor)', {
         from: env.RESEND_FROM_EMAIL,
         to: sponsor.contact_email as string,
         subject: `Match Made! You're sponsoring ${team.team_name} for $${(amountCents / 100).toFixed(2)}`,
@@ -155,8 +209,16 @@ export async function sendHandshakeEmail(submissionId: string, amountCents: numb
         idempotencyKey: createHash('sha256').update(submissionId + 'handshake-sponsor').digest('hex'),
       }),
     ])
+
+    if (!coachResult.success || !sponsorResult.success) {
+      return {
+        success: false,
+        error: [coachResult.error, sponsorResult.error].filter(Boolean).join('; '),
+      }
+    }
+    return { success: true }
   } catch (err) {
-    console.error('[notify] sendHandshakeEmail failed', err)
+    return notifyFailure('sendHandshakeEmail', err)
   }
 }
 
@@ -166,21 +228,17 @@ export async function sendSponsorApplicationConfirmation(
   contactEmail: string,
   contactName: string,
   proposedCapCents: number
-) {
-  try {
-    await resend.emails.send({
-      from: env.RESEND_FROM_EMAIL,
-      to: contactEmail,
-      subject: 'We received your sponsor application',
-      react: SponsorAppConfirmation({
-        companyName,
-        contactName,
-        proposedCapCents,
-      }),
-    })
-  } catch (err) {
-    console.error('[notify] sendSponsorApplicationConfirmation failed', err)
-  }
+): Promise<NotifyResult> {
+  return sendViaResend('sendSponsorApplicationConfirmation', {
+    from: env.RESEND_FROM_EMAIL,
+    to: contactEmail,
+    subject: 'We received your sponsor application',
+    react: SponsorAppConfirmation({
+      companyName,
+      contactName,
+      proposedCapCents,
+    }),
+  })
 }
 
 export async function createInAppNotification({
@@ -198,67 +256,77 @@ export async function createInAppNotification({
    * by a direct email, guaranteeing both channels fire for every event.
    */
   skipEmail?: boolean
-}) {
+}): Promise<NotifyResult> {
   const supabase = createAdminClient()
+  const failures: string[] = []
 
   // 1. In-app inbox alert.
   try {
-    await supabase.from('notifications').insert({
+    const { error: insertError } = await supabase.from('notifications').insert({
       recipient_id: recipientId,
       type, title, body: body ?? null, submission_id: submissionId ?? null,
     })
+    if (insertError) {
+      failures.push(notifyFailure('createInAppNotification(in-app)', insertError).error!)
+    }
   } catch (err) {
-    console.error('[notify] createInAppNotification (in-app) failed', err)
+    failures.push(notifyFailure('createInAppNotification(in-app)', err).error!)
   }
 
   // 2. Mirror it as a direct email (unless the caller sends its own).
-  if (skipEmail) return
-  try {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('email')
-      .eq('id', recipientId)
-      .single()
-    if (profile?.email) {
-      await resend.emails.send({
-        from: env.RESEND_FROM_EMAIL,
-        to: profile.email,
-        subject: title,
-        react: NotificationEmail({
-          title,
-          body,
-          ctaUrl: `${env.NEXT_PUBLIC_APP_URL}/dashboard`,
-          ctaLabel: 'Open the portal',
-        }),
-      })
+  if (!skipEmail) {
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', recipientId)
+        .single()
+      if (profile?.email) {
+        const emailResult = await sendViaResend('createInAppNotification(email)', {
+          from: env.RESEND_FROM_EMAIL,
+          to: profile.email,
+          subject: title,
+          react: NotificationEmail({
+            title,
+            body,
+            ctaUrl: `${env.NEXT_PUBLIC_APP_URL}/dashboard`,
+            ctaLabel: 'Open the portal',
+          }),
+        })
+        if (!emailResult.success) failures.push(emailResult.error!)
+      } else {
+        failures.push(
+          notifyFailure('createInAppNotification(email)', new Error(`No email on profile ${recipientId}`)).error!
+        )
+      }
+    } catch (err) {
+      failures.push(notifyFailure('createInAppNotification(email)', err).error!)
     }
-  } catch (err) {
-    console.error('[notify] createInAppNotification (email) failed', err)
   }
+
+  if (failures.length > 0) return { success: false, error: failures.join('; ') }
+  return { success: true }
+}
+
+/** Email a coach when an admin denies their credential verification. */
+export async function sendCoachDenialEmail(
+  to: string,
+  coachName: string,
+  reason: string
+): Promise<NotifyResult> {
+  return sendViaResend('sendCoachDenialEmail', {
+    from: env.RESEND_FROM_EMAIL,
+    to,
+    subject: 'Application Update Required — FTC Sponsorship Portal',
+    react: CoachDenialEmail({ coachName, reason }),
+  })
 }
 
 /** Send a congratulations email when an admin verifies a coach's credentials. */
-import CoachDenialEmail from '@/emails/coach-denial-email'
-
-export async function sendCoachDenialEmail(to: string, coachName: string, reason: string) {
-  try {
-    const { data, error } = await resend.emails.send({
-      from: env.RESEND_FROM_EMAIL,
-      to,
-      subject: 'Application Update Required — FTC Sponsorship Portal',
-      react: CoachDenialEmail({ coachName, reason }),
-    })
-
-    if (error) {
-      console.error('Failed to send coach denial email:', error)
-    }
-    return { data, error }
-  } catch (error) {
-    console.error('Unexpected error sending coach denial email:', error)
-    return { error }
-  }
-}
-export async function sendCoachVerificationEmail(coachId: string, coachName: string) {
+export async function sendCoachVerificationEmail(
+  coachId: string,
+  coachName: string
+): Promise<NotifyResult> {
   try {
     const supabase = createAdminClient()
     const { data: profile } = await supabase
@@ -267,19 +335,18 @@ export async function sendCoachVerificationEmail(coachId: string, coachName: str
       .eq('id', coachId)
       .single()
 
-    if (!profile?.email) return { error: 'No email found' }
+    if (!profile?.email) {
+      return notifyFailure('sendCoachVerificationEmail', new Error(`No email on profile ${coachId}`))
+    }
 
-    const { data, error } = await resend.emails.send({
+    return await sendViaResend('sendCoachVerificationEmail', {
       from: env.RESEND_FROM_EMAIL,
       to: profile.email,
       subject: 'Welcome to the FTC Sponsorship Portal!',
       react: CoachVerificationEmail({ coachName }),
     })
-    if (error) console.error('Failed to send verification email:', error)
-    return { data, error }
-  } catch (error) {
-    console.error('Unexpected error sending verification email:', error)
-    return { error }
+  } catch (err) {
+    return notifyFailure('sendCoachVerificationEmail', err)
   }
 }
 
@@ -289,12 +356,14 @@ export async function sendSponsorApplicationAlert(
   contactName: string,
   contactEmail: string,
   proposedCapCents: number
-) {
+): Promise<NotifyResult> {
   try {
     const recipients = await getAdminNotificationRecipients()
-    if (recipients.length === 0) return
+    if (recipients.length === 0) {
+      return notifyFailure('sendSponsorApplicationAlert', new Error('No admin notification recipients configured'))
+    }
 
-    await resend.emails.send({
+    return await sendViaResend('sendSponsorApplicationAlert', {
       from: env.RESEND_FROM_EMAIL,
       to: recipients,
       subject: `Action Required: New Sponsor Application (${companyName})`,
@@ -302,31 +371,57 @@ export async function sendSponsorApplicationAlert(
         coachName: contactName,
         coachEmail: contactEmail,
         reviewUrl: `${env.NEXT_PUBLIC_APP_URL}/applications`,
+        heading: 'New sponsor application',
+        description: `submitted a sponsor application on behalf of ${companyName} (proposed cap $${(proposedCapCents / 100).toLocaleString('en-US')}).`,
       }),
     })
   } catch (err) {
-    console.error('[notify] sendSponsorApplicationAlert failed', err)
+    return notifyFailure('sendSponsorApplicationAlert', err)
   }
 }
 
-export async function sendCoachSignupWelcomeEmail(coachEmail: string, coachName: string) {
-  try {
-    await resend.emails.send({
-      from: env.RESEND_FROM_EMAIL,
-      to: coachEmail,
-      subject: 'Welcome to the FTC Sponsorship Portal!',
-      react: CoachSignupWelcomeEmail({ coachName }),
-    })
-  } catch (err) {
-    console.error('[notify] sendCoachSignupWelcomeEmail failed', err)
-  }
+export async function sendCoachSignupWelcomeEmail(
+  coachEmail: string,
+  coachName: string
+): Promise<NotifyResult> {
+  return sendViaResend('sendCoachSignupWelcomeEmail', {
+    from: env.RESEND_FROM_EMAIL,
+    to: coachEmail,
+    subject: 'Welcome to the FTC Sponsorship Portal!',
+    react: CoachSignupWelcomeEmail({ coachName }),
+  })
 }
 
-export async function sendWelcomeInAppNotification(userId: string, name: string) {
+export async function sendWelcomeInAppNotification(
+  userId: string,
+  name: string
+): Promise<NotifyResult> {
+  // BUG FIX: the signup action passes the CLERK user id (text, `user_…`), but
+  // notifications.recipient_id is a uuid FK to profiles(id) — so this insert
+  // failed silently on every signup. Resolve non-uuid ids via profiles.clerk_user_id.
+  let recipientId = userId
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)
+  if (!isUuid) {
+    try {
+      const supabase = createAdminClient()
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('clerk_user_id', userId)
+        .single()
+      if (!profile?.id) {
+        return notifyFailure('sendWelcomeInAppNotification', new Error(`No profile for clerk user ${userId}`))
+      }
+      recipientId = profile.id
+    } catch (err) {
+      return notifyFailure('sendWelcomeInAppNotification', err)
+    }
+  }
+
   return createInAppNotification({
-    recipientId: userId,
+    recipientId,
     type: 'general',
-    title: 'Welcome to the FTC Matchmaker platform! 🎉',
+    title: 'Welcome to the FTC Sponsorship Portal! 🎉',
     body: `Hi ${name},\n\nWe're thrilled to have you here. Your account is currently pending verification—our team reviews photo IDs within 24-48 hours.\n\nIn the meantime, you can start building your team portfolio to get a head start on your funding requests!`,
     skipEmail: true, // coach already receives sendCoachSignupWelcomeEmail
   })
