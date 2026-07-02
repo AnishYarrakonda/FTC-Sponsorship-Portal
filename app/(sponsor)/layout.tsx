@@ -54,7 +54,7 @@ export default async function SponsorLayout({ children }: { children: React.Reac
   const userEmail = user.email ?? ''
 
   return (
-    <div className="flex h-screen overflow-hidden text-foreground">
+    <div className="flex h-screen flex-col overflow-hidden text-foreground lg:flex-row">
       <SponsorSidebar
         companyName={companyName}
         userName={userName}
@@ -62,7 +62,7 @@ export default async function SponsorLayout({ children }: { children: React.Reac
         pendingCount={pendingCount ?? 0}
       />
       <main className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[1000px] px-6 py-8 sm:px-10 lg:px-12">
+        <div className="mx-auto w-full max-w-[1000px] px-4 py-6 sm:px-8 sm:py-8 lg:px-12">
           {children}
         </div>
       </main>

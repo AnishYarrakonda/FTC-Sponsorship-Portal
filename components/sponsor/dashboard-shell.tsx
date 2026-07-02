@@ -17,6 +17,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { cn } from '@/lib/utils'
 import { FadeUp } from '@/components/motion/fade-up'
 import { StatCard } from '@/components/ui/stat-card'
+import { StatusBadge } from '@/components/ui/status-badge'
+import { EmptyState } from '@/components/ui/empty-state'
 
 type Sponsor = {
   id: string
@@ -57,14 +59,17 @@ export function SponsorDashboardShell({
   // Guard against null sponsor
   if (!sponsor) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed border-border rounded-2xl bg-card">
-        <Building2 className="h-10 w-10 text-muted-foreground/30 mb-4" />
-        <h2 className="text-xl font-semibold">No Sponsor Linked</h2>
-        <p className="text-muted-foreground text-center max-w-sm mt-2">
-          Your account is registered as a sponsor, but no company record was found. 
-          Please contact an administrator.
-        </p>
-      </div>
+      <EmptyState
+        className="py-20"
+        icon={Building2}
+        title="No sponsor linked"
+        description="Your account is registered as a sponsor, but no company record was found. Please contact an administrator."
+        action={
+          <a href="mailto:support@exodiusftc.com" className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}>
+            Contact support
+          </a>
+        }
+      />
     )
   }
 
@@ -143,10 +148,16 @@ export function SponsorDashboardShell({
               <SubmissionCard key={submission.id} submission={submission} index={i} />
             ))}
             {submissions.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed border-border rounded-2xl bg-card/50">
-                <FileText className="h-10 w-10 text-muted-foreground/30 mb-4" />
-                <p className="text-muted-foreground">No sponsorship requests yet.</p>
-              </div>
+              <EmptyState
+                icon={FileText}
+                title="No sponsorship requests yet"
+                description="Approved team pitches will appear here as soon as an admin dispatches them to you — you'll also get an email."
+                action={
+                  <Link href="/sponsor/funding" className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}>
+                    Review your funding cap
+                  </Link>
+                }
+              />
             )}
           </div>
         </div>
@@ -160,16 +171,21 @@ export function SponsorDashboardShell({
               <CardDescription>Find a specific team's pitch</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <input 
-                  placeholder="Team # or Name"
-                  className="w-full bg-background border border-border rounded-md pl-9 py-2 text-sm outline-none focus:ring-1 focus:ring-primary/50 transition-shadow"
-                />
-              </div>
-              <Button variant="secondary" className="w-full bg-secondary hover:bg-secondary/80 text-secondary-foreground shadow-sm">
-                Search Submissions
-              </Button>
+              <form action="/sponsor/submissions" method="GET" className="space-y-4">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                  <input
+                    type="search"
+                    name="q"
+                    aria-label="Search submissions by team number or name"
+                    placeholder="Team # or Name"
+                    className="w-full bg-background border border-border rounded-md pl-9 py-2 text-sm outline-none focus:ring-1 focus:ring-primary/50 transition-shadow"
+                  />
+                </div>
+                <Button type="submit" variant="secondary" className="w-full bg-secondary hover:bg-secondary/80 text-secondary-foreground shadow-sm">
+                  Search Submissions
+                </Button>
+              </form>
             </CardContent>
           </Card>
 
@@ -186,11 +202,11 @@ export function SponsorDashboardShell({
                  <div className="grid grid-cols-2 gap-2">
                    <div className="p-3 rounded-lg bg-background border border-border/50 text-center">
                      <div className="text-lg font-medium tracking-tight text-foreground">{approvedCount}</div>
-                     <div className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">Approved</div>
+                     <div className="text-xs text-muted-foreground uppercase tracking-widest mt-0.5">Approved</div>
                    </div>
                    <div className="p-3 rounded-lg bg-background border border-border/50 text-center">
                      <div className="text-lg font-medium tracking-tight text-foreground">{pendingCount}</div>
-                     <div className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">Pending</div>
+                     <div className="text-xs text-muted-foreground uppercase tracking-widest mt-0.5">Pending</div>
                    </div>
                  </div>
                </div>
@@ -203,12 +219,6 @@ export function SponsorDashboardShell({
 }
 
 function SubmissionCard({ submission, index }: { submission: Submission; index: number }) {
-  const statusColors: Record<string, string> = {
-    pending: 'text-amber-600 bg-amber-500/10 border-amber-500/20',
-    approved: 'text-emerald-600 bg-emerald-500/10 border-emerald-500/20',
-    declined: 'text-rose-600 bg-rose-500/10 border-rose-500/20',
-  }
-
   return (
     <FadeUp delay={index * 0.05}>
       <Link
@@ -223,7 +233,7 @@ function SubmissionCard({ submission, index }: { submission: Submission; index: 
             <h3 className="truncate text-[15px] font-medium transition-colors group-hover:text-primary text-foreground">
               {submission.teams?.team_name || 'Unknown Team'}
             </h3>
-            <div className="flex items-center gap-1.5 truncate text-[13px] text-muted-foreground mt-0.5">
+            <div className="flex items-center gap-1.5 truncate text-sm text-muted-foreground mt-0.5">
               <span className="truncate">{submission.teams?.organization || 'Independent'}</span>
               <span aria-hidden="true">•</span>
               <span className="truncate">{submission.teams?.city || 'Unknown'}, {submission.teams?.state || 'Unknown'}</span>
@@ -232,13 +242,8 @@ function SubmissionCard({ submission, index }: { submission: Submission; index: 
         </div>
 
         <div className="flex shrink-0 items-center gap-3">
-          <span className={cn(
-            'rounded-full border px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider',
-            statusColors[submission.status] || 'border-muted/20 bg-muted/10 text-muted-foreground'
-          )}>
-            {submission.status}
-          </span>
-          <ArrowUpRight className="h-5 w-5 text-muted-foreground/40 transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-foreground" />
+          <StatusBadge status={submission.status} label={submission.status === 'dispatched' ? 'New Request' : undefined} />
+          <ArrowUpRight aria-hidden="true" className="h-5 w-5 text-muted-foreground/40 transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-foreground" />
         </div>
       </Link>
     </FadeUp>

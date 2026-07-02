@@ -10,6 +10,7 @@ import {
   HERO_MORPHING_WORDS
 } from '@/lib/site-config'
 import { StatCard } from '@/components/ui/stat-card'
+import { WindowDots } from '@/components/ui/window-dots'
 import { ContainerScroll } from '@/components/ui/container-scroll-animation'
 
 function MorphingWord() {
@@ -49,15 +50,11 @@ function ProductHeroMock() {
       >
         {/* Browser Chrome */}
         <div className="flex h-12 items-center gap-2 border-b border-border bg-card/80 px-4 backdrop-blur-sm">
-          <div className="flex gap-1.5">
-            <div className="h-3 w-3 rounded-full bg-[#ff5f56]" />
-            <div className="h-3 w-3 rounded-full bg-[#ffbd2e]" />
-            <div className="h-3 w-3 rounded-full bg-[#27c93f]" />
-          </div>
+          <WindowDots size="md" />
           <div className="ml-4 flex-1">
             <div className="h-6 w-1/3 max-w-[200px] rounded-md bg-muted/50 flex items-center px-2">
-               <Search className="w-3 h-3 text-muted-foreground mr-2" />
-               <span className="text-[10px] text-muted-foreground">app.ftcmatchmaker.com</span>
+               <Search className="w-3 h-3 text-muted-foreground mr-2" aria-hidden="true" />
+               <span className="text-xs text-muted-foreground">app.ftcmatchmaker.com</span>
             </div>
           </div>
         </div>
@@ -224,7 +221,7 @@ export function Hero() {
         >
           <Link
             href="/signup"
-            className="group inline-flex items-center gap-2 rounded-full bg-[#181818] px-7 py-3.5 text-sm font-medium text-white hover:bg-[#181818]/90 transition-colors active:scale-[0.98] shadow-sm"
+            className="group inline-flex items-center gap-2 rounded-full bg-ink px-7 py-3.5 text-sm font-medium text-white hover:bg-ink/90 transition-colors active:scale-[0.98] shadow-sm"
           >
             Get started
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" strokeWidth={1.8} />

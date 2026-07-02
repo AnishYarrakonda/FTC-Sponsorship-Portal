@@ -13,8 +13,11 @@ export const ACCENT_GLOBE = "#1F6F5C" // Pine
 export const CURRENT_SEASON = '2026'
 export const DISPATCH_SEASON_LABEL = `Season ${CURRENT_SEASON} dispatch window open`
 
-// ─── Showcase team (the real team used across product mocks) ──────────────────
-export const SHOWCASE_TEAM = { number: '31579', name: 'Exodius' } as const
+// ─── Showcase team (fictional team used across product mocks) ─────────────────
+export const SHOWCASE_TEAM = { number: '12345', name: 'Ironclad Robotics' } as const
+
+// ─── Contact ─────────────────────────────────────────────────────────────────
+export const SUPPORT_EMAIL = 'support@exodiusftc.com'
 
 // ─── Portfolio mock (product showcase) ───────────────────────────────────────
 export const PORTFOLIO_MOCK = {
@@ -28,8 +31,8 @@ export const PORTFOLIO_MOCK = {
 }
 
 // ─── Dispatch review timeline (product showcase) ──────────────────────────────
-// Illustrates the human-review gate using the real team's own pitch lifecycle —
-// no invented teams or sponsor companies.
+// Illustrates the human-review gate using the fictional showcase team's pitch
+// lifecycle — no real teams or sponsor companies.
 export const DISPATCH_REVIEW = {
   team: SHOWCASE_TEAM,
   submissionRef: '318',
@@ -46,7 +49,7 @@ export const DISPATCH_REVIEW = {
 // ─── Footer social links ─────────────────────────────────────────────────────
 export const FOOTER_SOCIALS = [
   { label: 'Website', href: 'https://firstinspires.org', icon: 'Globe' },
-  { label: 'Contact', href: 'mailto:exodiusftc@gmail.com', icon: 'Mail' },
+  { label: 'Contact', href: `mailto:${SUPPORT_EMAIL}`, icon: 'Mail' },
   { label: 'FTC Forum', href: 'https://ftcforum.firstinspires.org', icon: 'AtSign' },
 ] as const
 

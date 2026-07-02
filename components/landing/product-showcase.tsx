@@ -2,6 +2,7 @@
 
 import { Check } from 'lucide-react'
 import { FadeUp } from '@/components/motion/fade-up'
+import { WindowDots } from '@/components/ui/window-dots'
 import { cn } from '@/lib/utils'
 import type { ReactNode } from 'react'
 import { PORTFOLIO_MOCK, DISPATCH_REVIEW } from '@/lib/site-config'
@@ -51,10 +52,8 @@ export function PortfolioMock() {
   return (
     <div className="relative rounded-2xl border border-border bg-background/80 p-3 shadow-xl shadow-foreground/5 backdrop-blur">
       <div className="flex items-center gap-1.5 px-2 py-1.5">
-        <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f56]" />
-        <span className="h-2.5 w-2.5 rounded-full bg-[#ffbd2e]" />
-        <span className="h-2.5 w-2.5 rounded-full bg-[#27c93f]" />
-        <span className="ml-3 font-mono text-[10px] text-muted-foreground">ftcmatchmaker.app/portfolio</span>
+        <WindowDots />
+        <span className="ml-3 font-mono text-xs text-muted-foreground">ftcmatchmaker.app/portfolio</span>
       </div>
       <div className="rounded-lg border border-border bg-card p-5 space-y-4">
         <div className="flex items-center justify-between">
@@ -62,7 +61,7 @@ export function PortfolioMock() {
             <div className="text-xs text-muted-foreground">Team {teamNumber}</div>
             <div className="text-sm font-medium text-foreground">{teamName}</div>
           </div>
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-2 py-0.5 text-[10px] font-medium text-primary">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-2 py-0.5 text-xs font-medium text-primary">
             <span className="h-1.5 w-1.5 rounded-full bg-primary" />
             Verified
           </div>
@@ -70,7 +69,7 @@ export function PortfolioMock() {
         <div className="grid grid-cols-3 gap-2">
           {['Story', 'Budget', 'Achievements'].map((s) => (
             <div key={s} className="rounded-md border border-border bg-accent/40 p-3">
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{s}</div>
+              <div className="text-xs uppercase tracking-wider text-muted-foreground">{s}</div>
               <div className="mt-2 h-1 rounded-full bg-border overflow-hidden">
                 <div className="h-full w-3/4 bg-primary" />
               </div>
@@ -95,12 +94,8 @@ export function ModerationMock() {
   return (
     <div className="relative rounded-2xl border border-border bg-background/80 p-3 shadow-xl shadow-foreground/5 backdrop-blur">
       <div className="flex items-center justify-between px-2 py-1.5">
-        <div className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f56]" />
-          <span className="h-2.5 w-2.5 rounded-full bg-[#ffbd2e]" />
-          <span className="h-2.5 w-2.5 rounded-full bg-[#27c93f]" />
-        </div>
-        <span className="font-mono text-[10px] text-muted-foreground">ftcmatchmaker.app/admin/review</span>
+        <WindowDots />
+        <span className="font-mono text-xs text-muted-foreground">ftcmatchmaker.app/admin/review</span>
       </div>
       <div className="rounded-lg border border-border bg-card">
         {/* submission header */}
@@ -108,13 +103,13 @@ export function ModerationMock() {
           <div>
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-foreground">Submission #{submissionRef}</span>
-              <span className="rounded-md border border-border bg-accent px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
+              <span className="rounded-md border border-border bg-accent px-1.5 py-0.5 text-xs font-mono text-muted-foreground">
                 {team.name} · {team.number}
               </span>
             </div>
             <div className="mt-0.5 text-xs text-muted-foreground">{subject}</div>
           </div>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/5 px-2 py-0.5 text-[10px] font-medium text-amber-600">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/5 px-2 py-0.5 text-xs font-medium text-amber-600">
             <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
             In review
           </span>
@@ -131,7 +126,7 @@ export function ModerationMock() {
                 <span className={cn('text-xs', s.state === 'todo' ? 'text-muted-foreground' : 'text-foreground')}>
                   {s.label}
                 </span>
-                <span className="font-mono text-[10px] tabular-nums text-muted-foreground">{s.meta}</span>
+                <span className="font-mono text-xs tabular-nums text-muted-foreground">{s.meta}</span>
               </div>
             </li>
           ))}

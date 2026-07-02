@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { UserCheck } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
+import { EmptyState } from '@/components/ui/empty-state'
 import { CoachVerificationCard } from '@/components/admin/coach-verification-card'
 
 export default async function CoachesPage() {
@@ -54,15 +56,17 @@ export default async function CoachesPage() {
             Awaiting Verification
           </h2>
           {pending.length > 0 && (
-            <span className="inline-flex items-center rounded-full bg-amber-500/10 border border-amber-900/60 text-amber-400 text-[10px] font-bold px-2 py-0.5">
+            <span className="inline-flex items-center rounded-full bg-[var(--badge-warning-bg)] border border-[var(--badge-warning-text)]/25 text-[var(--badge-warning-text)] text-xs font-semibold px-2 py-0.5">
               {pending.length}
             </span>
           )}
         </div>
         {pending.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-4 border border-dashed border-border rounded-xl text-center">
-            No coaches pending verification.
-          </p>
+          <EmptyState
+            icon={UserCheck}
+            title="No coaches pending verification"
+            description="Coaches appear here as soon as they upload credentials during signup."
+          />
         ) : (
           <div className="flex flex-col gap-3">
             {pending.map(coach => (

@@ -13,7 +13,7 @@ export function AccentSection({ children, className }: { children: React.ReactNo
 
 export function CharcoalCard({ children, className }: { children: React.ReactNode, className?: string }) {
   return (
-    <div className={cn("rounded-2xl bg-[#1E1C19] text-[#F7F3EE] p-8 md:p-12 shadow-xl", className)}>
+    <div className={cn("rounded-2xl bg-charcoal text-charcoal-foreground p-8 md:p-12 shadow-xl", className)}>
       {children}
     </div>
   )

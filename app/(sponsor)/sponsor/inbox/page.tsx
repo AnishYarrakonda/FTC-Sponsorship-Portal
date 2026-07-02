@@ -16,7 +16,7 @@ export default async function SponsorInboxPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Inbox</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Inbox</h1>
         <p className="text-muted-foreground mt-1">Notifications and communications from teams.</p>
       </div>
 

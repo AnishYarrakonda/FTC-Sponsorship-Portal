@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
   Search, Plus, ArrowUpRight, Sparkles, Building2, AlertCircle,
-  ChevronDown, ChevronUp, Bell, CheckCircle2,
+  ChevronDown, ChevronUp, Bell, CheckCircle2, FileText,
 } from 'lucide-react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { FadeUp } from '@/components/motion/fade-up'
@@ -24,6 +24,8 @@ import {
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { StatusBadge } from '@/components/ui/status-badge'
+import { EmptyState } from '@/components/ui/empty-state'
 import { PortfolioTab } from './portfolio-tab'
 import { InboxTab } from './inbox-tab'
 import { AccountSettings } from '@/components/account/account-settings'
@@ -137,33 +139,6 @@ export function DashboardShell({
   )
 }
 
-/* ── Shared components ──────────────────────────────────────────────────────── */
-
-function StatusChip({ status }: { status: string }) {
-  const statusConfig: Record<string, { bg: string; text: string; border: string }> = {
-    approved: { bg: 'var(--badge-success-bg)', text: 'var(--badge-success-text)', border: 'var(--badge-success-text)' },
-    dispatched: { bg: 'var(--badge-warning-bg)', text: 'var(--badge-warning-text)', border: 'var(--badge-warning-text)' },
-    pending: { bg: 'var(--badge-pending-bg)', text: 'var(--badge-pending-text)', border: 'var(--badge-pending-text)' },
-    changes_requested: { bg: 'var(--badge-warning-bg)', text: 'var(--badge-warning-text)', border: 'var(--badge-warning-text)' },
-    declined: { bg: 'var(--badge-rejected-bg)', text: 'var(--badge-rejected-text)', border: 'var(--badge-rejected-text)' },
-    draft: { bg: 'var(--badge-pending-bg)', text: 'var(--badge-pending-text)', border: 'var(--badge-pending-text)' },
-  }
-  const config = statusConfig[status] ?? statusConfig.draft
-  const label = status === 'dispatched' ? 'Sent to Sponsor' : status.replace(/_/g, ' ')
-  return (
-    <span
-      className="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium"
-      style={{
-        backgroundColor: config.bg,
-        color: config.text,
-        borderColor: config.border,
-      }}
-    >
-      {label}
-    </span>
-  )
-}
-
 /* ── Overview tab ───────────────────────────────────────────────────────────── */
 
 function OverviewTab({
@@ -224,7 +199,7 @@ function OverviewTab({
               </div>
               <div>
                 <h4 className="text-[15px] font-semibold text-foreground">Ready to graduate?</h4>
-                <p className="mt-1 text-[13px] text-muted-foreground max-w-md leading-relaxed">
+                <p className="mt-1 text-sm text-muted-foreground max-w-md leading-relaxed">
                   If you have secured your seed funding and registered with FIRST, you can upgrade your account to unlock technical robot specs and award history.
                 </p>
               </div>
@@ -242,7 +217,7 @@ function OverviewTab({
                     <Sparkles className="h-5 w-5 text-primary" />
                     Level Up Your Team
                   </DialogTitle>
-                  <DialogDescription className="text-muted-foreground text-[13px]">
+                  <DialogDescription className="text-muted-foreground text-sm">
                     Enter your official registration details to graduate from an Incubator to an Existing Team.
                   </DialogDescription>
                 </DialogHeader>
@@ -298,17 +273,17 @@ function OverviewTab({
                 <div>
                   <div className="flex items-center gap-2">
                     <AlertCircle className="h-4 w-4 text-rose-600" />
-                    <h4 className="text-[14px] font-medium text-rose-600">
+                    <h4 className="text-sm font-medium text-rose-600">
                       {s.status === 'declined' ? 'Submission Declined' : 'Changes Requested'}
                     </h4>
                   </div>
-                  <p className="mt-1 text-[13px] text-muted-foreground">
+                  <p className="mt-1 text-sm text-muted-foreground">
                     <span className="font-semibold text-foreground">{s.company_name}</span>: {s.admin_feedback || 'Needs your attention.'}
                   </p>
                 </div>
                 <Link
                   href={`/submissions/${s.id}/edit`}
-                  className="inline-flex items-center justify-center whitespace-nowrap rounded-[6px] bg-rose-600 text-white px-4 h-9 shrink-0 text-[13px] font-medium transition-all hover:bg-rose-700 active:scale-95 shadow-sm"
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-[6px] bg-rose-600 text-white px-4 h-9 shrink-0 text-sm font-medium transition-all hover:bg-rose-700 active:scale-95 shadow-sm"
                 >
                   Review Submission
                 </Link>
@@ -334,7 +309,7 @@ function OverviewTab({
               <CardTitle>Recent Pitches</CardTitle>
               <button
                 onClick={() => switchTab('pitches')}
-                className="flex items-center gap-1 text-[12px] text-muted-foreground hover:text-foreground transition-colors"
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 View all <ArrowUpRight className="h-3 w-3" />
               </button>
@@ -356,7 +331,7 @@ function OverviewTab({
                         </p>
                       </div>
                     </div>
-                    <StatusChip status={s.status ?? 'draft'} />
+                    <StatusBadge status={s.status ?? 'draft'} />
                   </div>
                 ))}
               </div>
@@ -365,7 +340,7 @@ function OverviewTab({
                 <p className="text-sm text-muted-foreground mb-3">No pitches yet.</p>
                 <button
                   onClick={() => switchTab('sponsors')}
-                  className="inline-flex items-center gap-1.5 text-[13px] font-medium text-primary hover:opacity-80 transition-opacity"
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:opacity-80 transition-opacity"
                 >
                   <Plus className="h-3.5 w-3.5" /> Start your first pitch
                 </button>
@@ -380,16 +355,16 @@ function OverviewTab({
           </CardHeader>
           <CardContent className="space-y-5">
             {team.mission_statement ? (
-              <p className="text-[13px] text-muted-foreground leading-relaxed line-clamp-3">
+              <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">
                 {team.mission_statement}
               </p>
             ) : (
-              <p className="text-[13px] text-muted-foreground italic">Add a mission statement to strengthen your pitches.</p>
+              <p className="text-sm text-muted-foreground italic">Add a mission statement to strengthen your pitches.</p>
             )}
 
             {portfolioAsk > 0 && (
               <div className="space-y-2">
-                <div className="flex items-center justify-between text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   <span>Funded</span>
                   <span className="font-mono text-foreground">
                     ${(fundedAmount / 100).toLocaleString()} of ${(portfolioAsk / 100).toLocaleString()}
@@ -401,12 +376,12 @@ function OverviewTab({
                     style={{ width: `${fundingPct}%` }}
                   />
                 </div>
-                <p className="text-[11px] text-muted-foreground">{fundingPct}% of season target</p>
+                <p className="text-xs text-muted-foreground">{fundingPct}% of season target</p>
               </div>
             )}
 
             {team.budget_items && (team.budget_items as any[]).length > 0 && (
-              <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" strokeWidth={1.5} />
                 <span>{(team.budget_items as any[]).length} budget line items</span>
               </div>
@@ -414,7 +389,7 @@ function OverviewTab({
 
             <button
               onClick={() => switchTab('portfolio')}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2.5 text-[13px] font-medium text-foreground hover:bg-accent transition-colors"
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2.5 text-sm font-medium text-foreground hover:bg-accent transition-colors"
             >
               Edit Portfolio
               <ArrowUpRight className="h-3.5 w-3.5" />
@@ -469,7 +444,7 @@ function CoachQuickAction({ icon, label, sub, onClick, badge }: {
           <span className="text-sm font-medium">{label}</span>
         </div>
         {badge != null && (
-          <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
+          <span className="rounded-full bg-primary px-1.5 py-0.5 text-xs font-semibold text-primary-foreground">
             {badge}
           </span>
         )}
@@ -534,12 +509,14 @@ function FindSponsorsTab({ sponsors, submissions }: { sponsors: Sponsor[], submi
         <div className="flex flex-wrap gap-3">
           {/* Search */}
           <div className="relative flex-1 min-w-[220px]">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={1.5} />
+            <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={1.5} />
             <input
+              type="search"
               value={query}
               onChange={e => setQuery(e.target.value)}
+              aria-label="Search sponsor companies"
               placeholder="Search companies…"
-              className="w-full rounded-md border border-border bg-card py-2 pl-9 pr-3 text-[13px] text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-primary/50 transition-shadow shadow-sm"
+              className="w-full rounded-md border border-border bg-card py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-primary/50 transition-shadow shadow-sm"
             />
           </div>
 
@@ -550,7 +527,7 @@ function FindSponsorsTab({ sponsors, submissions }: { sponsors: Sponsor[], submi
                 key={t}
                 onClick={() => setIndustry(t)}
                 className={cn(
-                  'rounded-md border px-3 py-1.5 text-[11px] font-medium transition-colors capitalize shadow-sm',
+                  'rounded-md border px-3 py-1.5 text-xs font-medium transition-colors capitalize shadow-sm',
                   industry === t
                     ? 'border-primary bg-primary/10 text-primary'
                     : 'border-border bg-card text-muted-foreground hover:text-foreground hover:border-border/80 hover:bg-accent'
@@ -568,7 +545,7 @@ function FindSponsorsTab({ sponsors, submissions }: { sponsors: Sponsor[], submi
                 key={r.label}
                 onClick={() => setFundingRange(i)}
                 className={cn(
-                  'rounded-md border px-3 py-1.5 text-[11px] font-medium transition-colors shadow-sm',
+                  'rounded-md border px-3 py-1.5 text-xs font-medium transition-colors shadow-sm',
                   fundingRange === i
                     ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600'
                     : 'border-border bg-card text-muted-foreground hover:text-foreground hover:border-border/80 hover:bg-accent'
@@ -611,7 +588,7 @@ function FindSponsorsTab({ sponsors, submissions }: { sponsors: Sponsor[], submi
                     <div className="flex-1 min-w-0">
                       <div className="text-[15px] font-medium text-foreground tracking-tight truncate">{s.company_name}</div>
                       {s.industry && (
-                        <span className="mt-1 inline-block rounded-md bg-secondary border border-border/50 px-2 py-0.5 text-[10px] uppercase font-medium tracking-wider text-muted-foreground">
+                        <span className="mt-1 inline-block rounded-md bg-secondary border border-border/50 px-2 py-0.5 text-xs uppercase font-medium tracking-wider text-muted-foreground">
                           {s.industry}
                         </span>
                       )}
@@ -620,7 +597,7 @@ function FindSponsorsTab({ sponsors, submissions }: { sponsors: Sponsor[], submi
 
                   {/* Funding bar */}
                   <div className="px-5 pb-5 space-y-2">
-                    <div className="flex items-center justify-between text-[11px] text-muted-foreground font-medium uppercase tracking-wider">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground font-medium uppercase tracking-wider">
                       <span>Remaining</span>
                       <span className="font-mono text-foreground">${(remaining / 100).toLocaleString()}</span>
                     </div>
@@ -630,7 +607,7 @@ function FindSponsorsTab({ sponsors, submissions }: { sponsors: Sponsor[], submi
                         style={{ width: `${100 - pct}%` }}
                       />
                     </div>
-                    <div className="text-[10px] text-muted-foreground">{100 - pct}% capacity available</div>
+                    <div className="text-xs text-muted-foreground">{100 - pct}% capacity available</div>
                   </div>
 
                   {/* Actions */}
@@ -640,7 +617,7 @@ function FindSponsorsTab({ sponsors, submissions }: { sponsors: Sponsor[], submi
                         href={s.website}
                         target="_blank"
                         rel="noreferrer"
-                        className="flex items-center justify-center gap-1.5 py-3 text-[12px] font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                        className="flex items-center justify-center gap-1.5 py-3 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                       >
                         Visit site <ArrowUpRight className="h-3 w-3" />
                       </a>
@@ -651,7 +628,7 @@ function FindSponsorsTab({ sponsors, submissions }: { sponsors: Sponsor[], submi
                       <Link
                         href={`/submissions/${activeSub.id}/edit`}
                         className={cn(
-                          'flex items-center justify-center gap-1.5 py-3 text-[12px] font-semibold transition-colors bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20',
+                          'flex items-center justify-center gap-1.5 py-3 text-xs font-semibold transition-colors bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20',
                           !s.website && 'col-span-2',
                         )}
                       >
@@ -661,7 +638,7 @@ function FindSponsorsTab({ sponsors, submissions }: { sponsors: Sponsor[], submi
                       <Link
                         href={`/submissions/new?sponsor=${s.id}`}
                         className={cn(
-                          'flex items-center justify-center gap-1.5 py-3 text-[12px] font-semibold transition-colors',
+                          'flex items-center justify-center gap-1.5 py-3 text-xs font-semibold transition-colors',
                           s.website
                             ? 'text-primary hover:bg-primary/5 hover:text-primary/90'
                             : 'col-span-2 text-primary hover:bg-primary/5 hover:text-primary/90',
@@ -676,9 +653,21 @@ function FindSponsorsTab({ sponsors, submissions }: { sponsors: Sponsor[], submi
             })}
           </AnimatePresence>
           {results.length === 0 && (
-            <div className="col-span-full rounded-xl border border-dashed border-border p-12 text-center text-[13px] text-muted-foreground">
-              No sponsors match your filters.
-            </div>
+            <EmptyState
+              className="col-span-full"
+              icon={Building2}
+              title="No sponsors match your filters"
+              description="Try a different search term, industry, or funding range — new sponsors are added as they're approved."
+              action={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { setQuery(''); setIndustry('all'); setFundingRange(0) }}
+                >
+                  Clear filters
+                </Button>
+              }
+            />
           )}
         </div>
       </div>
@@ -725,7 +714,7 @@ function SubmissionsTab({ submissions, onNewPitch }: { submissions: SubmissionSu
               key={f.id}
               onClick={() => setFilter(f.id)}
               className={cn(
-                'rounded-md border px-3 py-1.5 text-[11px] font-medium transition-colors shadow-sm',
+                'rounded-md border px-3 py-1.5 text-xs font-medium transition-colors shadow-sm',
                 filter === f.id
                   ? 'border-primary bg-primary/10 text-primary'
                   : 'border-border bg-card text-muted-foreground hover:text-foreground hover:border-border/80 hover:bg-accent'
@@ -757,10 +746,10 @@ function SubmissionsTab({ submissions, onNewPitch }: { submissions: SubmissionSu
                     <Building2 className="h-5 w-5" strokeWidth={1.5} />
                   </div>
                   <div className="min-w-0">
-                    <div className="text-[14px] font-medium text-foreground truncate">{s.company_name}</div>
+                    <div className="text-sm font-medium text-foreground truncate">{s.company_name}</div>
                     <div className="flex items-center gap-2 mt-1">
-                      <StatusChip status={s.status ?? 'draft'} />
-                      <span className="text-[11px] text-muted-foreground font-mono" suppressHydrationWarning>
+                      <StatusBadge status={s.status ?? 'draft'} />
+                      <span className="text-xs text-muted-foreground font-mono" suppressHydrationWarning>
                         {new Date(s.updated_at ?? 0).toLocaleDateString()}
                       </span>
                     </div>
@@ -771,7 +760,7 @@ function SubmissionsTab({ submissions, onNewPitch }: { submissions: SubmissionSu
                     <Link
                       href={`/submissions/${s.id}/edit`}
                       onClick={e => e.stopPropagation()}
-                      className="text-[11px] uppercase tracking-wider px-3 py-1.5 bg-background border border-border rounded-md hover:bg-accent text-foreground font-semibold transition-colors shadow-sm"
+                      className="text-xs uppercase tracking-wider px-3 py-1.5 bg-background border border-border rounded-md hover:bg-accent text-foreground font-semibold transition-colors shadow-sm"
                     >
                       Edit
                     </Link>
@@ -779,7 +768,7 @@ function SubmissionsTab({ submissions, onNewPitch }: { submissions: SubmissionSu
                     <Link
                       href={`/submissions/${s.id}/edit`}
                       onClick={e => e.stopPropagation()}
-                      className="text-[11px] uppercase tracking-wider px-3 py-1.5 bg-background border border-border rounded-md hover:bg-accent text-foreground font-semibold transition-colors shadow-sm"
+                      className="text-xs uppercase tracking-wider px-3 py-1.5 bg-background border border-border rounded-md hover:bg-accent text-foreground font-semibold transition-colors shadow-sm"
                     >
                       View
                     </Link>
@@ -802,12 +791,12 @@ function SubmissionsTab({ submissions, onNewPitch }: { submissions: SubmissionSu
                   >
                     <div className="px-5 pb-5 space-y-3 border-t border-border pt-4 bg-accent/20">
                       {s.admin_feedback && (
-                        <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-[13px] text-amber-700">
+                        <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-amber-700">
                           <span className="font-semibold text-amber-700">Admin feedback: </span>{s.admin_feedback}
                         </div>
                       )}
                       {s.requested_amount_cents != null && (
-                        <div className="text-[12px] text-muted-foreground">
+                        <div className="text-xs text-muted-foreground">
                           Ask: <span className="text-foreground font-mono font-medium">${(s.requested_amount_cents / 100).toLocaleString()}</span>
                         </div>
                       )}
@@ -819,7 +808,21 @@ function SubmissionsTab({ submissions, onNewPitch }: { submissions: SubmissionSu
           )
         })}
         {filtered.length === 0 && (
-          <div className="p-12 text-center text-muted-foreground text-[13px]">No submissions in this category.</div>
+          <EmptyState
+            className="rounded-none border-0 bg-transparent"
+            icon={FileText}
+            title={filter === 'all' ? 'No pitches yet' : 'No pitches in this category'}
+            description={
+              filter === 'all'
+                ? 'Browse active sponsors and send your first tailored pitch.'
+                : 'Try another filter, or start a new pitch to an active sponsor.'
+            }
+            action={
+              <Button onClick={onNewPitch} size="sm" className="gap-2">
+                <Plus className="h-4 w-4" aria-hidden="true" /> New Pitch
+              </Button>
+            }
+          />
         )}
       </div>
     </div>

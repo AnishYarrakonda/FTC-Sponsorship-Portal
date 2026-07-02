@@ -24,9 +24,10 @@ export function SaveIndicator({ state, className }: SaveIndicatorProps) {
     : ''
 
   return (
-    <AnimatePresence mode="wait">
-      {state !== 'idle' && (
-        <motion.span
+    <span role="status" aria-live="polite">
+      <AnimatePresence mode="wait">
+        {state !== 'idle' && (
+          <motion.span
           key={state}
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
@@ -55,7 +56,8 @@ export function SaveIndicator({ state, className }: SaveIndicatorProps) {
             </>
           )}
         </motion.span>
-      )}
-    </AnimatePresence>
+        )}
+      </AnimatePresence>
+    </span>
   )
 }

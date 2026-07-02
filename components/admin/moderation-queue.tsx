@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ModerationActions } from '@/components/admin/moderation-actions'
 import { approveSubmission, declineSubmission, requestEdit } from '@/app/actions/moderation'
@@ -14,7 +14,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { CheckCircle2, AlertCircle, CheckSquare, Square, ChevronDown, ChevronUp } from 'lucide-react'
+import { CheckCircle2, AlertCircle, CheckSquare, Square, ChevronDown, ChevronUp, Users } from 'lucide-react'
+import Link from 'next/link'
+import { EmptyState } from '@/components/ui/empty-state'
 import { cn, htmlToPlainText } from '@/lib/utils'
 
 interface Submission {
@@ -38,7 +40,7 @@ interface BulkResult {
 function FieldBlock({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <h4 className="mb-1.5 text-[11px] font-mono uppercase tracking-widest text-muted-foreground">{label}</h4>
+      <h4 className="mb-1.5 text-xs font-mono uppercase tracking-widest text-muted-foreground">{label}</h4>
       {children}
     </div>
   )
@@ -57,18 +59,18 @@ function PreviewPane({ submission }: { submission: Submission }) {
     <div className="space-y-4 text-sm">
       {/* Identity row */}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+        <span className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
           Sponsor: <span className="text-foreground">{sponsor?.company_name}</span>
         </span>
         <span className="text-muted-foreground/40">·</span>
-        <span className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+        <span className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
           Ask:{' '}
           <span className={cn('text-foreground', isOverAsk && 'text-amber-500')}>
             ${(financialAsk / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </span>
         </span>
         {isOverAsk && (
-          <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+          <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
             ⚠ Exceeds line items (${(lineItemSum / 100).toFixed(2)})
           </span>
         )}
@@ -154,7 +156,7 @@ function SubmissionCard({
             <p className="mt-0.5 text-sm font-medium text-foreground">
               From: {team?.team_name}{' '}
               {team?.status === 'existing' && team?.ftc_team_number ? (
-                <span className="ml-1 rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+                <span className="ml-1 rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
                   #{team.ftc_team_number}
                 </span>
               ) : (
@@ -162,10 +164,10 @@ function SubmissionCard({
               )}
             </p>
             <div className="mt-1.5 flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-border px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
+              <span className="rounded-full border border-border px-2 py-0.5 font-mono text-xs text-muted-foreground">
                 Ask: ${(financialAsk / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
               </span>
-              <span className="text-[11px] text-muted-foreground" suppressHydrationWarning>
+              <span className="text-xs text-muted-foreground" suppressHydrationWarning>
                 {new Date(submission.updated_at).toLocaleDateString()}
               </span>
             </div>
@@ -175,7 +177,7 @@ function SubmissionCard({
             type="button"
             onClick={() => setExpanded(e => !e)}
             className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-            aria-label={expanded ? 'Collapse' : 'Expand'}
+            aria-label={expanded ? 'Collapse submission details' : 'Expand submission details'}
           >
             {expanded
               ? <ChevronUp className="h-4 w-4" strokeWidth={1.5} />
@@ -272,7 +274,7 @@ function ApprovePreviewDrawer({ open, onClose, submission, onConfirm, isPending 
         <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
           {/* What the sponsor receives */}
           <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
-            <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">Sponsor email</p>
+            <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">Sponsor email</p>
             <p className="text-sm font-medium text-foreground">To: {sponsor?.company_name}</p>
             <p className="text-xs text-muted-foreground">
               Subject: Verified FTC Robotics Sponsorship Proposal:{' '}
@@ -289,7 +291,7 @@ function ApprovePreviewDrawer({ open, onClose, submission, onConfirm, isPending 
 
           {/* Budget impact */}
           <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-1">
-            <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">Sponsor funding impact</p>
+            <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">Sponsor funding impact</p>
             <p className="text-sm text-muted-foreground">
               Deducted:{' '}
               <span className="font-mono font-medium text-foreground">
@@ -305,7 +307,7 @@ function ApprovePreviewDrawer({ open, onClose, submission, onConfirm, isPending 
 
           {/* Coach notification */}
           <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-2">
-            <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">Coach notification</p>
+            <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">Coach notification</p>
             <p className="rounded-md bg-background border border-border px-3 py-2 text-sm text-muted-foreground">
               Your submission to{' '}
               <span className="font-medium text-foreground">{sponsor?.company_name}</span>{' '}
@@ -407,13 +409,17 @@ export function ModerationQueue({ initialSubmissions }: { initialSubmissions: Su
 
   if (submissions.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16 text-center">
-        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted text-2xl">
-          🎉
-        </div>
-        <h3 className="text-lg font-medium text-foreground">Queue is Empty</h3>
-        <p className="mt-1 text-sm text-muted-foreground">All submitted portfolios have been reviewed.</p>
-      </div>
+      <EmptyState
+        className="py-16"
+        icon={CheckCircle2}
+        title="Queue is empty"
+        description="All submitted portfolios have been reviewed. New submissions will appear here automatically."
+        action={
+          <Link href="/coaches" className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}>
+            <Users className="h-4 w-4" aria-hidden="true" /> Review coach verifications
+          </Link>
+        }
+      />
     )
   }
 

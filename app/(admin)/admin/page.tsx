@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/page-header'
+import { StatusBadge } from '@/components/ui/status-badge'
 import { Inbox, Users, Building2, AlertCircle, CheckCircle2, Clock, ArrowUpRight } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
@@ -180,16 +181,15 @@ export default async function AdminDashboardPage() {
             <div className="divide-y divide-border">
               {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
               {(recentActivity as any[]).map((a) => (
-                <div key={a.id} className="flex items-center justify-between py-2.5">
-                  <div className="flex items-center gap-3">
-                    <StatusDot status={a.status} />
-                    <div>
-                      <p className="text-sm text-foreground">
-                        <span className="font-medium">{a.team_name}</span>
-                        {' → '}
-                        <span className="text-muted-foreground">{a.company_name}</span>
-                      </p>
-                      <p className="text-xs text-muted-foreground">{humanizeStatus(a.status)}</p>
+                <div key={a.id} className="flex items-center justify-between gap-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-foreground">
+                      <span className="font-medium">{a.team_name}</span>
+                      {' → '}
+                      <span className="text-muted-foreground">{a.company_name}</span>
+                    </p>
+                    <div className="mt-1">
+                      <StatusBadge status={a.status} />
                     </div>
                   </div>
                   <span className="shrink-0 text-xs text-muted-foreground" suppressHydrationWarning>
@@ -222,7 +222,7 @@ function ActionCard({ icon, label, value, sub, highlight, href }: {
       <CardContent className="pt-5">
         <div className="flex items-center gap-1.5 text-muted-foreground">
           {icon}
-          <p className="text-[11px] font-mono uppercase tracking-widest">{label}</p>
+          <p className="text-xs font-mono uppercase tracking-widest">{label}</p>
         </div>
         <p className={cn('mt-1 text-3xl font-semibold tabular-nums tracking-tight', highlight ? 'text-amber-500' : 'text-foreground')} suppressHydrationWarning>
           {value}
@@ -260,26 +260,4 @@ function QuickLink({ href, icon, label, sub }: { href: string; icon: React.React
 
 function EmptyState({ text }: { text: string }) {
   return <p className="py-6 text-center text-sm text-muted-foreground">{text}</p>
-}
-
-function StatusDot({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    approved: 'bg-emerald-400',
-    pending: 'bg-amber-400',
-    declined: 'bg-rose-400',
-    changes_requested: 'bg-orange-400',
-    draft: 'bg-muted-foreground/40',
-  }
-  return <span className={cn('h-2 w-2 shrink-0 rounded-full', colors[status] ?? 'bg-muted-foreground/40')} />
-}
-
-function humanizeStatus(status: string) {
-  const map: Record<string, string> = {
-    approved: 'Approved & sent',
-    pending: 'Pending review',
-    declined: 'Declined',
-    changes_requested: 'Changes requested',
-    draft: 'Saved as draft',
-  }
-  return map[status] ?? status
 }

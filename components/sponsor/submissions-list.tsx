@@ -1,9 +1,12 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { FileText, Search, Filter, ArrowUpRight, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { EmptyState } from '@/components/ui/empty-state'
+import { StatusBadge } from '@/components/ui/status-badge'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,7 +27,9 @@ const STATUS_FILTERS = [
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function SponsorSubmissionsList({ submissions }: { submissions: any[] }) {
-  const [query, setQuery] = useState('')
+  // Seed the search box from ?q= (set by the dashboard "Team Search" card)
+  const searchParams = useSearchParams()
+  const [query, setQuery] = useState(searchParams?.get('q') ?? '')
   const [status, setStatus] = useState<string>('all')
 
   const filtered = useMemo(() => {
@@ -44,10 +49,12 @@ export function SponsorSubmissionsList({ submissions }: { submissions: any[] }) 
     <>
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />
           <input
+            type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            aria-label="Search teams by name or number"
             placeholder="Search teams..."
             className="w-full bg-card border border-border rounded-md pl-9 py-2 text-sm outline-none focus:ring-1 focus:ring-primary/50 transition-shadow"
           />
@@ -75,14 +82,24 @@ export function SponsorSubmissionsList({ submissions }: { submissions: any[] }) 
           <SubmissionRow key={s.id} submission={s} />
         ))}
         {filtered.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed border-border rounded-2xl bg-card/50">
-            <FileText className="h-10 w-10 text-muted-foreground/30 mb-4" />
-            <p className="text-muted-foreground">
-              {submissions.length === 0
-                ? 'No sponsorship requests found.'
-                : 'No requests match your search or filter.'}
-            </p>
-          </div>
+          submissions.length === 0 ? (
+            <EmptyState
+              icon={FileText}
+              title="No sponsorship requests yet"
+              description="Approved team pitches will appear here as soon as an admin dispatches them to you — you'll also get an email."
+            />
+          ) : (
+            <EmptyState
+              icon={Search}
+              title="No requests match your search"
+              description="Try a different team name or number, or reset the status filter."
+              action={
+                <Button variant="outline" size="sm" onClick={() => { setQuery(''); setStatus('all') }}>
+                  Clear search & filters
+                </Button>
+              }
+            />
+          )
         )}
       </div>
     </>
@@ -91,17 +108,6 @@ export function SponsorSubmissionsList({ submissions }: { submissions: any[] }) 
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function SubmissionRow({ submission }: { submission: any }) {
-  const statusColors: Record<string, string> = {
-    pending: 'text-amber-600 bg-amber-500/10 border-amber-500/20',
-    dispatched: 'text-amber-600 bg-amber-500/10 border-amber-500/20',
-    approved: 'text-emerald-600 bg-emerald-500/10 border-emerald-500/20',
-    declined: 'text-rose-600 bg-rose-500/10 border-rose-500/20',
-    changes_requested: 'text-amber-600 bg-amber-500/10 border-amber-500/20',
-  }
-
-  const statusLabel =
-    submission.status === 'dispatched' ? 'New Request' : String(submission.status).replace('_', ' ')
-
   return (
     <Link href={`/sponsor/submissions/${submission.id}`}>
       <Card className="hover:border-border/80 hover:shadow-sm transition-all cursor-pointer group shadow-sm bg-card border-border">
@@ -112,25 +118,18 @@ function SubmissionRow({ submission }: { submission: any }) {
             </div>
             <div className="min-w-0">
               <div className="text-[15px] font-medium truncate group-hover:text-primary transition-colors text-foreground">{submission.teams?.team_name || 'Unknown Team'}</div>
-              <div className="text-[13px] text-muted-foreground mt-0.5">
+              <div className="text-sm text-muted-foreground mt-0.5">
                 {submission.teams?.city || 'Unknown'}, {submission.teams?.state || 'Unknown'}
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-4 shrink-0">
-            <div
-              className={cn(
-                'px-2.5 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wider border',
-                statusColors[submission.status] || 'text-muted-foreground bg-muted/10 border-muted-foreground/20',
-              )}
-            >
-              {statusLabel}
-            </div>
+            <StatusBadge status={submission.status} label={submission.status === 'dispatched' ? 'New Request' : undefined} />
             <div className="text-xs text-muted-foreground tabular-nums">
               {new Date(submission.created_at).toLocaleDateString()}
             </div>
-            <ArrowUpRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-foreground group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
+            <ArrowUpRight aria-hidden="true" className="h-4 w-4 text-muted-foreground/40 group-hover:text-foreground group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
           </div>
         </CardContent>
       </Card>
