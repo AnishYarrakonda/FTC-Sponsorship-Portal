@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/page-header'
+import { RoleRedirectBanner } from '@/components/auth/role-redirect-banner'
 import { Inbox, Users, Building2, AlertCircle, CheckCircle2, Clock, ArrowUpRight } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
@@ -50,6 +51,7 @@ export default async function AdminDashboardPage() {
 
   return (
     <div className="flex flex-col gap-8">
+      <RoleRedirectBanner />
       <PageHeader
         title="Admin Dashboard"
         subtitle="Operational overview — queue health, pending actions, and today's activity."

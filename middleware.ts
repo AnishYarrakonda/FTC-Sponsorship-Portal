@@ -1,5 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
-import { NextResponse, type NextRequest, type NextFetchEvent } from 'next/server'
+import { NextResponse } from 'next/server'
 
 // Routes reachable without an authenticated session.
 const isPublicRoute = createRouteMatcher([
