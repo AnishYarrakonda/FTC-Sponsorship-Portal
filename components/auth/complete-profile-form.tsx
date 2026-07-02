@@ -103,14 +103,13 @@ export function CompleteProfileForm({ email, defaultName }: { email: string; def
   }
 
   return (
-    <section className="fixed inset-0 overflow-y-auto bg-background text-foreground">
-      <div className="min-h-screen w-full grid place-items-center px-4 py-16">
+    <section className="w-full text-foreground">
+      <div className="w-full grid place-items-center">
         <Card className="w-full max-w-2xl border-border bg-card/70 backdrop-blur shadow-2xl">
           <CardHeader className="border-b border-border/50 pb-6">
-            <CardTitle className="text-2xl text-foreground">Finish setting up your account</CardTitle>
+            <CardTitle className="text-2xl text-foreground">Complete your coach profile</CardTitle>
             <CardDescription className="text-muted-foreground">
-              Your sign-in for <span className="font-medium text-foreground">{email}</span> is ready, but your
-              coach profile was never completed. Fill in the details below to finish — or sign out if this
+              Fill in your coach and team details below to finish — or sign out if this
               isn&apos;t you.
             </CardDescription>
           </CardHeader>
@@ -402,7 +401,7 @@ export function CompleteProfileForm({ email, defaultName }: { email: string; def
           </CardContent>
           <CardFooter className="border-t border-border/50 py-4">
             <p className="text-xs text-muted-foreground">
-              Meant to join as a sponsor? <Link href="/sponsors/apply" className="underline hover:text-foreground">Apply here</Link> or
+              Meant to join as a sponsor? Choose &ldquo;I&apos;m a sponsor representative&rdquo; above, or
               contact <a href="mailto:support@ftcportal.dev" className="underline hover:text-foreground">support</a>.
             </p>
           </CardFooter>

@@ -1,13 +1,15 @@
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { getAuthedProfile } from '@/lib/actions-utils'
-import { CompleteProfileForm } from '@/components/auth/complete-profile-form'
+import { CompleteProfileChooser } from '@/components/auth/complete-profile-chooser'
 
 /**
  * Orphan recovery: an authenticated Clerk user whose `profiles` row was never
- * created (signup crashed after the Clerk session activated). Role layouts and
- * /awaiting-verification route profile-less users here instead of /login
- * (which would redirect-loop for an authed session).
+ * created (signup crashed after the Clerk session activated — happens to both
+ * coach and sponsor signups). Role layouts and /awaiting-verification route
+ * profile-less users here instead of /login (which would redirect-loop for an
+ * authed session). The chooser lets the user finish as either a coach or a
+ * sponsor representative.
  */
 export default async function CompleteProfilePage() {
   const { userId } = await auth()
@@ -27,5 +29,5 @@ export default async function CompleteProfilePage() {
     ''
   const defaultName = clerkUser?.fullName ?? ''
 
-  return <CompleteProfileForm email={email} defaultName={defaultName} />
+  return <CompleteProfileChooser email={email} defaultName={defaultName} />
 }

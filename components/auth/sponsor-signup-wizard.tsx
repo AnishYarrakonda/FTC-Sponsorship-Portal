@@ -5,7 +5,9 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { sponsorSignupSchema, type SponsorSignupInput } from '@/lib/schemas/sponsor-signup'
 import { createSponsorApplication } from '@/app/actions/auth'
+import { schemaPlaceholderPassword } from '@/components/auth/complete-sponsor-application-form'
 import { useSignUp } from '@clerk/nextjs/legacy'
+import { useUser } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -34,6 +36,7 @@ function clerkErrorMessage(err: unknown, fallback: string): string {
 export function SponsorSignupWizard() {
   const router = useRouter()
   const { isLoaded, signUp, setActive } = useSignUp()
+  const { isLoaded: userLoaded, isSignedIn, user } = useUser()
   const [step, setStep] = useState(1)
   const totalSteps = 3
   const [error, setError] = useState<string | null>(null)
@@ -45,6 +48,12 @@ export function SponsorSignupWizard() {
   const [emailVerified, setEmailVerified] = useState(false)
   const [verifyCode, setVerifyCode] = useState('')
   const [verifyPending, setVerifyPending] = useState(false)
+
+  // A Clerk session is already active but no profile exists yet (e.g. the user
+  // came from /complete-profile after a signup that crashed post-verification).
+  // The Account step is already done, so the wizard resumes at Company.
+  const [resumedFromSession, setResumedFromSession] = useState(false)
+  const minStep = resumedFromSession ? 2 : 1
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -103,10 +112,35 @@ export function SponsorSignupWizard() {
     mode: 'onTouched'
   })
 
+  // Resume mode: skip the Account step when a Clerk session is already active
+  // and the user has no profile yet (no role mirrored into publicMetadata —
+  // UX hint only, never used for authorization). `signUp` is unusable with an
+  // active session, so the account fields are satisfied from the session
+  // instead: real email + name from Clerk, and a throwaway placeholder for
+  // the schema's password fields (Clerk already owns the real credential).
+  useEffect(() => {
+    if (resumedFromSession || !userLoaded || !isSignedIn || !user) return
+    if (user.publicMetadata?.role) return
+    const sessionEmail =
+      user.primaryEmailAddress?.emailAddress ?? user.emailAddresses?.[0]?.emailAddress ?? ''
+    const placeholder = schemaPlaceholderPassword()
+    form.setValue('email', sessionEmail)
+    if (user.fullName) form.setValue('fullName', user.fullName)
+    form.setValue('password', placeholder)
+    form.setValue('confirmPassword', placeholder)
+    setEmailVerified(true)
+    setShowEmailVerify(false)
+    setResumedFromSession(true)
+    setStep(prev => Math.max(prev, 2))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumedFromSession, userLoaded, isSignedIn, user])
+
   const nextStep = async () => {
     let fieldsToValidate: any[] = []
     if (step === 1) fieldsToValidate = ['fullName', 'email', 'password', 'confirmPassword']
-    if (step === 2) fieldsToValidate = ['companyName', 'industry', 'website', 'phoneNumber', 'companyAddress']
+    if (step === 2) fieldsToValidate = resumedFromSession
+      ? ['fullName', 'companyName', 'industry', 'website', 'phoneNumber', 'companyAddress']
+      : ['companyName', 'industry', 'website', 'phoneNumber', 'companyAddress']
 
     const isValid = await form.trigger(fieldsToValidate)
     if (!isValid) return
@@ -175,7 +209,7 @@ export function SponsorSignupWizard() {
     }
   }
 
-  const prevStep = () => { setStep(prev => Math.max(prev - 1, 1)); window.scrollTo(0, 0) }
+  const prevStep = () => { setStep(prev => Math.max(prev - 1, minStep)); window.scrollTo(0, 0) }
 
   async function onSubmit(values: SponsorSignupInput) {
     setIsPending(true)
@@ -347,6 +381,20 @@ export function SponsorSignupWizard() {
                     {/* STEP 2: Company */}
                     {step === 2 && (
                       <>
+                        {resumedFromSession && (
+                          <>
+                            <Alert className="bg-primary/5 border-primary/20">
+                              <AlertDescription className="text-sm text-foreground">
+                                You&apos;re signed in as{' '}
+                                <span className="font-medium">{form.watch('email') || 'your verified email'}</span>.
+                                Your account is ready — finish your company details below.
+                              </AlertDescription>
+                            </Alert>
+                            <FormField control={form.control} name="fullName" render={({ field }) => (
+                              <FormItem><FormLabel>Representative Name</FormLabel><FormControl><Input placeholder="Jane Doe" {...field} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                          </>
+                        )}
                         <FormField control={form.control} name="companyName" render={({ field }) => (
                           <FormItem><FormLabel>Company Name</FormLabel><FormControl><Input placeholder="e.g. TechCorp Solutions" {...field} /></FormControl><FormMessage /></FormItem>
                         )} />
@@ -509,7 +557,7 @@ export function SponsorSignupWizard() {
                 </AnimatePresence>
 
                 <div className="flex justify-between pt-6 border-t border-border/80 mt-8">
-                  {step > 1 ? (
+                  {step > minStep ? (
                     <Button type="button" variant="outline" onClick={prevStep} className="bg-background">
                       <ChevronLeft className="w-4 h-4 mr-2" /> Back
                     </Button>
