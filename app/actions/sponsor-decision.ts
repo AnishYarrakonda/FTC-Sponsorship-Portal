@@ -5,7 +5,10 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { createInAppNotification, sendHandshakeEmail, sendSubmissionDecisionEmail } from '@/lib/notify'
 import { requireSponsor } from '@/lib/actions-utils'
+import { mapDbError } from '@/lib/errors'
 import { z } from 'zod'
+
+const DECISION_EMAIL_WARNING = 'The decision was saved, but the notification email could not be sent.'
 
 const sponsorUpdateSchema = z.object({
   submissionId: z.string().uuid(),
@@ -62,7 +65,7 @@ export async function sponsorUpdateSubmissionStatus(
     p_amount_cents: amountCents,
   })
 
-  if (rpcError) return { error: rpcError.message }
+  if (rpcError) return { error: mapDbError(rpcError, 'sponsorUpdateSubmissionStatus.rpc') }
 
   const result = rpcResult as { ok: boolean; error?: string; amount_cents?: number }
   if (!result?.ok) {
@@ -89,20 +92,20 @@ export async function sponsorUpdateSubmissionStatus(
     })
   }
 
-  try {
-    if (status === 'approved') {
-      const approvedAmount = result.amount_cents ?? amountCents
-      await Promise.all([
-        sendHandshakeEmail(submissionId, approvedAmount),
-        sendSubmissionDecisionEmail(submissionId, 'approved', normalizedFeedback),
-      ])
-    } else if (status === 'declined') {
-      await sendSubmissionDecisionEmail(submissionId, 'declined', normalizedFeedback)
-    } else {
-      await sendSubmissionDecisionEmail(submissionId, 'changes_requested', normalizedFeedback)
-    }
-  } catch (e) {
-    console.error('Failed to send sponsor decision emails:', e)
+  // Senders never throw — collect results so a failed decision-critical email
+  // surfaces as a warning while the saved decision still returns success.
+  let emailsOk = true
+  if (status === 'approved') {
+    const approvedAmount = result.amount_cents ?? amountCents
+    const [handshake, decision] = await Promise.all([
+      sendHandshakeEmail(submissionId, approvedAmount),
+      sendSubmissionDecisionEmail(submissionId, 'approved', normalizedFeedback),
+    ])
+    emailsOk = handshake.success && decision.success
+  } else if (status === 'declined') {
+    emailsOk = (await sendSubmissionDecisionEmail(submissionId, 'declined', normalizedFeedback)).success
+  } else {
+    emailsOk = (await sendSubmissionDecisionEmail(submissionId, 'changes_requested', normalizedFeedback)).success
   }
 
   revalidatePath('/sponsor/dashboard')
@@ -110,7 +113,7 @@ export async function sponsorUpdateSubmissionStatus(
   revalidatePath('/sponsor/inbox')
   revalidatePath('/dashboard')
 
-  return { success: true }
+  return emailsOk ? { success: true } : { success: true, warning: DECISION_EMAIL_WARNING }
 }
 
 export async function recordSponsorDecision(
@@ -138,7 +141,7 @@ export async function recordSponsorDecision(
   })
 
   if (error) {
-    return { ok: false, error: error.message }
+    return { ok: false, error: mapDbError(error, 'recordSponsorDecision.rpc') }
   }
 
   const result = rpcResult as { ok: boolean; error?: string; amount_cents?: number }
@@ -165,22 +168,22 @@ export async function recordSponsorDecision(
     })
   }
 
-  try {
-    if (submissionId && decision !== 'decline') {
-      const approvedAmount = result.amount_cents ?? partialAmount
-      await Promise.all([
-        sendHandshakeEmail(submissionId, approvedAmount),
-        sendSubmissionDecisionEmail(submissionId, 'approved'),
-      ])
-    } else if (submissionId) {
-      await sendSubmissionDecisionEmail(submissionId, 'declined')
-    }
-  } catch (e) {
-    console.error('Failed to send record decision emails:', e)
+  // Senders never throw — collect results so a failed decision-critical email
+  // surfaces as a warning while the recorded decision still returns ok.
+  let emailsOk = true
+  if (submissionId && decision !== 'decline') {
+    const approvedAmount = result.amount_cents ?? partialAmount
+    const [handshake, decisionEmail] = await Promise.all([
+      sendHandshakeEmail(submissionId, approvedAmount),
+      sendSubmissionDecisionEmail(submissionId, 'approved'),
+    ])
+    emailsOk = handshake.success && decisionEmail.success
+  } else if (submissionId) {
+    emailsOk = (await sendSubmissionDecisionEmail(submissionId, 'declined')).success
   }
 
   revalidatePath('/dashboard')
   revalidatePath('/sponsor/inbox')
-  return { ok: true }
+  return emailsOk ? { ok: true } : { ok: true, warning: DECISION_EMAIL_WARNING }
 }
 

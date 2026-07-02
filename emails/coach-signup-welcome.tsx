@@ -49,9 +49,11 @@ export default function CoachSignupWelcomeEmail({
             In the meantime, you can explore the portal and get familiar with the dashboard.
           </Text>
           
+          <Text style={text}>— The FTC Sponsorship Portal team</Text>
           <Hr style={hr} />
           <Text style={footer}>
-            FTC Sponsorship Portal · Supporting the next generation of engineers.
+            FTC Sponsorship Portal · Supporting the next generation of engineers. You received
+            this email because you created a coach account on the portal.
           </Text>
         </Container>
       </Body>

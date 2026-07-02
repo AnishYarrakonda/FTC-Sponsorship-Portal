@@ -60,9 +60,11 @@ export default function HandshakeEmail({
             <Text style={{ ...text, margin: '4px 0 0' }}><strong>Amount Agreed:</strong> {amountDisplay}</Text>
           </Section>
 
+          <Text style={text}>— The FTC Sponsorship Portal team</Text>
           <Hr style={hr} />
           <Text style={footer}>
-            FTC Matchmaker · This match was facilitated through FTC Matchmaker.
+            FTC Sponsorship Portal · You received this email because a sponsorship match involving
+            you was made through the FTC Sponsorship Portal.
           </Text>
         </Container>
       </Body>

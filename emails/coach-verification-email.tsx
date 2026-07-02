@@ -19,19 +19,19 @@ interface CoachVerificationEmailProps {
 
 export default function CoachVerificationEmail({
   coachName,
-  appUrl = 'https://ftc-sponsorship-portal.vercel.app',
+  appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
 }: CoachVerificationEmailProps) {
   return (
     <Html>
       <Head />
-      <Preview>Your FTC Matchmaker coach account is now verified 🎉</Preview>
+      <Preview>Your FTC Sponsorship Portal coach account is now verified 🎉</Preview>
       <Body style={main}>
         <Container style={container}>
           <Heading style={h1}>Hello {coachName},</Heading>
           <Heading style={h2}>Your account has been verified!</Heading>
 
           <Text style={text}>
-            Great news — an FTC Matchmaker admin has reviewed and approved your coach credentials. You now have full access to the platform.
+            Great news — an FTC Sponsorship Portal admin has reviewed and approved your coach credentials. You now have full access to the platform.
           </Text>
 
           <Section style={ctaSection}>
@@ -49,9 +49,10 @@ export default function CoachVerificationEmail({
             Get Started →
           </Button>
 
+          <Text style={text}>— The FTC Sponsorship Portal team</Text>
           <Hr style={hr} />
           <Text style={footer}>
-            FTC Matchmaker · You received this email because you created a coach account on our platform.
+            FTC Sponsorship Portal · You received this email because you created a coach account on our platform.
           </Text>
         </Container>
       </Body>

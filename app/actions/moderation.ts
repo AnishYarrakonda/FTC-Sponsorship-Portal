@@ -4,6 +4,7 @@ import { dispatchApprovedSubmission } from '@/lib/dispatch'
 import { sendSubmissionDecisionEmail, createInAppNotification } from '@/lib/notify'
 import { revalidatePath } from 'next/cache'
 import { requireAdmin } from '@/lib/actions-utils'
+import { mapDbError } from '@/lib/errors'
 import { z } from 'zod'
 
 const moderationSchema = z.object({
@@ -52,14 +53,19 @@ export async function approveSubmission(submissionId: string) {
 
   const finalToken = result.token
 
-  // Notify coach + dispatch to sponsor with their access token
-  try {
-    await Promise.all([
-      sendSubmissionDecisionEmail(submissionId, 'approved'),
-      dispatchApprovedSubmission(submissionId, finalToken!),
-    ])
-  } catch (e) {
-    console.error('Failed to send notifications/dispatch for approved submission:', e)
+  // Notify coach + dispatch to sponsor with their access token. Both senders
+  // never throw; they resolve { success, error? } so we can surface a warning
+  // when the approval was saved but a decision-critical email failed.
+  const [decisionEmail, dispatchResult] = await Promise.all([
+    sendSubmissionDecisionEmail(submissionId, 'approved'),
+    dispatchApprovedSubmission(submissionId, finalToken!),
+  ])
+
+  let warning: string | undefined
+  if (!dispatchResult.success) {
+    warning = 'The approval was saved, but the pitch email to the sponsor could not be sent. Please retry the dispatch or contact engineering.'
+  } else if (!decisionEmail.success) {
+    warning = 'The approval was saved, but the notification email to the coach could not be sent.'
   }
 
   const { data: sub } = await adminClient
@@ -103,7 +109,7 @@ export async function approveSubmission(submissionId: string) {
   revalidatePath('/moderation')
   revalidatePath('/dashboard')
 
-  return { success: true }
+  return warning ? { success: true, warning } : { success: true }
 }
 
 export async function declineSubmission(submissionId: string, feedback: string) {
@@ -127,7 +133,7 @@ export async function declineSubmission(submissionId: string, feedback: string) 
     p_feedback: feedback,
   })
 
-  if (rpcError) return { error: (rpcError as { message: string }).message }
+  if (rpcError) return { error: mapDbError(rpcError as { code?: string; message?: string }, 'declineSubmission.rpc') }
 
   const rpcResult = rpcData as { ok: boolean; error?: string }
   if (!rpcResult.ok) {
@@ -138,11 +144,7 @@ export async function declineSubmission(submissionId: string, feedback: string) 
     return { error: messages[rpcResult.error ?? ''] ?? 'Could not decline submission.' }
   }
 
-  try {
-    await sendSubmissionDecisionEmail(submissionId, 'declined', feedback)
-  } catch (e) {
-    console.error('Failed to send decline email:', e)
-  }
+  const declineEmail = await sendSubmissionDecisionEmail(submissionId, 'declined', feedback)
 
   const { data: sub } = await adminClient
     .from('submissions')
@@ -166,7 +168,9 @@ export async function declineSubmission(submissionId: string, feedback: string) 
   revalidatePath('/moderation')
   revalidatePath('/dashboard')
 
-  return { success: true }
+  return declineEmail.success
+    ? { success: true }
+    : { success: true, warning: 'The decision was saved, but the notification email to the coach could not be sent.' }
 }
 
 export async function requestEdit(submissionId: string, feedback: string) {
@@ -190,7 +194,7 @@ export async function requestEdit(submissionId: string, feedback: string) {
     p_feedback: feedback,
   })
 
-  if (rpcError) return { error: (rpcError as { message: string }).message }
+  if (rpcError) return { error: mapDbError(rpcError as { code?: string; message?: string }, 'requestEdit.rpc') }
 
   const rpcResult = rpcData as { ok: boolean; error?: string }
   if (!rpcResult.ok) {
@@ -201,11 +205,7 @@ export async function requestEdit(submissionId: string, feedback: string) {
     return { error: messages[rpcResult.error ?? ''] ?? 'Could not request edits.' }
   }
 
-  try {
-    await sendSubmissionDecisionEmail(submissionId, 'changes_requested', feedback)
-  } catch (e) {
-    console.error('Failed to send request-edit email:', e)
-  }
+  const requestEditEmail = await sendSubmissionDecisionEmail(submissionId, 'changes_requested', feedback)
 
   const { data: sub } = await adminClient
     .from('submissions')
@@ -229,6 +229,8 @@ export async function requestEdit(submissionId: string, feedback: string) {
   revalidatePath('/moderation')
   revalidatePath('/dashboard')
 
-  return { success: true }
+  return requestEditEmail.success
+    ? { success: true }
+    : { success: true, warning: 'The decision was saved, but the notification email to the coach could not be sent.' }
 }
 

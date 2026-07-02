@@ -17,6 +17,9 @@ interface CredentialUploadAlertProps {
   coachEmail: string
   teamName?: string | null
   reviewUrl: string
+  /** Override the default credential-upload copy (e.g. sponsor application alerts). */
+  heading?: string
+  description?: string
 }
 
 export default function CredentialUploadAlert({
@@ -24,17 +27,18 @@ export default function CredentialUploadAlert({
   coachEmail,
   teamName,
   reviewUrl,
+  heading = 'Coach credential uploaded',
+  description = 'just uploaded their credential for verification.',
 }: CredentialUploadAlertProps) {
   return (
     <Html>
       <Head />
-      <Preview>New coach credential awaiting review</Preview>
+      <Preview>{heading} — action required</Preview>
       <Body style={main}>
         <Container style={container}>
-          <Heading style={h1}>Coach credential uploaded</Heading>
+          <Heading style={h1}>{heading}</Heading>
           <Text style={text}>
-            <strong>{coachName}</strong> ({coachEmail}) just uploaded their credential for
-            verification.
+            <strong>{coachName}</strong> ({coachEmail}) {description}
           </Text>
           {teamName && (
             <Text style={text}>
@@ -46,9 +50,11 @@ export default function CredentialUploadAlert({
               Review in admin console
             </Button>
           </Section>
+          <Text style={text}>— The FTC Sponsorship Portal team</Text>
           <Hr style={hr} />
           <Text style={footer}>
-            FTC Sponsorship Portal · Automated alert sent to admins on credential upload.
+            FTC Sponsorship Portal · You received this automated alert because you are an
+            administrator of the portal.
           </Text>
         </Container>
       </Body>

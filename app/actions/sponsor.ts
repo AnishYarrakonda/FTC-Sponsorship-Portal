@@ -5,7 +5,42 @@ import { sponsorApplicationSchema, sponsorSchema, type SponsorApplicationInput, 
 import { sendSponsorApplicationConfirmation } from '@/lib/notify'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
-import { requireAdmin } from '@/lib/actions-utils'
+import { getClientIp, requireAdmin } from '@/lib/actions-utils'
+import { mapDbError } from '@/lib/errors'
+import * as Sentry from '@sentry/nextjs'
+
+/**
+ * Postgres-backed throttle (see 0055_coach_denial_and_throttle.sql). Callable
+ * only via the admin client (EXECUTE is restricted to service_role). Returns
+ * true when the caller is within the limit. Fails OPEN (with a Sentry report)
+ * so a throttle outage never takes the public application form down.
+ */
+async function checkThrottle(
+  adminClient: ReturnType<typeof createAdminClient>,
+  key: string,
+  limit: number,
+  window: string
+): Promise<boolean> {
+  try {
+    const { data, error } = await adminClient.rpc('check_throttle', {
+      p_key: key,
+      p_limit: limit,
+      p_window: window,
+    })
+    if (error) {
+      console.error('[sponsor-apply] check_throttle failed', error)
+      Sentry.captureException(new Error(`[sponsor-apply] check_throttle failed: ${error.message}`), {
+        extra: { key, limit, window },
+      })
+      return true
+    }
+    return data !== false
+  } catch (err) {
+    console.error('[sponsor-apply] check_throttle threw', err)
+    Sentry.captureException(err)
+    return true
+  }
+}
 
 export async function submitSponsorApplication(data: SponsorApplicationInput) {
   const result = sponsorApplicationSchema.safeParse(data)
@@ -13,10 +48,27 @@ export async function submitSponsorApplication(data: SponsorApplicationInput) {
     return { error: 'Invalid data provided' }
   }
 
-  const { companyName, contactName, contactEmail, proposedCapCents, message } = result.data
+  const { companyName, contactName, contactEmail, proposedCapCents, message, website2 } = result.data
+
+  // Honeypot: real users never see or fill this field. Pretend success so bots
+  // get no signal, and do nothing else.
+  if (website2 && website2.trim().length > 0) {
+    return { success: true }
+  }
 
   // Use admin client since the user may be unauthenticated
   const supabase = createAdminClient()
+
+  // Abuse protection: per-IP (3/hour) and per-normalized-email (2/day) throttles.
+  const ip = await getClientIp()
+  if (!(await checkThrottle(supabase, `sponsor-apply:${ip}`, 3, '1 hour'))) {
+    return { error: 'Too many applications from this network — please try again later.' }
+  }
+
+  const normalizedEmail = contactEmail.trim().toLowerCase()
+  if (!(await checkThrottle(supabase, `sponsor-apply-email:${normalizedEmail}`, 2, '1 day'))) {
+    return { error: 'Too many applications for this email address — please try again later.' }
+  }
 
   const { error } = await supabase
     .from('sponsor_applications')
@@ -29,19 +81,17 @@ export async function submitSponsorApplication(data: SponsorApplicationInput) {
     })
 
   if (error) {
-    return { error: error.message }
+    return { error: mapDbError(error, 'submitSponsorApplication.insert') }
   }
 
-  try {
-    await sendSponsorApplicationConfirmation(
-      companyName,
-      contactEmail,
-      contactName ?? 'Sponsor',
-      proposedCapCents
-    )
-  } catch (e) {
-    console.error('Failed to send sponsor application confirmation email:', e)
-  }
+  // Confirmation email failure is non-fatal — the application is saved and the
+  // sender already reports to Sentry.
+  await sendSponsorApplicationConfirmation(
+    companyName,
+    contactEmail,
+    contactName ?? 'Sponsor',
+    proposedCapCents
+  )
 
   return { success: true }
 }
@@ -77,7 +127,7 @@ export async function adminCreateSponsor(data: SponsorInput) {
     })
 
   if (error) {
-    return { error: error.message }
+    return { error: mapDbError(error, 'adminCreateSponsor.insert') }
   }
 
   await adminClient.from('audit_log').insert({
@@ -122,7 +172,7 @@ export async function adminUpdateSponsor(id: string, data: SponsorInput) {
     .eq('id', id)
 
   if (error) {
-    return { error: error.message }
+    return { error: mapDbError(error, 'adminUpdateSponsor.update') }
   }
 
   // Write to audit log
@@ -163,7 +213,7 @@ export async function deleteSponsor(id: string): Promise<{ success?: true; error
   if (!snapshot) return { error: 'Sponsor not found' }
 
   const { error } = await adminClient.from('sponsors').delete().eq('id', parsed.data.id)
-  if (error) return { error: error.message }
+  if (error) return { error: mapDbError(error, 'deleteSponsor.delete') }
 
   await adminClient.from('audit_log').insert({
     actor_id: user.id,
@@ -200,7 +250,7 @@ export async function searchSponsors(query?: string) {
       .select('*')
       .textSearch('search_vector', trimmed, { type: 'websearch', config: 'english' })
 
-    if (error) return { error: error.message }
+    if (error) return { error: mapDbError(error, 'searchSponsors.textSearch') }
     return { data: data ?? [] }
   }
 
@@ -209,7 +259,7 @@ export async function searchSponsors(query?: string) {
     .select('*')
     .order('company_name', { ascending: true })
 
-  if (error) return { error: error.message }
+  if (error) return { error: mapDbError(error, 'searchSponsors.list') }
   return { data: data ?? [] }
 }
 
@@ -230,7 +280,7 @@ export async function adminToggleSponsorStatus(id: string, newStatus: 'active' |
     .update({ status: newStatus })
     .eq('id', id)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mapDbError(error, 'adminToggleSponsorStatus.update') }
 
   await adminClient.from('audit_log').insert({
     actor_id: user.id,
