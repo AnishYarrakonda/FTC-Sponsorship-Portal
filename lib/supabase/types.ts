@@ -596,19 +596,14 @@ export type Database = {
       }
       teams: {
         Row: {
-          autonomous_description: string | null
           budget_items: Json
-          build_system: string | null
-          cad_software: string | null
           city: string | null
           coach_experience: string | null
           coach_photo_url: string | null
           community_endorsements: string | null
           community_interest_text: string | null
-          control_system: string | null
           created_at: string
           deleted_at: string | null
-          drivetrain: string | null
           events_hosted: number | null
           financial_ask_cents: number
           founded_year: number | null
@@ -616,7 +611,6 @@ export type Database = {
           github_link: string | null
           id: string
           logo_url: string | null
-          manufacturing_capabilities: string[] | null
           media_urls: Json
           mission_statement: string | null
           organization: string | null
@@ -624,14 +618,9 @@ export type Database = {
           owner_id: string
           past_sponsors: string[]
           press_links: Json
-          programming: string | null
-          proudest_mechanism_name: string | null
-          proudest_mechanism_problem: string | null
-          proudest_mechanism_solution: string | null
           public: boolean
           seasons_competed: number | null
           seed_funding_goals_cents: number | null
-          sensors: string[] | null
           slug: string
           state: string | null
           status: Database["public"]["Enums"]["team_status"]
@@ -648,19 +637,14 @@ export type Database = {
           youtube_url: string | null
         }
         Insert: {
-          autonomous_description?: string | null
           budget_items?: Json
-          build_system?: string | null
-          cad_software?: string | null
           city?: string | null
           coach_experience?: string | null
           coach_photo_url?: string | null
           community_endorsements?: string | null
           community_interest_text?: string | null
-          control_system?: string | null
           created_at?: string
           deleted_at?: string | null
-          drivetrain?: string | null
           events_hosted?: number | null
           financial_ask_cents?: number
           founded_year?: number | null
@@ -668,7 +652,6 @@ export type Database = {
           github_link?: string | null
           id?: string
           logo_url?: string | null
-          manufacturing_capabilities?: string[] | null
           media_urls?: Json
           mission_statement?: string | null
           organization?: string | null
@@ -676,14 +659,9 @@ export type Database = {
           owner_id: string
           past_sponsors?: string[]
           press_links?: Json
-          programming?: string | null
-          proudest_mechanism_name?: string | null
-          proudest_mechanism_problem?: string | null
-          proudest_mechanism_solution?: string | null
           public?: boolean
           seasons_competed?: number | null
           seed_funding_goals_cents?: number | null
-          sensors?: string[] | null
           slug: string
           state?: string | null
           status?: Database["public"]["Enums"]["team_status"]
@@ -700,19 +678,14 @@ export type Database = {
           youtube_url?: string | null
         }
         Update: {
-          autonomous_description?: string | null
           budget_items?: Json
-          build_system?: string | null
-          cad_software?: string | null
           city?: string | null
           coach_experience?: string | null
           coach_photo_url?: string | null
           community_endorsements?: string | null
           community_interest_text?: string | null
-          control_system?: string | null
           created_at?: string
           deleted_at?: string | null
-          drivetrain?: string | null
           events_hosted?: number | null
           financial_ask_cents?: number
           founded_year?: number | null
@@ -720,7 +693,6 @@ export type Database = {
           github_link?: string | null
           id?: string
           logo_url?: string | null
-          manufacturing_capabilities?: string[] | null
           media_urls?: Json
           mission_statement?: string | null
           organization?: string | null
@@ -728,14 +700,9 @@ export type Database = {
           owner_id?: string
           past_sponsors?: string[]
           press_links?: Json
-          programming?: string | null
-          proudest_mechanism_name?: string | null
-          proudest_mechanism_problem?: string | null
-          proudest_mechanism_solution?: string | null
           public?: boolean
           seasons_competed?: number | null
           seed_funding_goals_cents?: number | null
-          sensors?: string[] | null
           slug?: string
           state?: string | null
           status?: Database["public"]["Enums"]["team_status"]
