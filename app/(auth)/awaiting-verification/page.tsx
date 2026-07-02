@@ -19,11 +19,15 @@ export default async function AwaitingVerificationPage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('coach_verified, coach_credentials_url, full_name, denial_reason, denied_at')
+    .select('role, sponsor_id, coach_verified, coach_credentials_url, full_name, denial_reason, denied_at')
     .eq('id', user.id)
     .single()
 
   if (profile?.coach_verified) redirect('/dashboard')
+
+  // Sponsor applicants have no credentials to upload — their pending state lives
+  // in the sponsor layout, which shows the application-under-review screen.
+  if (profile?.role === 'sponsor') redirect('/sponsor/dashboard')
 
   const hasCredentials = !!profile?.coach_credentials_url
   const displayName = profile?.full_name ?? user.email ?? 'Coach'
