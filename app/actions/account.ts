@@ -5,6 +5,7 @@ import { clerkClient } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { requireAuth } from '@/lib/actions-utils'
+import { mapDbError } from '@/lib/errors'
 import { env } from '@/lib/env'
 
 const updateProfileSchema = z.object({
@@ -51,7 +52,15 @@ export async function updateProfile(data: { fullName: string }) {
     .update({ full_name: result.data.fullName })
     .eq('id', user.id)
 
-  if (profileError) return { error: profileError.message }
+  if (profileError) return { error: mapDbError(profileError, 'updateProfile') }
+
+  await createAdminClient().from('audit_log').insert({
+    actor_id: user.id,
+    action: 'update_profile',
+    entity_type: 'profiles',
+    entity_id: user.id,
+    metadata: { field: 'full_name' },
+  })
 
   return { success: true }
 }
@@ -62,9 +71,10 @@ export async function updatePassword(data: { newPassword: string; currentPasswor
     return { error: result.error.issues[0].message }
   }
 
-  let clerkUserId
+  let user, clerkUserId
   try {
     const auth = await requireAuth()
+    user = auth.user
     clerkUserId = auth.clerkUserId
   } catch {
     return { error: 'Not authenticated' }
@@ -87,6 +97,13 @@ export async function updatePassword(data: { newPassword: string; currentPasswor
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Unable to update password.' }
   }
+
+  await createAdminClient().from('audit_log').insert({
+    actor_id: user.id,
+    action: 'update_password',
+    entity_type: 'profiles',
+    entity_id: user.id,
+  })
 
   return { success: true }
 }
@@ -137,7 +154,18 @@ export async function changeEmail(data: { newEmail: string; currentPassword: str
     return { error: e instanceof Error ? e.message : 'Unable to change email.' }
   }
 
-  return { success: true, message: 'Check your new email inbox for a confirmation link.' }
+  await createAdminClient().from('audit_log').insert({
+    actor_id: user.id,
+    action: 'change_email_requested',
+    entity_type: 'profiles',
+    entity_id: user.id,
+    metadata: { new_email: result.data.newEmail },
+  })
+
+  return {
+    success: true,
+    message: `Verification sent to ${result.data.newEmail} — it becomes your active email once confirmed.`,
+  }
 }
 
 export async function deleteAccount(data: { confirmEmail: string; currentPassword: string }) {

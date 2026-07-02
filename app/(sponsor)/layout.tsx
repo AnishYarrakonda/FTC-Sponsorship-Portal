@@ -1,10 +1,16 @@
 import { getAuthedProfile } from '@/lib/actions-utils'
+import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { SponsorSidebar } from '@/components/sponsor/sponsor-sidebar'
 
 export default async function SponsorLayout({ children }: { children: React.ReactNode }) {
   const authed = await getAuthedProfile()
-  if (!authed) redirect('/login')
+  if (!authed) {
+    // Clerk session without a profiles row = orphaned signup → recovery page
+    // (redirecting to /login would loop: middleware bounces authed users back).
+    const { userId } = await auth()
+    redirect(userId ? '/complete-profile' : '/login')
+  }
   const { supabase, user } = authed
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -14,9 +20,9 @@ export default async function SponsorLayout({ children }: { children: React.Reac
     .eq('id', user.id)
     .single()
 
-  if (profile?.role === 'admin') redirect('/admin')
-  if (profile?.role === 'coach') redirect('/dashboard')
-  if (profile?.role !== 'sponsor') redirect('/login')
+  if (profile?.role === 'admin') redirect('/admin?redirected=sponsor')
+  if (profile?.role === 'coach') redirect('/dashboard?redirected=sponsor')
+  if (profile?.role !== 'sponsor') redirect('/complete-profile')
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sponsor = (profile as any)?.sponsors ?? null

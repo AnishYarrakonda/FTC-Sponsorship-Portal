@@ -1,6 +1,7 @@
 import { getAuthedProfile } from '@/lib/actions-utils'
 import { redirect } from 'next/navigation'
 import { SponsorDashboardShell } from '@/components/sponsor/dashboard-shell'
+import { RoleRedirectBanner } from '@/components/auth/role-redirect-banner'
 
 export default async function SponsorDashboardPage() {
   const authed = await getAuthedProfile()
@@ -38,11 +39,12 @@ export default async function SponsorDashboardPage() {
   const sponsor = (profile as any)?.sponsors ?? null
 
   return (
+    <><RoleRedirectBanner />
     <SponsorDashboardShell
       sponsor={sponsor}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       submissions={(submissions || []) as any[]}
       notifications={notifications || []}
-    />
+    /></>
   )
 }

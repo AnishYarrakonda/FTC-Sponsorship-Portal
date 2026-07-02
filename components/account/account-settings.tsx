@@ -46,10 +46,13 @@ export function AccountSettings({
   currentName,
   email,
   role,
+  pendingEmail = null,
 }: {
   currentName: string
   email: string
   role: string
+  /** Email registered in Clerk but not yet verified (pending change), if any. */
+  pendingEmail?: string | null
 }) {
   // Profile
   const [fullName, setFullName] = useState(currentName)
@@ -64,6 +67,7 @@ export function AccountSettings({
   const [newEmail, setNewEmail] = useState('')
   const [emailPw, setEmailPw] = useState('')
   const [emailMsg, setEmailMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [pendingEmailState, setPendingEmailState] = useState<string | null>(pendingEmail)
 
   // Data export
   const [exportMsg, setExportMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -73,11 +77,17 @@ export function AccountSettings({
   const [deletePw, setDeletePw] = useState('')
   const [deleteMsg, setDeleteMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
-  const [isPending, startTransition] = useTransition()
+  // Per-section transitions so one submitting section doesn't put every other
+  // button into a loading state.
+  const [nameSaving, startNameTransition] = useTransition()
+  const [pwSaving, startPwTransition] = useTransition()
+  const [emailSaving, startEmailTransition] = useTransition()
+  const [exporting, startExportTransition] = useTransition()
+  const [deleting, startDeleteTransition] = useTransition()
 
   function handleProfileSave() {
     setNameMsg(null)
-    startTransition(async () => {
+    startNameTransition(async () => {
       const res = await updateProfile({ fullName })
       if (res?.error) setNameMsg({ type: 'error', text: res.error })
       else setNameMsg({ type: 'success', text: 'Display name updated.' })
@@ -86,7 +96,7 @@ export function AccountSettings({
 
   function handlePasswordSave() {
     setPwMsg(null)
-    startTransition(async () => {
+    startPwTransition(async () => {
       const res = await updatePassword({ newPassword: newPw, currentPassword: currentPw })
       if (res?.error) setPwMsg({ type: 'error', text: res.error })
       else {
@@ -99,11 +109,12 @@ export function AccountSettings({
 
   function handleEmailChange() {
     setEmailMsg(null)
-    startTransition(async () => {
+    startEmailTransition(async () => {
       const res = await changeEmail({ newEmail, currentPassword: emailPw })
       if (res?.error) setEmailMsg({ type: 'error', text: res.error })
       else {
-        setEmailMsg({ type: 'success', text: ('message' in res ? res.message : undefined) ?? 'Confirmation email sent.' })
+        setEmailMsg(null)
+        setPendingEmailState(newEmail)
         setNewEmail('')
         setEmailPw('')
       }
@@ -112,7 +123,7 @@ export function AccountSettings({
 
   function handleExport() {
     setExportMsg(null)
-    startTransition(async () => {
+    startExportTransition(async () => {
       const res = await requestDataExport()
       if (res?.error) setExportMsg({ type: 'error', text: res.error })
       else setExportMsg({ type: 'success', text: res.message ?? 'Export queued.' })
@@ -121,7 +132,7 @@ export function AccountSettings({
 
   function handleDelete() {
     setDeleteMsg(null)
-    startTransition(async () => {
+    startDeleteTransition(async () => {
       const res = await deleteAccount({ confirmEmail, currentPassword: deletePw })
       if (res?.error) setDeleteMsg({ type: 'error', text: res.error })
     })
@@ -152,7 +163,7 @@ export function AccountSettings({
             <Input value={role} disabled className="opacity-50 cursor-not-allowed capitalize" />
           </div>
           {nameMsg && <StatusMessage type={nameMsg.type} text={nameMsg.text} />}
-          <Button onClick={handleProfileSave} disabled={isPending} loading={isPending} className="self-start">
+          <Button onClick={handleProfileSave} disabled={nameSaving} loading={nameSaving} className="self-start">
             Save profile
           </Button>
         </div>
@@ -161,6 +172,16 @@ export function AccountSettings({
       {/* Change email */}
       <SectionCard title="Change Email" sub="You'll receive a confirmation link at your new address before the change takes effect.">
         <div className="flex flex-col gap-4">
+          {pendingEmailState && (
+            <div className="flex items-start gap-2 rounded-md bg-amber-500/10 px-3 py-2.5 text-sm text-amber-700 dark:text-amber-400">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.5} />
+              <span>
+                Verification sent to <span className="font-medium">{pendingEmailState}</span> — it becomes your
+                active email once confirmed. Until then, keep signing in with{' '}
+                <span className="font-medium">{email}</span>.
+              </span>
+            </div>
+          )}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="newEmail">New email address</Label>
             <Input
@@ -184,11 +205,11 @@ export function AccountSettings({
           {emailMsg && <StatusMessage type={emailMsg.type} text={emailMsg.text} />}
           <Button
             onClick={handleEmailChange}
-            disabled={isPending || !newEmail || !emailPw}
-            loading={isPending}
+            disabled={emailSaving || !newEmail || !emailPw}
+            loading={emailSaving}
             className="self-start"
           >
-            Send confirmation
+            {emailSaving ? 'Sending…' : 'Send confirmation'}
           </Button>
         </div>
       </SectionCard>
@@ -222,11 +243,11 @@ export function AccountSettings({
           {pwMsg && <StatusMessage type={pwMsg.type} text={pwMsg.text} />}
           <Button
             onClick={handlePasswordSave}
-            disabled={isPending || !currentPw || newPw.length < 12}
-            loading={isPending}
+            disabled={pwSaving || !currentPw || newPw.length < 12}
+            loading={pwSaving}
             className="self-start"
           >
-            Update password
+            {pwSaving ? 'Updating…' : 'Update password'}
           </Button>
         </div>
       </SectionCard>
@@ -245,8 +266,8 @@ export function AccountSettings({
           <Button
             variant="outline"
             onClick={handleExport}
-            disabled={isPending}
-            loading={isPending}
+            disabled={exporting}
+            loading={exporting}
             className="self-start gap-2"
           >
             <Download className="h-4 w-4" strokeWidth={1.5} />
@@ -289,8 +310,8 @@ export function AccountSettings({
           <Button
             variant="destructive"
             onClick={handleDelete}
-            disabled={isPending || confirmEmail !== email || !deletePw}
-            loading={isPending}
+            disabled={deleting || confirmEmail !== email || !deletePw}
+            loading={deleting}
             className="self-start gap-2"
           >
             <Trash2 className="h-4 w-4" strokeWidth={1.5} />

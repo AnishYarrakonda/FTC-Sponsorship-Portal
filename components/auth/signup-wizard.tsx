@@ -24,6 +24,15 @@ import { motion, AnimatePresence } from 'framer-motion'
 
 const STEP_LABELS = ['Account', 'Verification', 'Your Team']
 
+function SectionHeading({ title, sub }: { title: string; sub?: string }) {
+  return (
+    <div className="pt-1">
+      <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{title}</h3>
+      {sub && <p className="text-xs text-muted-foreground/80 mt-0.5">{sub}</p>}
+    </div>
+  )
+}
+
 // Surface a readable message from a Clerk error payload.
 function clerkErrorMessage(err: unknown, fallback: string): string {
   const anyErr = err as { errors?: { longMessage?: string; message?: string }[] }
@@ -71,13 +80,8 @@ export function SignupWizard() {
         missionStatement: '',
         taxStatus: 'None',
         communityInterestText: '',
+        sustainabilityPlan: '',
         seedFundingGoalsCents: 0,
-        technicalSummary: '',
-        outreachSummary: '',
-        mediaUrls: [],
-        youtubeUrl: '',
-        budgetItems: [],
-        financialAskCents: 0,
       }
     },
     mode: 'onTouched'
@@ -194,6 +198,11 @@ export function SignupWizard() {
     setLookupSuccess(true)
   }
 
+  // Tracks a failure of createCoachProfile AFTER the Clerk session is already
+  // active (the account exists but the profile row doesn't yet). The action is
+  // idempotent (upsert on clerk_user_id), so retrying with the same data is safe.
+  const [profileFailed, setProfileFailed] = useState(false)
+
   async function onSubmit(values: SignupInput) {
     setIsPending(true)
     setError(null)
@@ -210,12 +219,19 @@ export function SignupWizard() {
 
     if (result?.error) {
       setError(result.error)
+      setProfileFailed(true)
       setIsPending(false)
       return
     }
 
+    setProfileFailed(false)
     // Matches the previous flow: coaches proceed to upload/await verification.
     router.push('/upload-credentials')
+  }
+
+  // Re-invoke the profile action with the data already in the form.
+  function retryProfileCreation() {
+    void form.handleSubmit(onSubmit)()
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -327,7 +343,25 @@ export function SignupWizard() {
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 text-foreground">
                 {error && (
                   <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive">
-                    <AlertDescription>{error}</AlertDescription>
+                    <AlertDescription>
+                      <span>{error}</span>
+                      {profileFailed && (
+                        <span className="block mt-2">
+                          Your account and email verification are safe — only the final profile step failed,
+                          and retrying will not create a duplicate.
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={retryProfileCreation}
+                            disabled={isPending}
+                            className="ml-0 mt-2 block border-destructive/40 text-destructive hover:bg-destructive/10"
+                          >
+                            {isPending ? 'Retrying…' : 'Retry'}
+                          </Button>
+                        </span>
+                      )}
+                    </AlertDescription>
                   </Alert>
                 )}
 
@@ -521,6 +555,7 @@ export function SignupWizard() {
                           </Alert>
                         )}
 
+                        <SectionHeading title="Team identity" sub="Who you are — the rest of the portfolio is built after verification." />
                         <FormField control={form.control} name="teamData.status" render={({ field }) => (
                           <FormItem className="space-y-2">
                             <FormLabel className="text-foreground/80">Team Status</FormLabel>
@@ -580,6 +615,7 @@ export function SignupWizard() {
                           </FormItem>
                         )} />
 
+                        <SectionHeading title="Location" />
                         <div className="grid grid-cols-2 gap-4">
                           <FormField control={form.control} name="teamData.city" render={({ field }) => (
                             <FormItem>
@@ -597,6 +633,7 @@ export function SignupWizard() {
                           )} />
                         </div>
 
+                        <SectionHeading title="Mission & funding" />
                         <FormField control={form.control} name="teamData.taxStatus" render={({ field }) => (
                           <FormItem>
                             <FormLabel className="text-foreground/80">Tax Status</FormLabel>
@@ -624,7 +661,7 @@ export function SignupWizard() {
                             <FormLabel className="text-foreground/80">Mission Statement</FormLabel>
                             <FormControl>
                               <Textarea
-                                placeholder="What is your team's overarching goal?"
+                                placeholder="What is your team's overarching goal? (min 50 characters)"
                                 className="min-h-[90px] resize-none bg-background border-border text-foreground placeholder:text-muted-foreground"
                                 maxLength={LIMITS.mission}
                                 {...field}
@@ -633,6 +670,59 @@ export function SignupWizard() {
                             <FormMessage />
                           </FormItem>
                         )} />
+
+                        {teamStatus === 'incubator' && (
+                          <>
+                            <SectionHeading title="New team details" sub="Help sponsors understand why this team should exist." />
+                            <FormField control={form.control} name="teamData.communityInterestText" render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-foreground/80">Community Interest</FormLabel>
+                                <FormControl>
+                                  <Textarea
+                                    placeholder="Who wants this team to exist? Describe student and community interest."
+                                    className="min-h-[70px] resize-none bg-background border-border text-foreground placeholder:text-muted-foreground"
+                                    {...field}
+                                    value={field.value ?? ''}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )} />
+                            <FormField control={form.control} name="teamData.sustainabilityPlan" render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-foreground/80">Sustainability Plan</FormLabel>
+                                <FormControl>
+                                  <Textarea
+                                    placeholder="How will the team keep running after the first season?"
+                                    className="min-h-[70px] resize-none bg-background border-border text-foreground placeholder:text-muted-foreground"
+                                    {...field}
+                                    value={field.value ?? ''}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )} />
+                            <FormField control={form.control} name="teamData.seedFundingGoalsCents" render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-foreground/80">Seed Funding Goal (USD)</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    className="bg-background border-border text-foreground placeholder:text-muted-foreground"
+                                    type="number"
+                                    min={0}
+                                    placeholder="e.g. 1500"
+                                    value={field.value !== undefined ? field.value / 100 : ''}
+                                    onChange={(e) => {
+                                      const n = parseFloat(e.target.value)
+                                      field.onChange(isNaN(n) ? undefined : Math.round(n * 100))
+                                    }}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )} />
+                          </>
+                        )}
                       </>
                     )}
                   </motion.div>

@@ -15,11 +15,38 @@ import Link from 'next/link'
 import { ChevronRight, ChevronLeft } from 'lucide-react'
 import { useSearchParams, useRouter } from 'next/navigation'
 
-// Surface a readable message from a Clerk error payload.
-function clerkErrorMessage(err: unknown, fallback: string): string {
-  const anyErr = err as { errors?: { longMessage?: string; message?: string }[] }
-  return anyErr?.errors?.[0]?.longMessage ?? anyErr?.errors?.[0]?.message ?? fallback
+// Map known Clerk error codes to friendly, actionable messages (wrong password
+// vs unknown email vs rate-limited), falling back to Clerk's own message.
+function friendlyClerkError(err: unknown, fallback: string): string {
+  const anyErr = err as {
+    status?: number
+    errors?: { code?: string; longMessage?: string; message?: string }[]
+  }
+  const first = anyErr?.errors?.[0]
+  switch (first?.code) {
+    case 'form_identifier_not_found':
+      return 'No account found with that email address. Check for typos, or create an account below.'
+    case 'form_password_incorrect':
+      return 'That password is incorrect. Try again, or use “Forgot password?” to reset it.'
+    case 'too_many_requests':
+    case 'rate_limit_exceeded':
+      return 'Too many attempts — you have been temporarily rate-limited. Wait a minute and try again.'
+    case 'form_code_incorrect':
+      return 'That code is incorrect. Double-check the 6 digits and try again.'
+    case 'verification_expired':
+      return 'That code has expired. Use “Resend code” to get a fresh one.'
+    case 'user_locked':
+      return 'Your account is temporarily locked after too many failed attempts. Try again later or reset your password.'
+    default:
+      if (anyErr?.status === 429) {
+        return 'Too many attempts — please wait a minute and try again.'
+      }
+      return first?.longMessage ?? first?.message ?? fallback
+  }
 }
+
+const RESEND_COOLDOWN_SECONDS = 30
+const CODE_EXPIRY_MS = 10 * 60 * 1000 // Clerk email codes last ~10 minutes
 
 type Mode = 'login' | 'device-verify' | 'forgot-request' | 'forgot-reset'
 
@@ -27,6 +54,7 @@ export function LoginForm() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const resetSuccess = searchParams.get('reset') === 'success'
+  const accountDeleted = searchParams.get('deleted') === '1'
   const redirectUrl = searchParams.get('redirect_url') || '/'
   const { isLoaded, signIn, setActive } = useSignIn()
   const { isLoaded: authLoaded, isSignedIn } = useAuth()
@@ -39,12 +67,20 @@ export function LoginForm() {
   const [resetEmail, setResetEmail] = useState('')
   const [resetCode, setResetCode] = useState('')
   const [resetNewPassword, setResetNewPassword] = useState('')
-  const [resetSent, setResetSent] = useState(false)
 
   // Client Trust (new-device verification) local state
   const [deviceCode, setDeviceCode] = useState('')
   const [deviceEmail, setDeviceEmail] = useState('')
   const [deviceEmailId, setDeviceEmailId] = useState('')
+  const [deviceCodeSentAt, setDeviceCodeSentAt] = useState<number | null>(null)
+  const [resendCooldown, setResendCooldown] = useState(0)
+
+  // Tick the resend cooldown down once per second while active.
+  useEffect(() => {
+    if (resendCooldown <= 0) return
+    const t = setInterval(() => setResendCooldown((s) => (s > 0 ? s - 1 : 0)), 1000)
+    return () => clearInterval(t)
+  }, [resendCooldown])
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
@@ -178,6 +214,8 @@ export function LoginForm() {
         setDeviceEmail(emailFactor.safeIdentifier ?? values.email)
         setDeviceEmailId(emailFactor.emailAddressId)
         setDeviceCode('')
+        setDeviceCodeSentAt(Date.now())
+        setResendCooldown(RESEND_COOLDOWN_SECONDS)
         setMode('device-verify')
         setIsPending(false)
       } else {
@@ -185,7 +223,7 @@ export function LoginForm() {
         setIsPending(false)
       }
     } catch (err) {
-      setError(clerkErrorMessage(err, 'Invalid email or password.'))
+      setError(friendlyClerkError(err, 'Invalid email or password.'))
       setIsPending(false)
     }
   }
@@ -212,20 +250,29 @@ export function LoginForm() {
         setIsPending(false)
       }
     } catch (err) {
-      setError(clerkErrorMessage(err, 'Invalid code. Please try again.'))
+      // Codes only live ~10 minutes — if this one is stale, say so explicitly
+      // instead of a generic "invalid code".
+      if (deviceCodeSentAt && Date.now() - deviceCodeSentAt > CODE_EXPIRY_MS) {
+        setError('That code has expired (codes last about 10 minutes). Use “Resend code” to get a fresh one.')
+      } else {
+        setError(friendlyClerkError(err, 'Invalid code. Please try again.'))
+      }
       setIsPending(false)
     }
   }
 
-  // Client Trust — resend the device-verification code.
+  // Client Trust — resend the device-verification code (cooldown-gated).
   async function resendDeviceCode() {
-    if (!isLoaded || !signIn || !deviceEmailId) return
+    if (!isLoaded || !signIn || !deviceEmailId || resendCooldown > 0) return
     setError(null)
     setIsPending(true)
     try {
       await signIn.prepareSecondFactor({ strategy: 'email_code', emailAddressId: deviceEmailId })
+      setDeviceCode('')
+      setDeviceCodeSentAt(Date.now())
+      setResendCooldown(RESEND_COOLDOWN_SECONDS)
     } catch (err) {
-      setError(clerkErrorMessage(err, 'Could not resend the code. Please try again.'))
+      setError(friendlyClerkError(err, 'Could not resend the code. Please try again.'))
     } finally {
       setIsPending(false)
     }
@@ -245,10 +292,9 @@ export function LoginForm() {
         strategy: 'reset_password_email_code',
         identifier: resetEmail.trim(),
       })
-      setResetSent(true)
       setMode('forgot-reset')
     } catch (err) {
-      setError(clerkErrorMessage(err, 'Could not send reset code. Check the email and try again.'))
+      setError(friendlyClerkError(err, 'Could not send reset code. Check the email and try again.'))
     } finally {
       setIsPending(false)
     }
@@ -281,7 +327,7 @@ export function LoginForm() {
         setIsPending(false)
       }
     } catch (err) {
-      setError(clerkErrorMessage(err, 'Invalid code or password. Please try again.'))
+      setError(friendlyClerkError(err, 'Invalid code or password. Please try again.'))
       setIsPending(false)
     }
   }
@@ -289,7 +335,6 @@ export function LoginForm() {
   function backToLogin() {
     setMode('login')
     setError(null)
-    setResetSent(false)
     setResetCode('')
     setResetNewPassword('')
     setDeviceCode('')
@@ -397,6 +442,14 @@ export function LoginForm() {
                 <AlertDescription>Password updated successfully. Log in with your new password.</AlertDescription>
               </Alert>
             )}
+            {accountDeleted && mode === 'login' && (
+              <Alert className="bg-emerald-500/10 border-emerald-500/20 text-emerald-600 mb-6">
+                <AlertDescription>
+                  Your account was deleted. All of your data has been removed — thanks for being part of the
+                  portal. You can create a new account any time.
+                </AlertDescription>
+              </Alert>
+            )}
             {error && (
               <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive mb-6">
                 <AlertDescription>{error}</AlertDescription>
@@ -440,7 +493,7 @@ export function LoginForm() {
                               setResetEmail(form.getValues('email'))
                               setMode('forgot-request')
                             }}
-                            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                            className="text-sm font-medium text-primary hover:underline underline-offset-4 transition-colors"
                           >
                             Forgot password?
                           </button>
@@ -483,7 +536,7 @@ export function LoginForm() {
                     onChange={(e) => setDeviceCode(e.target.value)}
                   />
                   <p className="text-xs text-muted-foreground">
-                    We emailed a 6-digit code to {deviceEmail || 'your email'}.
+                    We emailed a 6-digit code to {deviceEmail || 'your email'}. Codes expire after about 10 minutes.
                   </p>
                 </div>
                 <Button
@@ -495,14 +548,16 @@ export function LoginForm() {
                   {isPending ? 'Verifying…' : 'Verify & Sign In'}
                 </Button>
                 <div className="flex items-center justify-between">
-                  <button
+                  <Button
                     type="button"
+                    variant="outline"
+                    size="sm"
                     onClick={resendDeviceCode}
-                    className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                    disabled={isPending}
+                    className="border-border bg-transparent"
+                    disabled={isPending || resendCooldown > 0}
                   >
-                    Resend code
-                  </button>
+                    {resendCooldown > 0 ? `Resend code (${resendCooldown}s)` : 'Resend code'}
+                  </Button>
                   <button
                     type="button"
                     onClick={backToLogin}

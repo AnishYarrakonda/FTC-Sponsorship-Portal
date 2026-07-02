@@ -2,6 +2,7 @@ import { getAuthedProfile } from '@/lib/actions-utils'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import { DashboardShell } from '@/components/coach/dashboard-shell'
+import { RoleRedirectBanner } from '@/components/auth/role-redirect-banner'
 import Link from 'next/link'
 
 export default async function DashboardPage() {
@@ -165,6 +166,7 @@ export default async function DashboardPage() {
     .order('season', { ascending: false })
 
   return (
+    <><RoleRedirectBanner />
     <DashboardShell
       team={currentTeam as any}
       profile={profile as any}
@@ -173,6 +175,6 @@ export default async function DashboardPage() {
       unreadCount={unreadCount ?? 0}
       submissions={submissions as any ?? []}
       achievements={(achievements || []) as any}
-    />
+    /></>
   )
 }
