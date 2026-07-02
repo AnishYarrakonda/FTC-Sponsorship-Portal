@@ -29,12 +29,12 @@ export default async function CoachLayout({ children }: { children: React.ReactN
   const userEmail = user.email ?? ''
 
   return (
-    <div className="flex h-screen overflow-hidden text-foreground">
-      <Suspense fallback={<div className="w-56 shrink-0 border-r border-border bg-card" />}>
+    <div className="flex h-screen flex-col overflow-hidden text-foreground lg:flex-row">
+      <Suspense fallback={<div className="hidden w-56 shrink-0 border-r border-border bg-card lg:block" />}>
         <CoachSidebar userName={userName} userEmail={userEmail} />
       </Suspense>
       <main className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[1100px] px-6 py-8 sm:px-10 lg:px-12">
+        <div className="mx-auto w-full max-w-[1100px] px-4 py-6 sm:px-8 sm:py-8 lg:px-12">
           {children}
         </div>
       </main>

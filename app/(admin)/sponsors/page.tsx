@@ -1,7 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
+import { Building2 } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
+import { StatusBadge } from '@/components/ui/status-badge'
+import { EmptyState } from '@/components/ui/empty-state'
 import { SponsorToggleButton } from '@/components/admin/sponsor-toggle-button'
 
 export default async function AdminSponsorsPage() {
@@ -50,9 +53,7 @@ export default async function AdminSponsorsPage() {
               </div>
               
               <div className="flex flex-wrap items-center gap-2 pt-1">
-                <span className={`inline-flex items-center gap-1 rounded-full border text-[10px] font-medium px-2 py-0.5 ${sponsor.status === 'active' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600' : 'bg-amber-500/10 border-amber-500/20 text-amber-600'}`}>
-                  {sponsor.status}
-                </span>
+                <StatusBadge status={sponsor.status} />
               </div>
             </div>
 
@@ -77,9 +78,16 @@ export default async function AdminSponsorsPage() {
           </div>
         ))}
         {(!sponsors || sponsors.length === 0) && (
-          <p className="text-sm text-muted-foreground py-4 border border-dashed border-border rounded-xl text-center">
-            No sponsors found in the database.
-          </p>
+          <EmptyState
+            icon={Building2}
+            title="No sponsors yet"
+            description="Add your first funding partner to open the directory to coaches."
+            action={
+              <Link href="/sponsors/new">
+                <Button size="sm">+ Add Sponsor</Button>
+              </Link>
+            }
+          />
         )}
       </div>
     </div>

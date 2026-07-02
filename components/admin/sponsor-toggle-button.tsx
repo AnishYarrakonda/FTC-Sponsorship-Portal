@@ -23,7 +23,7 @@ export function SponsorToggleButton({
     <button
       onClick={handleToggle}
       disabled={isPending}
-      className={`text-[11px] font-medium px-2.5 py-1 rounded-full border transition-colors disabled:opacity-50 ${
+      className={`text-xs font-medium px-2.5 py-1 rounded-full border transition-colors disabled:opacity-50 ${
         isActive
           ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:border-red-900/60 hover:text-red-400 hover:bg-red-500/5'
           : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:border-emerald-900/60 hover:text-emerald-400 hover:bg-emerald-500/5'

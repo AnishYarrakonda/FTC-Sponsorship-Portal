@@ -33,7 +33,7 @@ const ACTION_COLORS: Record<string, string> = {
 function ActionChip({ action }: { action: string }) {
   const color = ACTION_COLORS[action] ?? 'bg-muted text-muted-foreground'
   return (
-    <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium', color)}>
+    <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', color)}>
       {action.replace(/_/g, ' ')}
     </span>
   )
@@ -93,7 +93,7 @@ function MetaRow({ entry }: { entry: AuditEntry }) {
       {open && hasMeta && (
         <tr className="border-b border-border bg-muted/30">
           <td colSpan={5} className="px-4 py-3">
-            <pre className="text-[11px] text-muted-foreground whitespace-pre-wrap break-all">
+            <pre className="text-xs text-muted-foreground whitespace-pre-wrap break-all">
               {JSON.stringify(entry.metadata, null, 2)}
             </pre>
           </td>
@@ -156,7 +156,7 @@ export function AuditLogTable({ logs, uniqueActions, currentAction, page, pageSi
           <thead className="border-b border-border bg-muted/40">
             <tr>
               {['Actor', 'Action', 'Entity', 'Time', ''].map((h) => (
-                <th key={h} className="px-4 py-2.5 text-left text-[11px] font-mono uppercase tracking-widest text-muted-foreground">
+                <th key={h} className="px-4 py-2.5 text-left text-xs font-mono uppercase tracking-widest text-muted-foreground">
                   {h}
                 </th>
               ))}

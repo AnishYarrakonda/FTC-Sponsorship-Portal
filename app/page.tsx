@@ -78,12 +78,12 @@ export default async function HomePage() {
               </Link>
             </div>
             <CharcoalCard className="flex flex-col justify-center">
-              <div className="text-sm font-mono text-[#A39A88] uppercase tracking-wider mb-2">Platform Metrics</div>
+              <div className="text-sm font-mono text-text-muted uppercase tracking-wider mb-2">Platform Metrics</div>
               <div className="text-5xl md:text-6xl font-medium tracking-tight text-white mb-2">100%</div>
-              <div className="text-lg text-[#F7F3EE]/70 mb-10">Of pitches read by a human admin before dispatch.</div>
-              
+              <div className="text-lg text-charcoal-foreground/70 mb-10">Of pitches read by a human admin before dispatch.</div>
+
               <div className="text-5xl md:text-6xl font-medium tracking-tight text-white mb-2">&lt; 24h</div>
-              <div className="text-lg text-[#F7F3EE]/70">Average turnaround for review and URL signing.</div>
+              <div className="text-lg text-charcoal-foreground/70">Average turnaround for review and URL signing.</div>
             </CharcoalCard>
           </div>
         </AccentSection>

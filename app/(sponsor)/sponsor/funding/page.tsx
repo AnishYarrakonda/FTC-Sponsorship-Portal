@@ -1,7 +1,11 @@
 import { getAuthedProfile } from '@/lib/actions-utils'
 import { redirect } from 'next/navigation'
-import { TrendingUp } from 'lucide-react'
+import Link from 'next/link'
+import { TrendingUp, Wallet, Building2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { EmptyState } from '@/components/ui/empty-state'
+import { buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 export default async function SponsorFundingPage() {
   const authed = await getAuthedProfile()
@@ -21,10 +25,12 @@ export default async function SponsorFundingPage() {
 
   if (!sponsor) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed border-border rounded-2xl bg-card/30">
-        <h2 className="text-xl font-semibold">No Funding Account</h2>
-        <p className="text-muted-foreground mt-2">Could not find a linked sponsor record for your account.</p>
-      </div>
+      <EmptyState
+        className="py-20"
+        icon={Building2}
+        title="No funding account"
+        description="Could not find a linked sponsor record for your account. Please contact an administrator."
+      />
     )
   }
 
@@ -39,7 +45,7 @@ export default async function SponsorFundingPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Funding</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Funding</h1>
         <p className="text-muted-foreground mt-1">Track your approved sponsorships and disbursements.</p>
       </div>
 
@@ -49,7 +55,7 @@ export default async function SponsorFundingPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest">Total Approved</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">${(totalApproved / 100).toLocaleString()}</div>
+            <div className="text-3xl font-semibold">${(totalApproved / 100).toLocaleString()}</div>
             <p className="text-xs text-muted-foreground mt-1">Across all teams, all time</p>
           </CardContent>
         </Card>
@@ -58,7 +64,7 @@ export default async function SponsorFundingPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest">Transactions</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{transactions?.length || 0}</div>
+            <div className="text-3xl font-semibold">{transactions?.length || 0}</div>
             <p className="text-xs text-muted-foreground mt-1">Confirmed disbursements</p>
           </CardContent>
         </Card>
@@ -84,14 +90,22 @@ export default async function SponsorFundingPage() {
                 </div>
                 <div className="text-right">
                   <div className="font-bold text-emerald-500">+${(t.amount_cents / 100).toLocaleString()}</div>
-                  <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Confirmed</div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-wider">Confirmed</div>
                 </div>
               </div>
             ))}
             {(!transactions || transactions.length === 0) && (
-              <div className="text-center py-10 text-muted-foreground italic text-sm">
-                No transactions recorded yet.
-              </div>
+              <EmptyState
+                className="border-0 bg-transparent"
+                icon={Wallet}
+                title="No transactions yet"
+                description="When you approve a team's pitch, the disbursement is recorded here against your funding cap."
+                action={
+                  <Link href="/sponsor/submissions" className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}>
+                    Review pending pitches
+                  </Link>
+                }
+              />
             )}
           </div>
         </CardContent>

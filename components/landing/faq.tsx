@@ -5,6 +5,7 @@ import { Accordion } from '@/components/ui/accordion'
 import { Section } from '@/components/ui/section'
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
+import { SUPPORT_EMAIL } from '@/lib/site-config'
 
 const items = [
   {
@@ -45,7 +46,7 @@ export function FAQ() {
             Have a question that isn&apos;t answered here? Reach out to our team.
           </p>
           <Link 
-            href="mailto:exodiusftc@gmail.com"
+            href={`mailto:${SUPPORT_EMAIL}`}
             className="mt-8 mb-12 inline-flex w-fit items-center gap-2 rounded-full border border-border bg-background px-6 py-3 text-sm font-medium text-foreground hover:bg-accent transition-colors shadow-sm"
           >
             Contact support

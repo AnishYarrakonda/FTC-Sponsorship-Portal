@@ -1,13 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
+import Link from 'next/link'
+import { Inbox } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { StatusBadge } from '@/components/ui/status-badge'
+import { EmptyState } from '@/components/ui/empty-state'
+import { buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { ApplicationActions } from '@/components/admin/application-actions'
-
-const STATUS_STYLE: Record<string, string> = {
-  pending:  'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40',
-  approved: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40',
-  rejected: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40',
-}
 
 export default async function ApplicationsPage() {
   const supabase = await createClient()
@@ -23,8 +22,8 @@ export default async function ApplicationsPage() {
   return (
     <div className="flex flex-col gap-8">
       <div>
-        <h1 className="text-3xl font-bold">Sponsor Applications</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-3xl font-semibold tracking-tight">Sponsor Applications</h1>
+        <p className="text-muted-foreground mt-1">
           Companies who applied via the public form. Approve to add them to the sponsor directory.
         </p>
       </div>
@@ -33,11 +32,22 @@ export default async function ApplicationsPage() {
         <h2 className="text-lg font-semibold flex items-center gap-2">
           Pending Review
           {pending.length > 0 && (
-            <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/40">{pending.length}</Badge>
+            <span className="rounded-full bg-[var(--badge-warning-bg)] px-2 py-0.5 text-xs font-semibold text-[var(--badge-warning-text)]">
+              {pending.length}
+            </span>
           )}
         </h2>
         {pending.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-4">No pending applications.</p>
+          <EmptyState
+            icon={Inbox}
+            title="No pending applications"
+            description="New sponsor applications from the public form will appear here for review."
+            action={
+              <Link href="/sponsors/new" className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}>
+                Add a sponsor manually
+              </Link>
+            }
+          />
         ) : (
           <div className="space-y-3">
             {pending.map(app => (
@@ -50,9 +60,7 @@ export default async function ApplicationsPage() {
                         {app.contact_name} ({app.contact_email}) · Applied {new Date(app.created_at).toLocaleDateString()}
                       </CardDescription>
                     </div>
-                    <Badge className={STATUS_STYLE[app.status] ?? 'bg-muted'}>
-                      {app.status}
-                    </Badge>
+                    <StatusBadge status={app.status} />
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -89,7 +97,7 @@ export default async function ApplicationsPage() {
                   <p className="font-medium text-sm">{app.company_name}</p>
                   <p className="text-xs text-muted-foreground">{app.contact_email}</p>
                 </div>
-                <Badge className={STATUS_STYLE[app.status] ?? 'bg-muted'}>{app.status}</Badge>
+                <StatusBadge status={app.status} />
               </div>
             ))}
           </div>

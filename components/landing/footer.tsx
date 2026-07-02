@@ -57,9 +57,9 @@ export function LandingFooter() {
           ))}
         </div>
 
-        <div className="mt-16 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-6 text-[13px] text-muted-foreground">
+        <div className="mt-16 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-6 text-sm text-muted-foreground">
           <span suppressHydrationWarning>© {new Date().getFullYear()} FTC Matchmaker</span>
-          <span className="font-mono text-[11px]">Built for Season {CURRENT_SEASON}</span>
+          <span className="font-mono text-xs">Built for Season {CURRENT_SEASON}</span>
         </div>
       </div>
     </footer>

@@ -1,14 +1,15 @@
 import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/page-header'
+import { StatusBadge } from '@/components/ui/status-badge'
 import { AnalyticsChartsWrapper } from '@/components/admin/analytics-charts-wrapper'
 
-const STATUS_LABELS: Record<string, { label: string; bg: string; text: string }> = {
-  draft:             { label: 'Draft',           bg: 'var(--badge-pending-bg)',  text: 'var(--badge-pending-text)' },
-  pending:           { label: 'Pending Admin',   bg: 'var(--badge-pending-bg)',  text: 'var(--badge-pending-text)' },
-  dispatched:        { label: 'Sent to Sponsor', bg: 'var(--badge-warning-bg)',  text: 'var(--badge-warning-text)' },
-  approved:          { label: 'Funded',          bg: 'var(--badge-success-bg)',  text: 'var(--badge-success-text)' },
-  declined:          { label: 'Declined',        bg: 'var(--badge-rejected-bg)', text: 'var(--badge-rejected-text)' },
-  changes_requested: { label: 'Changes Req.',   bg: 'var(--badge-warning-bg)',  text: 'var(--badge-warning-text)' },
+const STATUS_LABELS: Record<string, string> = {
+  draft:             'Draft',
+  pending:           'Pending Admin',
+  dispatched:        'Sent to Sponsor',
+  approved:          'Funded',
+  declined:          'Declined',
+  changes_requested: 'Changes Req.',
 }
 
 export default async function AnalyticsPage() {
@@ -62,7 +63,7 @@ export default async function AnalyticsPage() {
 
       {/* ── Section 1: Marketing KPIs ── */}
       <section>
-        <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-muted-foreground mb-4">
+        <div className="text-xs font-mono uppercase tracking-[0.18em] text-muted-foreground mb-4">
           Platform KPIs
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -86,7 +87,7 @@ export default async function AnalyticsPage() {
 
       {/* ── Section 2: Platform Health ── */}
       <section>
-        <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-muted-foreground mb-4">
+        <div className="text-xs font-mono uppercase tracking-[0.18em] text-muted-foreground mb-4">
           Platform Health
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -110,25 +111,25 @@ export default async function AnalyticsPage() {
 
       {/* ── Section 3: Submission Pipeline ── */}
       <section>
-        <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-muted-foreground mb-4">
+        <div className="text-xs font-mono uppercase tracking-[0.18em] text-muted-foreground mb-4">
           Submission Pipeline
         </div>
         <div className="rounded-xl border border-border bg-card p-6">
           {totalSubmissions > 0 ? (
             <div className="flex flex-col gap-4">
-              {Object.entries(STATUS_LABELS).map(([key, { label, bg, text }]) => {
+              {Object.entries(STATUS_LABELS).map(([key, label]) => {
                 const count = statusCounts[key] ?? 0
                 const pct = totalSubmissions > 0 ? Math.round((count / totalSubmissions) * 100) : 0
                 return (
                   <div key={key} className="flex items-center gap-4">
-                    <span className="w-36 flex-shrink-0 text-right text-[11px] text-muted-foreground">{label}</span>
+                    <span className="w-36 flex-shrink-0 text-right text-xs text-muted-foreground">{label}</span>
                     <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
                       <div
                         className="h-2 rounded-full transition-all"
                         style={{ width: `${pct}%`, background: pct > 0 ? 'var(--foreground)' : 'transparent', opacity: 0.75 }}
                       />
                     </div>
-                    <span className="w-20 text-right text-[11px] font-mono text-muted-foreground">
+                    <span className="w-20 text-right text-xs font-mono text-muted-foreground">
                       {count} ({pct}%)
                     </span>
                   </div>
@@ -143,7 +144,7 @@ export default async function AnalyticsPage() {
 
       {/* ── Recent Activity Table ── */}
       <section>
-        <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-muted-foreground mb-4">
+        <div className="text-xs font-mono uppercase tracking-[0.18em] text-muted-foreground mb-4">
           Recent Activity
         </div>
         <div className="rounded-xl border border-border bg-card overflow-hidden">
@@ -152,7 +153,7 @@ export default async function AnalyticsPage() {
               <thead className="bg-muted/50 border-b border-border">
                 <tr>
                   {['Team', 'Sponsor', 'Ask', 'Status'].map(h => (
-                    <th key={h} className="px-4 py-3 text-left text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                    <th key={h} className="px-4 py-3 text-left text-xs font-mono uppercase tracking-wider text-muted-foreground">
                       {h}
                     </th>
                   ))}
@@ -163,24 +164,18 @@ export default async function AnalyticsPage() {
                   (submissionSummary as any[])!
                     .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
                     .slice(0, 12)
-                    .map(sub => {
-                      const meta = STATUS_LABELS[sub.status] ?? { label: sub.status, bg: 'var(--muted)', text: 'var(--muted-foreground)' }
-                      return (
-                        <tr key={sub.id} className="hover:bg-muted/50 transition-colors">
-                          <td className="px-4 py-3 font-medium text-foreground">{sub.team_name}</td>
-                          <td className="px-4 py-3 text-muted-foreground max-w-[180px] truncate">{sub.company_name}</td>
-                          <td className="px-4 py-3 text-muted-foreground font-mono text-xs" suppressHydrationWarning>
-                            ${(sub.requested_amount_cents / 100).toLocaleString('en-US')}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full"
-                              style={{ background: meta.bg, color: meta.text }}>
-                              {meta.label}
-                            </span>
-                          </td>
-                        </tr>
-                      )
-                    })
+                    .map(sub => (
+                      <tr key={sub.id} className="hover:bg-muted/50 transition-colors">
+                        <td className="px-4 py-3 font-medium text-foreground">{sub.team_name}</td>
+                        <td className="px-4 py-3 text-muted-foreground max-w-[180px] truncate">{sub.company_name}</td>
+                        <td className="px-4 py-3 text-muted-foreground font-mono text-xs" suppressHydrationWarning>
+                          ${(sub.requested_amount_cents / 100).toLocaleString('en-US')}
+                        </td>
+                        <td className="px-4 py-3">
+                          <StatusBadge status={sub.status} label={STATUS_LABELS[sub.status]} />
+                        </td>
+                      </tr>
+                    ))
                 ) : (
                   <tr>
                     <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground text-sm">
@@ -200,7 +195,7 @@ export default async function AnalyticsPage() {
 function KpiCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="rounded-xl border border-border bg-card p-5 transition-colors hover:border-border-hover">
-      <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-muted-foreground">{label}</div>
+      <div className="text-xs font-mono uppercase tracking-[0.18em] text-muted-foreground">{label}</div>
       <div className="mt-2 text-3xl font-semibold tracking-tight text-foreground tabular-nums" suppressHydrationWarning>
         {value}
       </div>
@@ -220,7 +215,7 @@ function HealthCard({
 
   return (
     <div className={`rounded-xl border p-6 flex flex-col gap-2 ${accentClass}`}>
-      <div className="text-[10px] font-mono uppercase tracking-[0.18em] opacity-70">{label}</div>
+      <div className="text-xs font-mono uppercase tracking-[0.18em] opacity-70">{label}</div>
       <div className="text-4xl font-bold tracking-tight tabular-nums" suppressHydrationWarning>
         {value}
       </div>

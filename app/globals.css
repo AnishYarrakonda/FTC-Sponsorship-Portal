@@ -64,6 +64,16 @@
 
   --color-accent-text: var(--accent-text);
   --color-accent-globe: var(--accent-globe);
+
+  /* Dark marketing surfaces (charcoal sections / ink CTAs) */
+  --color-charcoal: var(--surface-charcoal);
+  --color-charcoal-foreground: var(--surface-charcoal-foreground);
+  --color-ink: var(--surface-ink);
+
+  /* macOS-style browser-chrome window dots */
+  --color-window-dot-close: var(--window-dot-close);
+  --color-window-dot-minimize: var(--window-dot-minimize);
+  --color-window-dot-maximize: var(--window-dot-maximize);
 }
 
 :root {
@@ -96,11 +106,14 @@
   --input: #E7E1D6;
   --ring: #1F6F5C;
   
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  /* Chart palette — pine-first, colorblind-differentiated */
+  --chart-1: #1F6F5C; /* pine — primary series */
+  --chart-2: #10b981; /* emerald — positive/approved */
+  --chart-3: #f59e0b; /* amber — pending/warning */
+  --chart-4: #f43f5e; /* rose — declined/negative */
+  --chart-5: #A39A88; /* warm neutral — drafts/other */
+  --chart-grid: #E7E1D6;
+  --chart-tick: #A39A88;
   
   --radius: 0.625rem;
   
@@ -133,6 +146,16 @@
   --badge-warning-text: #854D0E;
   --badge-rejected-bg: #FCE8E8;
   --badge-rejected-text: #991B1B;
+
+  /* Dark marketing surfaces */
+  --surface-charcoal: #1E1C19;
+  --surface-charcoal-foreground: #F7F3EE;
+  --surface-ink: #181818;
+
+  /* macOS-style browser-chrome window dots */
+  --window-dot-close: #ff5f56;
+  --window-dot-minimize: #ffbd2e;
+  --window-dot-maximize: #27c93f;
 }
 
 @keyframes navPop {
@@ -180,6 +203,20 @@
   }
   h1 {
     letter-spacing: -0.03em;
+  }
+
+  /* Consistent focus-visible ring for bare interactive elements.
+     Components that render their own focus ring opt out via
+     `focus-visible:outline-none` + `focus-visible:ring-*`. */
+  a:focus-visible,
+  button:focus-visible,
+  [role='button']:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  summary:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
 
   /* Hide spin buttons for number inputs */
