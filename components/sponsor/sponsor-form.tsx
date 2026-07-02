@@ -45,6 +45,7 @@ export function SponsorForm({ initialSponsor }: Props) {
       fundingCapCents: initialSponsor?.funding_cap_cents ?? 0,
       status: initialSponsor?.status ?? 'pending_review',
       notes: initialSponsor?.notes ?? '',
+      website2: '',
     },
   })
 
@@ -75,6 +76,19 @@ export function SponsorForm({ initialSponsor }: Props) {
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
+
+            {/* Honeypot — visually hidden, never shown to real users. Bots that
+                autofill every field trip it and the server silently no-ops. */}
+            <div aria-hidden="true" style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, overflow: 'hidden' }}>
+              <label htmlFor="website2">Website (leave this field empty)</label>
+              <input
+                id="website2"
+                type="text"
+                tabIndex={-1}
+                autoComplete="off"
+                {...form.register('website2')}
+              />
+            </div>
 
             <FormField
               control={form.control}
