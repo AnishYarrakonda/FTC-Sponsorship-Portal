@@ -50,9 +50,12 @@ export const CoachDenialEmail = ({
             Log In and Re-apply
           </Button>
 
+          <Text style={text}>— The FTC Sponsorship Portal team</Text>
           <Hr style={hr} />
           <Text style={footer}>
-            If you believe this was a mistake or need further assistance, please contact our support team.
+            FTC Sponsorship Portal · You received this email because you applied for a coach
+            account on the portal. If you believe this was a mistake or need further assistance,
+            please contact our support team.
           </Text>
         </Container>
       </Body>

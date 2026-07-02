@@ -66,9 +66,11 @@ export default function SubmissionDecisionEmail({
             </Section>
           )}
 
+          <Text style={text}>— The FTC Sponsorship Portal team</Text>
           <Hr style={hr} />
           <Text style={footer}>
-            FTC Matchmaker · You received this email because you submitted a portfolio on our platform.
+            FTC Sponsorship Portal · You received this email because you submitted a sponsorship
+            pitch on our platform.
           </Text>
         </Container>
       </Body>
