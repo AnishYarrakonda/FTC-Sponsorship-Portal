@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createInAppNotification, sendCoachVerificationEmail, sendCoachDenialEmail } from '@/lib/notify'
 import { requireAdmin } from '@/lib/actions-utils'
+import { mapDbError } from '@/lib/errors'
 import { z } from 'zod'
 
 const verifyCoachSchema = z.object({
@@ -36,14 +37,16 @@ export async function verifyCoach(coachId: string, verified: boolean) {
 
   const { error } = await adminClient
     .from('profiles')
-    .update({ 
+    .update({
       coach_verified: verified,
-      // Clear pending data if verifying
-      ...(verified ? { pending_team_data: null } : {})
+      // Approval supersedes any earlier denial. pending_team_data is cleared
+      // below only AFTER the team row is provisioned successfully, so a failed
+      // insert can still be retried by the dashboard fallback.
+      ...(verified ? { denial_reason: null, denied_at: null } : {})
     })
     .eq('id', coachId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mapDbError(error, 'verifyCoach.update') }
 
   await adminClient.from('audit_log').insert({
     actor_id: user.id,
@@ -55,54 +58,41 @@ export async function verifyCoach(coachId: string, verified: boolean) {
   if (verified) {
     const coachName = coachProfile?.full_name ?? 'Coach'
     
-    // Provision team from pending data
+    // Provision team from pending data. Writes ONLY the fields the signup
+    // wizard currently collects — never the legacy robot columns (drivetrain,
+    // build_system, programming, cad_software, control_system, sensors, …),
+    // which are being dropped from the schema.
     if (coachProfile?.pending_team_data) {
       const payloadData = coachProfile.pending_team_data as Record<string, unknown>
-      const rawBudgetItems = (payloadData.budgetItems as Array<Record<string, unknown>> | undefined) || []
-      const normalizedBudgetItems = rawBudgetItems.map((item) => ({
-        label: (item.label as string | undefined)?.trim() || '',
-        qty: (item.qty as number | undefined) || 1,
-        unit_cost_cents: (item.unitCostCents as number | undefined) || 0,
-        total_cents: (item.totalCents as number | undefined) || 0,
-      }))
-      const totalAsk = normalizedBudgetItems.reduce((sum: number, item) => sum + item.total_cents, 0)
-      
+
+      // Existing teams MUST have a team number (DB constraint); if missing,
+      // fall back to incubator instead of failing provisioning.
+      const ftcTeamNumber = (payloadData.ftcTeamNumber as number | undefined) ?? null
+      const rawStatus = (payloadData.status as string) || 'existing'
+      const status = rawStatus === 'existing' && !ftcTeamNumber ? 'incubator' : rawStatus
+
       const teamPayload = {
         owner_id: coachId,
-        status: (payloadData.status as string) || 'existing',
-        ftc_team_number: (payloadData.ftcTeamNumber as number | undefined) ?? null,
+        status,
+        ftc_team_number: ftcTeamNumber,
         team_name: ((payloadData.teamName as string | undefined) || '').trim(),
         organization: (payloadData.organization as string | undefined)?.trim() || null,
         city: ((payloadData.city as string | undefined) || '').trim(),
         state: ((payloadData.state as string | undefined) || '').trim(),
-        tagline: (payloadData.tagline as string | undefined)?.trim() || null,
         mission_statement: ((payloadData.missionStatement as string | undefined) || '').trim(),
         tax_status: (payloadData.taxStatus as string | undefined) || 'None',
         community_interest_text: (payloadData.communityInterestText as string | undefined)?.trim() || null,
         seed_funding_goals_cents: (payloadData.seedFundingGoalsCents as number | undefined) ?? 0,
-        technical_summary: (payloadData.technicalSummary as string | undefined)?.trim() || null,
-        outreach_summary: (payloadData.outreachSummary as string | undefined)?.trim() || null,
-        drivetrain: (payloadData.drivetrain as string | undefined)?.trim() || null,
-        build_system: (payloadData.buildSystem as string | undefined)?.trim() || null,
-        programming: (payloadData.programming as string | undefined)?.trim() || null,
-        media_urls: (payloadData.mediaUrls as string[] | undefined) || [],
-        youtube_url: (payloadData.youtubeUrl as string | undefined) || null,
-        budget_items: normalizedBudgetItems,
-        financial_ask_cents: totalAsk,
-        cad_software: (payloadData.cadSoftware as string | undefined)?.trim() || null,
-        control_system: (payloadData.controlSystem as string | undefined)?.trim() || null,
-        sensors: payloadData.sensors ? (Array.isArray(payloadData.sensors) ? payloadData.sensors : (payloadData.sensors as string).split(',').map(v => v.trim()).filter(Boolean)) : [],
-        github_link: (payloadData.githubLink as string | undefined)?.trim() || null,
-        autonomous_description: (payloadData.autonomousDescription as string | undefined)?.trim() || null,
-        subteam_breakdown: (payloadData.subteamBreakdown as string | undefined)?.trim() || null,
-        manufacturing_capabilities: payloadData.manufacturingCapabilities ? (Array.isArray(payloadData.manufacturingCapabilities) ? payloadData.manufacturingCapabilities : (payloadData.manufacturingCapabilities as string).split(',').map(v => v.trim()).filter(Boolean)) : [],
-        visual_pitch_items: payloadData.visualPitchItems ?? [],
-        proudest_mechanism_name: (payloadData.proudestMechanismName as string | undefined)?.trim() || null,
-        proudest_mechanism_problem: (payloadData.proudestMechanismProblem as string | undefined)?.trim() || null,
-        proudest_mechanism_solution: (payloadData.proudestMechanismSolution as string | undefined)?.trim() || null,
       }
 
-      await adminClient.from('teams').insert(teamPayload as never)
+      const { error: teamError } = await adminClient.from('teams').insert(teamPayload as never)
+      if (teamError) {
+        // Don't fail the verification (the coach IS verified) — pending data is
+        // kept so the dashboard auto-provisioning fallback retries on first load.
+        console.error('[verifyCoach] team provisioning failed:', teamError)
+      } else {
+        await adminClient.from('profiles').update({ pending_team_data: null }).eq('id', coachId)
+      }
     }
 
     await Promise.all([
@@ -156,17 +146,21 @@ export async function denyCoach(coachId: string, reason: string) {
     }
   }
 
-  // Update profile: clear data and keep verified = false
+  // Update profile: clear data, keep verified = false, and record the denial
+  // so the coach sees the reason on /awaiting-verification and admins see the
+  // history when re-reviewing. A successful re-upload clears both fields.
   const { error } = await adminClient
     .from('profiles')
-    .update({ 
+    .update({
       coach_verified: false,
       coach_credentials_url: null,
-      pending_team_data: null
+      pending_team_data: null,
+      denial_reason: reason.trim(),
+      denied_at: new Date().toISOString(),
     })
     .eq('id', coachId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mapDbError(error, 'denyCoach.update') }
 
   await adminClient.from('audit_log').insert({
     actor_id: user.id,
@@ -232,7 +226,9 @@ export async function approveSponsorApplication(applicationId: string) {
     .select('id')
     .single()
 
-  if (insertError || !newSponsor) return { error: insertError?.message ?? 'Failed to create sponsor' }
+  if (insertError || !newSponsor) {
+    return { error: insertError ? mapDbError(insertError, 'approveSponsorApplication.insert') : 'Failed to create sponsor' }
+  }
 
   // Link the applicant's profile to the new sponsor so requireSponsor() admits them.
   // Public opt-in applicants signed up via signUpSponsor (role='sponsor', sponsor_id=null);
@@ -286,7 +282,7 @@ export async function rejectSponsorApplication(applicationId: string) {
     .update({ status: 'rejected' })
     .eq('id', applicationId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mapDbError(error, 'rejectSponsorApplication.update') }
 
   await adminClient.from('audit_log').insert({
     actor_id: user.id,

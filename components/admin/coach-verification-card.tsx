@@ -26,6 +26,8 @@ export type CoachData = {
   referral_source: string | null
   coppa_acknowledged: boolean
   tos_accepted: boolean
+  denial_reason: string | null
+  denied_at: string | null
   pending_team_data: any | null
   signedUrl: string | null
   team: { team_name: string; ftc_team_number: number | null; city: string | null; state: string | null } | null
@@ -71,6 +73,7 @@ export function CoachVerificationCard({ coach }: { coach: CoachData }) {
 
   const pd = coach.pending_team_data || {}
   const hasPendingData = !!coach.pending_team_data
+  const wasDenied = !coach.coach_verified && !!coach.denied_at
 
   return (
     <div className="rounded-xl border bg-card p-5 flex flex-col md:flex-row md:items-start gap-5 transition-colors hover:border-accent shadow-sm">
@@ -121,7 +124,17 @@ export function CoachVerificationCard({ coach }: { coach: CoachData }) {
                Data Pending Review
              </span>
           )}
+          {wasDenied && (
+             <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 border border-red-500/20 text-red-600 text-[10px] font-medium px-2 py-0.5">
+               <XCircle className="h-3 w-3" /> Previously denied {new Date(coach.denied_at!).toLocaleDateString()}
+             </span>
+          )}
         </div>
+        {wasDenied && coach.denial_reason && (
+          <p className="text-xs text-red-600/90 mt-1 line-clamp-2" title={coach.denial_reason}>
+            Prior denial reason: {coach.denial_reason}
+          </p>
+        )}
         {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
       </div>
 
@@ -145,6 +158,21 @@ export function CoachVerificationCard({ coach }: { coach: CoachData }) {
               <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-2">
                 {/* Left Side: Data Tabs */}
                 <div className="overflow-y-auto border-r p-6">
+                  {wasDenied && (
+                    <div className="mb-6 rounded-lg border border-red-500/20 bg-red-500/5 p-4 space-y-1">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-red-600 flex items-center gap-1.5">
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                        Re-review — previously denied{' '}
+                        {new Date(coach.denied_at!).toLocaleDateString()}
+                      </p>
+                      <p className="text-sm text-foreground whitespace-pre-wrap">
+                        {coach.denial_reason ?? 'No reason recorded.'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        The coach has since re-uploaded credentials. Check that the prior issue is resolved.
+                      </p>
+                    </div>
+                  )}
                   <Tabs defaultValue="identity" className="w-full">
                     <TabsList className="w-full grid grid-cols-2 mb-6">
                       <TabsTrigger value="identity">Coach Identity</TabsTrigger>
@@ -310,15 +338,30 @@ export function CoachVerificationCard({ coach }: { coach: CoachData }) {
                         <p className="text-sm text-muted-foreground">
                           This will clear their pending team data and uploaded credentials. An email will be sent to the coach with your reason, allowing them to correct the issue and re-apply.
                         </p>
+                        {wasDenied && coach.denial_reason && (
+                          <div className="rounded-md border border-border bg-muted/40 p-3">
+                            <p className="text-xs font-medium text-muted-foreground mb-1">
+                              Previous denial ({new Date(coach.denied_at!).toLocaleDateString()})
+                            </p>
+                            <p className="text-sm text-foreground whitespace-pre-wrap">{coach.denial_reason}</p>
+                          </div>
+                        )}
                         <div className="space-y-2">
-                          <Label htmlFor="denyReason" className="text-foreground">Reason for Denial</Label>
-                          <Textarea 
-                            id="denyReason" 
-                            placeholder="e.g., The provided ID is expired. Please upload a valid ID." 
+                          <Label htmlFor="denyReason" className="text-foreground">
+                            Reason for Denial <span className="text-red-500" aria-hidden>*</span>
+                          </Label>
+                          <Textarea
+                            id="denyReason"
+                            placeholder="e.g., The provided ID is expired. Please upload a valid ID."
                             value={denyReason}
                             onChange={(e) => setDenyReason(e.target.value)}
+                            required
+                            aria-required
                             className="h-24 bg-background border-border resize-none"
                           />
+                          <p className="text-xs text-muted-foreground">
+                            Required — this is emailed to the coach and shown on their status page.
+                          </p>
                         </div>
                       </div>
                       <DialogFooter>

@@ -11,7 +11,7 @@ export default async function CoachesPage() {
     .select(`
       id, full_name, email, created_at, coach_verified, coach_credentials_url,
       date_of_birth, phone_number, address_line1, city, state, zip_code, referral_source,
-      coppa_acknowledged, tos_accepted, pending_team_data,
+      coppa_acknowledged, tos_accepted, denial_reason, denied_at, pending_team_data,
       teams:teams(team_name, ftc_team_number, city, state)
     `)
     .eq('role', 'coach')
