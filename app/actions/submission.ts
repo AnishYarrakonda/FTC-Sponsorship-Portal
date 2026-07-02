@@ -53,6 +53,15 @@ export async function saveSubmission(
   if ('error' in ctx) return { error: ctx.error }
   const { supabase, user, teamId, financialAsk } = ctx
 
+  // Approval reserves the portfolio ask against the sponsor's cap, so a $0 ask
+  // can never be dispatched — catch it here where the coach can actually fix it.
+  if (status === 'pending' && financialAsk <= 0) {
+    return {
+      error:
+        'Your portfolio has no funding ask yet. Add budget line items in Portfolio → Goals & Funding Ask, then submit your pitch.',
+    }
+  }
+
   // Spec: max 3 pending submissions per rolling 7-day window
   if (status === 'pending') {
     const { count } = await supabase

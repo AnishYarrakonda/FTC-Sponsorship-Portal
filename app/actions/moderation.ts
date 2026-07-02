@@ -47,6 +47,8 @@ export async function approveSubmission(submissionId: string) {
       submission_not_pending: 'This submission is no longer pending review.',
       sponsor_not_found: 'Sponsor not found.',
       insufficient_sponsor_capacity: 'Sponsor does not have enough remaining capacity for this request.',
+      invalid_amount:
+        "This team's portfolio has no funding ask. The coach needs to add budget line items to their portfolio before this pitch can be dispatched.",
     }
     return { error: messages[result.error ?? ''] ?? result.error }
   }

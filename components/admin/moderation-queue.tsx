@@ -399,6 +399,11 @@ export function ModerationQueue({ initialSubmissions }: { initialSubmissions: Su
       const res = await approveSubmission(submissionId)
       if (!res?.error) {
         removeSubmissions([submissionId])
+        setBulkResults(null)
+      } else {
+        // Surface the failure through the same results banner the bulk path uses —
+        // closing the dialog with no feedback left admins thinking approval worked.
+        setBulkResults([{ id: submissionId, ok: false, error: res.error }])
       }
       setApprovePreview(null)
     })
