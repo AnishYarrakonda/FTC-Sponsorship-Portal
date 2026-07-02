@@ -5,22 +5,23 @@ export async function GET() {
   const authed = await getAuthedProfile()
 
   if (!authed) {
-    return NextResponse.json({ count: 0 }, { status: 401 })
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   const { supabase, user } = authed
 
   if (user.role !== 'coach') {
-    return NextResponse.json({ count: 0 }, { status: 403 })
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
-  
+
   const { count, error } = await supabase
     .from('notifications')
     .select('id', { count: 'exact', head: true })
     .eq('recipient_id', user.id)
     .is('read_at', null)
-    
+
   if (error) {
-    return NextResponse.json({ count: 0, error: error.message }, { status: 500 })
+    // Never leak raw Postgres error messages to the client.
+    return NextResponse.json({ error: 'Failed to load unread count' }, { status: 500 })
   }
 
   return NextResponse.json(

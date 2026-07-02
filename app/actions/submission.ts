@@ -5,6 +5,9 @@ import { submissionSchema, type SubmissionInput } from '@/lib/schemas/submission
 import { redirect } from 'next/navigation'
 import { requireAuth, requireVerifiedCoach } from '@/lib/actions-utils'
 import { createInAppNotification } from '@/lib/notify'
+import { mapDbError } from '@/lib/errors'
+
+const DUPLICATE_SUBMISSION_MESSAGE = 'You already have an active pitch to this sponsor.'
 
 const EDITABLE_SUBMISSION_STATUSES = ['draft', 'declined', 'changes_requested'] as const
 
@@ -106,9 +109,10 @@ export async function saveSubmission(
       .update(payload)
       .eq('id', submissionId)
 
-    if (error) return { error: error.message }
+    if (error) return { error: mapDbError(error, 'saveSubmission.update') }
   } else {
-    // Check if an active submission already exists for this team/sponsor combo
+    // Fast path: friendly rejection when an active submission already exists
+    // for this team/sponsor combo.
     const { data: existingTarget } = await supabase
       .from('submissions')
       .select('id, status')
@@ -118,16 +122,22 @@ export async function saveSubmission(
       .maybeSingle()
 
     if (existingTarget) {
-      return { error: 'An active submission for this sponsor already exists.' }
+      return { error: DUPLICATE_SUBMISSION_MESSAGE }
     }
 
+    // The pre-check above races with concurrent inserts; the partial unique
+    // index on active (team_id, sponsor_id) is the real guard. Map its 23505
+    // to the same friendly message instead of leaking a constraint error.
     const { data: inserted, error } = await supabase
       .from('submissions')
       .insert(payload)
       .select('id')
       .single()
 
-    if (error) return { error: error.message }
+    if (error) {
+      if (error.code === '23505') return { error: DUPLICATE_SUBMISSION_MESSAGE }
+      return { error: mapDbError(error, 'saveSubmission.insert') }
+    }
     submissionId = inserted.id
   }
 
@@ -199,7 +209,7 @@ export async function autoSaveSubmissionDraft(
     }
 
     const { error } = await supabase.from('submissions').update(payload).eq('id', submissionId)
-    if (error) return { error: error.message }
+    if (error) return { error: mapDbError(error, 'autoSaveSubmissionDraft.update') }
     return { id: submissionId }
   }
 
@@ -218,7 +228,7 @@ export async function autoSaveSubmissionDraft(
       return { error: 'An active submission for this sponsor is already in progress and locked.' }
     }
     const { error } = await supabase.from('submissions').update(payload).eq('id', existingTarget.id)
-    if (error) return { error: error.message }
+    if (error) return { error: mapDbError(error, 'autoSaveSubmissionDraft.updateExisting') }
     return { id: existingTarget.id }
   }
 
@@ -228,7 +238,12 @@ export async function autoSaveSubmissionDraft(
     .select('id')
     .single()
 
-  if (error) return { error: error.message }
+  if (error) {
+    // Concurrent autosave can race the pre-check; the partial unique index on
+    // active (team_id, sponsor_id) reports 23505 — map it to the friendly message.
+    if (error.code === '23505') return { error: DUPLICATE_SUBMISSION_MESSAGE }
+    return { error: mapDbError(error, 'autoSaveSubmissionDraft.insert') }
+  }
   return { id: inserted.id }
 }
 
