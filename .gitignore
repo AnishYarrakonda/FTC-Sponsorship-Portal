@@ -58,3 +58,47 @@ next-env.d.ts
 
 # clerk configuration (can include secrets)
 /.clerk/
+
+# ─── SECURITY: never commit these ────────────────────────────────────────────
+# Internal audit + operations docs. The QA report enumerates unfixed exploitable
+# vulnerabilities with working repro commands and the production project ref.
+# This must never reach a public repo, and it is the reason this repo is private.
+# Scoped to .md on purpose: a bare *REMEDIATION* also matched
+# lib/__tests__/remediation-invariants.test.ts (git uses core.ignorecase on macOS),
+# silently dropping a real test file from the repo.
+/docs/
+*QA-REPORT*.md
+*QA-FINDINGS*.md
+*REMEDIATION*.md
+*HANDOFF*.md
+
+# secrets, keys, credentials
+*.key
+*.p12
+*.pfx
+*.crt
+*.jks
+*.keystore
+secrets.*
+credentials.*
+service-account*.json
+*.jwt
+*.sid
+
+# local scratch / agent working files
+/scratchpad/
+/.scratch/
+*.local.md
+.claude/settings.local.json
+
+# database dumps + backups (contain real user data)
+*.dump
+*.sql.gz
+*.sqlite
+*.sqlite3
+/backups/
+/supabase/.dump/
+
+# uploaded artifacts (coach photo IDs, team media)
+/uploads/
+/tmp/
