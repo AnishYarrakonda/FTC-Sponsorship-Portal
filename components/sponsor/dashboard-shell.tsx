@@ -114,7 +114,7 @@ export function SponsorDashboardShell({
           value={pendingCount}
           icon={Clock}
           description="Awaiting your review"
-          iconContainerClassName={pendingCount > 0 ? "bg-amber-500/10 text-amber-600" : ""}
+          iconContainerClassName={pendingCount > 0 ? "bg-amber-500/10 text-status-warning" : ""}
         />
         <StatCard
           label="Active Sponsorships"

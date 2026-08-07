@@ -32,7 +32,7 @@ function SectionCard({
 function StatusMessage({ type, text }: { type: 'success' | 'error'; text: string }) {
   return (
     <div className={cn('flex items-start gap-2 rounded-md px-3 py-2.5 text-sm',
-      type === 'success' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-destructive/10 text-destructive'
+      type === 'success' ? 'bg-emerald-500/10 text-status-success dark:text-emerald-400' : 'bg-destructive/10 text-destructive'
     )}>
       {type === 'success'
         ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.5} />

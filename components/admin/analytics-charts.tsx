@@ -154,7 +154,7 @@ export default function AnalyticsCharts() {
           label="Approval Rate"
           value={`${data?.approvalRate || 0}%`}
           description="Successful pitches"
-          iconContainerClassName="bg-emerald-500/10 text-emerald-600"
+          iconContainerClassName="bg-emerald-500/10 text-status-success"
         />
         <StatCard
           icon={Clock}

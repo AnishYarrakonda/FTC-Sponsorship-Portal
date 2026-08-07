@@ -119,7 +119,7 @@ export function SponsorDecisionPanel({ token, totalAskCents, teamName }: Props) 
               />
             </div>
             {parseFloat(partialAmount) * 100 > totalAskCents && (
-              <p className="text-xs text-amber-600">
+              <p className="text-xs text-status-warning">
                 A partial offer can&apos;t exceed the full request of {totalDisplay}.
               </p>
             )}

@@ -124,7 +124,7 @@ function ProductHeroMock() {
                      </div>
                   </div>
                   <div className="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
-                    <span className="text-xs font-medium text-amber-600">In Progress</span>
+                    <span className="text-xs font-medium text-status-warning">In Progress</span>
                   </div>
                </motion.div>
 
@@ -134,7 +134,7 @@ function ProductHeroMock() {
                >
                   <div className="flex items-center gap-4">
                      <div className="h-10 w-10 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center">
-                       <span className="text-rose-600 font-bold text-xs tracking-wider">ND</span>
+                       <span className="text-status-danger font-bold text-xs tracking-wider">ND</span>
                      </div>
                      <div className="flex flex-col">
                        <span className="text-sm font-semibold text-foreground">Nexus Dynamics</span>
@@ -142,7 +142,7 @@ function ProductHeroMock() {
                      </div>
                   </div>
                   <div className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                    <span className="text-xs font-medium text-emerald-600">+$2,500</span>
+                    <span className="text-xs font-medium text-status-success">+$2,500</span>
                   </div>
                </motion.div>
              </div>

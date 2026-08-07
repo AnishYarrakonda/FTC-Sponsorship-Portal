@@ -159,7 +159,7 @@ export default async function AdminDashboardPage() {
                     <div key={s.id}>
                       <div className="mb-1 flex justify-between text-sm">
                         <span className="font-medium text-foreground">{s.company_name}</span>
-                        <span className={pct >= 95 ? 'text-destructive' : 'text-amber-500'}>{pct}%</span>
+                        <span className={pct >= 95 ? 'text-destructive' : 'text-status-warning'}>{pct}%</span>
                       </div>
                       <div className="h-1 w-full rounded-full bg-muted">
                         <div className={cn('h-1 rounded-full transition-all', pct >= 95 ? 'bg-destructive' : 'bg-amber-500')} style={{ width: `${pct}%` }} />
@@ -226,7 +226,7 @@ function ActionCard({ icon, label, value, sub, highlight, href }: {
           {icon}
           <p className="text-xs font-mono uppercase tracking-widest">{label}</p>
         </div>
-        <p className={cn('mt-1 text-3xl font-semibold tabular-nums tracking-tight', highlight ? 'text-amber-500' : 'text-foreground')} suppressHydrationWarning>
+        <p className={cn('mt-1 text-3xl font-semibold tabular-nums tracking-tight', highlight ? 'text-status-warning' : 'text-foreground')} suppressHydrationWarning>
           {value}
         </p>
         {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}

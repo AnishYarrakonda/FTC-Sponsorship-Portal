@@ -313,7 +313,7 @@ export function SignupWizard() {
                     type="text"
                     inputMode="numeric"
                     autoComplete="one-time-code"
-                    className="bg-background border-border text-foreground placeholder:text-muted-foreground tracking-[0.3em] text-center h-11"
+                    className="bg-background border-input text-foreground placeholder:text-muted-foreground tracking-[0.3em] text-center h-11"
                     placeholder="123456"
                     value={verifyCode}
                     onChange={(e) => setVerifyCode(e.target.value)}
@@ -390,14 +390,14 @@ export function SignupWizard() {
                         <FormField control={form.control} name="fullName" render={({ field }) => (
                           <FormItem>
                             <FormLabel className="text-foreground/80">Full Name</FormLabel>
-                            <FormControl><Input className="bg-background border-border text-foreground placeholder:text-muted-foreground" placeholder="Jane Doe" maxLength={LIMITS.fullName} {...field} /></FormControl>
+                            <FormControl><Input className="bg-background border-input text-foreground placeholder:text-muted-foreground" placeholder="Jane Doe" maxLength={LIMITS.fullName} {...field} /></FormControl>
                             <FormMessage />
                           </FormItem>
                         )} />
                         <FormField control={form.control} name="email" render={({ field }) => (
                           <FormItem>
                             <FormLabel className="text-foreground/80">Email Address</FormLabel>
-                            <FormControl><Input className="bg-background border-border text-foreground placeholder:text-muted-foreground" type="email" autoComplete="email" placeholder="coach@example.com" {...field} /></FormControl>
+                            <FormControl><Input className="bg-background border-input text-foreground placeholder:text-muted-foreground" type="email" autoComplete="email" placeholder="coach@example.com" {...field} /></FormControl>
                             <FormMessage />
                           </FormItem>
                         )} />
@@ -405,14 +405,14 @@ export function SignupWizard() {
                           <FormField control={form.control} name="password" render={({ field }) => (
                             <FormItem>
                               <FormLabel className="text-foreground/80">Password</FormLabel>
-                              <FormControl><Input className="bg-background border-border text-foreground" type="password" autoComplete="new-password" {...field} /></FormControl>
+                              <FormControl><Input className="bg-background border-input text-foreground" type="password" autoComplete="new-password" {...field} /></FormControl>
                               <FormMessage />
                             </FormItem>
                           )} />
                           <FormField control={form.control} name="confirmPassword" render={({ field }) => (
                             <FormItem>
                               <FormLabel className="text-foreground/80">Confirm Password</FormLabel>
-                              <FormControl><Input className="bg-background border-border text-foreground" type="password" autoComplete="new-password" {...field} /></FormControl>
+                              <FormControl><Input className="bg-background border-input text-foreground" type="password" autoComplete="new-password" {...field} /></FormControl>
                               <FormMessage />
                             </FormItem>
                           )} />
@@ -428,14 +428,14 @@ export function SignupWizard() {
                           <FormField control={form.control} name="dateOfBirth" render={({ field }) => (
                             <FormItem>
                               <FormLabel className="text-foreground/80">Date of Birth</FormLabel>
-                              <FormControl><Input className="bg-background border-border text-foreground" type="date" {...field} /></FormControl>
+                              <FormControl><Input className="bg-background border-input text-foreground" type="date" {...field} /></FormControl>
                               <FormMessage />
                             </FormItem>
                           )} />
                           <FormField control={form.control} name="phoneNumber" render={({ field }) => (
                             <FormItem>
                               <FormLabel className="text-foreground/80">Phone Number</FormLabel>
-                              <FormControl><Input className="bg-background border-border text-foreground placeholder:text-muted-foreground" type="tel" placeholder="(555) 123-4567" {...field} /></FormControl>
+                              <FormControl><Input className="bg-background border-input text-foreground placeholder:text-muted-foreground" type="tel" placeholder="(555) 123-4567" {...field} /></FormControl>
                               <FormMessage />
                             </FormItem>
                           )} />
@@ -443,7 +443,7 @@ export function SignupWizard() {
                         <FormField control={form.control} name="addressLine1" render={({ field }) => (
                           <FormItem>
                             <FormLabel className="text-foreground/80">Street Address</FormLabel>
-                            <FormControl><Input className="bg-background border-border text-foreground placeholder:text-muted-foreground" placeholder="123 Main St" {...field} /></FormControl>
+                            <FormControl><Input className="bg-background border-input text-foreground placeholder:text-muted-foreground" placeholder="123 Main St" {...field} /></FormControl>
                             <FormMessage />
                           </FormItem>
                         )} />
@@ -451,7 +451,7 @@ export function SignupWizard() {
                           <FormField control={form.control} name="city" render={({ field }) => (
                             <FormItem className="col-span-1">
                               <FormLabel className="text-foreground/80">City</FormLabel>
-                              <FormControl><Input className="bg-background border-border text-foreground" {...field} /></FormControl>
+                              <FormControl><Input className="bg-background border-input text-foreground" {...field} /></FormControl>
                               <FormMessage />
                             </FormItem>
                           )} />
@@ -465,7 +465,7 @@ export function SignupWizard() {
                           <FormField control={form.control} name="zipCode" render={({ field }) => (
                             <FormItem className="col-span-1">
                               <FormLabel className="text-foreground/80">Zip Code</FormLabel>
-                              <FormControl><Input className="bg-background border-border text-foreground" {...field} /></FormControl>
+                              <FormControl><Input className="bg-background border-input text-foreground" {...field} /></FormControl>
                               <FormMessage />
                             </FormItem>
                           )} />
@@ -549,7 +549,7 @@ export function SignupWizard() {
                         <FormField control={form.control} name="referralSource" render={({ field }) => (
                           <FormItem>
                             <FormLabel className="text-foreground/80">How did you hear about us? <span className="text-muted-foreground font-normal">(Optional)</span></FormLabel>
-                            <FormControl><Input className="bg-background border-border text-foreground placeholder:text-muted-foreground" placeholder="e.g. FIRST forum, another coach..." {...field} /></FormControl>
+                            <FormControl><Input className="bg-background border-input text-foreground placeholder:text-muted-foreground" placeholder="e.g. FIRST forum, another coach..." {...field} /></FormControl>
                           </FormItem>
                         )} />
                       </>
@@ -592,7 +592,7 @@ export function SignupWizard() {
                               <FormControl>
                                 <div className="flex gap-2">
                                   <Input
-                                    className="bg-background border-border text-foreground placeholder:text-muted-foreground"
+                                    className="bg-background border-input text-foreground placeholder:text-muted-foreground"
                                     placeholder="e.g. 12345"
                                     type="number"
                                     value={field.value ?? ''}
@@ -603,7 +603,7 @@ export function SignupWizard() {
                                   </Button>
                                 </div>
                               </FormControl>
-                              {lookupSuccess && <p className="text-sm text-emerald-600 font-medium">✓ Team found in FIRST registry</p>}
+                              {lookupSuccess && <p className="text-sm text-status-success font-medium">✓ Team found in FIRST registry</p>}
                               <FormMessage />
                             </FormItem>
                           )} />
@@ -612,7 +612,7 @@ export function SignupWizard() {
                         <FormField control={form.control} name="teamData.teamName" render={({ field }) => (
                           <FormItem>
                             <FormLabel className="text-foreground/80">Team Name</FormLabel>
-                            <FormControl><Input className="bg-background border-border text-foreground placeholder:text-muted-foreground" placeholder="e.g. The RoboKnights" maxLength={LIMITS.teamName} {...field} /></FormControl>
+                            <FormControl><Input className="bg-background border-input text-foreground placeholder:text-muted-foreground" placeholder="e.g. The RoboKnights" maxLength={LIMITS.teamName} {...field} /></FormControl>
                             <FormMessage />
                           </FormItem>
                         )} />
@@ -620,7 +620,7 @@ export function SignupWizard() {
                         <FormField control={form.control} name="teamData.organization" render={({ field }) => (
                           <FormItem>
                             <FormLabel className="text-foreground/80">Organization / School <span className="text-muted-foreground font-normal">(Optional)</span></FormLabel>
-                            <FormControl><Input className="bg-background border-border text-foreground placeholder:text-muted-foreground" placeholder="e.g. Lincoln High School" maxLength={LIMITS.organization} {...field} value={field.value ?? ''} /></FormControl>
+                            <FormControl><Input className="bg-background border-input text-foreground placeholder:text-muted-foreground" placeholder="e.g. Lincoln High School" maxLength={LIMITS.organization} {...field} value={field.value ?? ''} /></FormControl>
                             <FormMessage />
                           </FormItem>
                         )} />
@@ -630,7 +630,7 @@ export function SignupWizard() {
                           <FormField control={form.control} name="teamData.city" render={({ field }) => (
                             <FormItem>
                               <FormLabel className="text-foreground/80">Team City</FormLabel>
-                              <FormControl><Input className="bg-background border-border text-foreground placeholder:text-muted-foreground" placeholder="Austin" {...field} /></FormControl>
+                              <FormControl><Input className="bg-background border-input text-foreground placeholder:text-muted-foreground" placeholder="Austin" {...field} /></FormControl>
                               <FormMessage />
                             </FormItem>
                           )} />
@@ -650,7 +650,7 @@ export function SignupWizard() {
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <FormControl>
-                                  <Button variant="outline" className="w-full justify-between font-normal bg-background border-border text-foreground hover:bg-accent">
+                                  <Button variant="outline" className="w-full justify-between font-normal bg-background border-input text-foreground hover:bg-accent">
                                     {field.value === 'None' ? 'Standard / No tax-exempt status' : field.value === '501c3' ? '501(c)(3) Non-profit' : field.value === 'School' ? 'School / Educational Institution' : 'Select tax status'}
                                     <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                   </Button>
@@ -672,7 +672,7 @@ export function SignupWizard() {
                             <FormControl>
                               <Textarea
                                 placeholder="What is your team's overarching goal? (min 50 characters)"
-                                className="min-h-[90px] resize-none bg-background border-border text-foreground placeholder:text-muted-foreground"
+                                className="min-h-[90px] resize-none bg-background border-input text-foreground placeholder:text-muted-foreground"
                                 maxLength={LIMITS.mission}
                                 {...field}
                               />
@@ -690,7 +690,7 @@ export function SignupWizard() {
                                 <FormControl>
                                   <Textarea
                                     placeholder="Who wants this team to exist? Describe student and community interest."
-                                    className="min-h-[70px] resize-none bg-background border-border text-foreground placeholder:text-muted-foreground"
+                                    className="min-h-[70px] resize-none bg-background border-input text-foreground placeholder:text-muted-foreground"
                                     {...field}
                                     value={field.value ?? ''}
                                   />
@@ -704,7 +704,7 @@ export function SignupWizard() {
                                 <FormControl>
                                   <Textarea
                                     placeholder="How will the team keep running after the first season?"
-                                    className="min-h-[70px] resize-none bg-background border-border text-foreground placeholder:text-muted-foreground"
+                                    className="min-h-[70px] resize-none bg-background border-input text-foreground placeholder:text-muted-foreground"
                                     {...field}
                                     value={field.value ?? ''}
                                   />
@@ -717,7 +717,7 @@ export function SignupWizard() {
                                 <FormLabel className="text-foreground/80">Seed Funding Goal (USD)</FormLabel>
                                 <FormControl>
                                   <Input
-                                    className="bg-background border-border text-foreground placeholder:text-muted-foreground"
+                                    className="bg-background border-input text-foreground placeholder:text-muted-foreground"
                                     type="number"
                                     min={0}
                                     placeholder="e.g. 1500"
@@ -740,7 +740,7 @@ export function SignupWizard() {
 
                 <div className="flex justify-between pt-6 border-t border-border/80 mt-8">
                   {step > 1 ? (
-                    <Button type="button" variant="outline" onClick={prevStep} className="bg-background border-border text-foreground hover:bg-accent">
+                    <Button type="button" variant="outline" onClick={prevStep} className="bg-background border-input text-foreground hover:bg-accent">
                       <ChevronLeft className="w-4 h-4 mr-2" /> Back
                     </Button>
                   ) : <div />}

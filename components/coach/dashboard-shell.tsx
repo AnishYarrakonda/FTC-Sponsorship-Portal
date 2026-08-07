@@ -243,7 +243,7 @@ function OverviewTab({
                     <Input
                       type="number"
                       placeholder="e.g. 12345"
-                      className="bg-background border-border text-foreground placeholder:text-muted-foreground focus:ring-primary"
+                      className="bg-background border-input text-foreground placeholder:text-muted-foreground focus:ring-primary"
                       value={gradNumber}
                       onChange={(e) => setGradNumber(e.target.value)}
                     />
@@ -252,7 +252,7 @@ function OverviewTab({
                     <Label className="text-foreground">Official Team Name</Label>
                     <Input
                       placeholder="Enter official team name"
-                      className="bg-background border-border text-foreground placeholder:text-muted-foreground focus:ring-primary"
+                      className="bg-background border-input text-foreground placeholder:text-muted-foreground focus:ring-primary"
                       value={gradName}
                       onChange={(e) => setGradName(e.target.value)}
                     />
@@ -288,8 +288,8 @@ function OverviewTab({
               <div key={s.id} className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-rose-600" />
-                    <h4 className="text-sm font-medium text-rose-600">
+                    <AlertCircle className="h-4 w-4 text-status-danger" />
+                    <h4 className="text-sm font-medium text-status-danger">
                       {s.status === 'declined' ? 'Submission Declined' : 'Changes Requested'}
                     </h4>
                   </div>
@@ -563,7 +563,7 @@ function FindSponsorsTab({ sponsors, submissions }: { sponsors: Sponsor[], submi
                 className={cn(
                   'rounded-md border px-3 py-1.5 text-xs font-medium transition-colors shadow-sm',
                   fundingRange === i
-                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600'
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-status-success'
                     : 'border-border bg-card text-muted-foreground hover:text-foreground hover:border-border/80 hover:bg-accent'
                 )}
               >
@@ -644,7 +644,7 @@ function FindSponsorsTab({ sponsors, submissions }: { sponsors: Sponsor[], submi
                       <Link
                         href={`/submissions/${activeSub.id}/edit`}
                         className={cn(
-                          'flex items-center justify-center gap-1.5 py-3 text-xs font-semibold transition-colors bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20',
+                          'flex items-center justify-center gap-1.5 py-3 text-xs font-semibold transition-colors bg-emerald-500/10 text-status-success hover:bg-emerald-500/20',
                           !s.website && 'col-span-2',
                         )}
                       >

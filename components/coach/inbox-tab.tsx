@@ -13,8 +13,8 @@ import type { Notification } from '@/lib/supabase/types'
 function getIcon(type: string) {
   switch (type) {
     case 'submission_declined': return <XCircle aria-hidden="true" className="text-rose-500 h-5 w-5" />
-    case 'submission_approved': return <CheckCircle2 aria-hidden="true" className="text-emerald-600 h-5 w-5" />
-    case 'submission_changes_requested': return <AlertCircle aria-hidden="true" className="text-amber-500 h-5 w-5" />
+    case 'submission_approved': return <CheckCircle2 aria-hidden="true" className="text-status-success h-5 w-5" />
+    case 'submission_changes_requested': return <AlertCircle aria-hidden="true" className="text-status-warning h-5 w-5" />
     default: return <AlertCircle aria-hidden="true" className="text-muted-foreground h-5 w-5" />
   }
 }

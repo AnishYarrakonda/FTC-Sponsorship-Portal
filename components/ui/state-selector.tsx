@@ -90,7 +90,7 @@ export function StateSelector({ value, onChange, placeholder = "Select state..."
             aria-expanded={open}
             className={cn(
               "flex h-9 w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
-              "bg-background border-border text-foreground hover:bg-accent cursor-pointer transition-colors",
+              "bg-background border-input text-foreground hover:bg-accent cursor-pointer transition-colors",
               className
             )}
           />

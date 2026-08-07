@@ -62,7 +62,7 @@ export function CredibilityBlock({
           <ul className="space-y-1.5">
             {registrations.map((r) => (
               <li key={r} className="flex items-start gap-2 text-sm text-foreground/80">
-                <span className="mt-0.5 text-emerald-600 dark:text-emerald-400">✓</span>
+                <span className="mt-0.5 text-status-success dark:text-emerald-400">✓</span>
                 {r}
               </li>
             ))}

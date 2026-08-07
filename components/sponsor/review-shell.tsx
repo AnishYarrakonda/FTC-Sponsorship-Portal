@@ -203,7 +203,7 @@ export function SponsorReviewShell({ submission, team }: { submission: any; team
               <div className="grid gap-3">
                 {achievements.length > 0 ? achievements.map((ach) => (
                   <div key={ach.id} className="p-4 rounded-xl border border-border bg-card flex items-start gap-4 shadow-sm">
-                    <Award className="h-5 w-5 text-amber-500 shrink-0" strokeWidth={1.5} />
+                    <Award className="h-5 w-5 text-status-warning shrink-0" strokeWidth={1.5} />
                     <div className="min-w-0">
                       <div className="text-[15px] font-medium text-foreground">{ach.award || ach.event_name}</div>
                       <div className="text-[13px] text-muted-foreground mt-0.5">
@@ -344,7 +344,7 @@ export function SponsorReviewShell({ submission, team }: { submission: any; team
                         placeholder="Add a message for the team or internal notes..."
                         value={feedback}
                         onChange={(e) => setFeedback(e.target.value)}
-                        className="min-h-[120px] bg-background border-border text-[14px]"
+                        className="min-h-[120px] bg-background border-input text-[14px]"
                       />
                     </div>
 
@@ -372,7 +372,7 @@ export function SponsorReviewShell({ submission, team }: { submission: any; team
                       </Button>
                       <Button 
                         variant="outline" 
-                        className="border-rose-500/20 text-rose-600 hover:bg-rose-500/10"
+                        className="border-rose-500/20 text-status-danger hover:bg-rose-500/10"
                         disabled={isPending}
                         onClick={() => setShowConfirm('declined')}
                       >

@@ -70,6 +70,24 @@
   --color-charcoal-foreground: var(--surface-charcoal-foreground);
   --color-ink: var(--surface-ink);
 
+  /* Status colours, WCAG AA on every app surface.
+   *
+   * Tailwind's amber/emerald/rose 500-600 were used as the status-text pattern and all
+   * of them fail AA on this cream palette. Measured against --bg-app #F7F3EE /
+   * --bg-surface #FFFCF7 / --bg-elevated #FBF8F2:
+   *
+   *   amber-500   1.94:1   amber-600   2.88:1   emerald-600  3.41:1
+   *   rose-600    4.25:1   slate-500   4.31:1        (AA normal text needs 4.5:1)
+   *
+   * These map to the --badge-*-text tokens, which were already defined and unused:
+   *
+   *   status-warning #854D0E  6.20:1     status-success #1F6F5C  5.45:1
+   *   status-danger  #991B1B  7.52:1                      (worst surface shown)
+   */
+  --color-status-success: var(--badge-success-text);
+  --color-status-warning: var(--badge-warning-text);
+  --color-status-danger: var(--badge-rejected-text);
+
   /* macOS-style browser-chrome window dots */
   --color-window-dot-close: var(--window-dot-close);
   --color-window-dot-minimize: var(--window-dot-minimize);
@@ -103,7 +121,18 @@
   --destructive-foreground: #FFFFFF;
   
   --border: #E7E1D6;
-  --input: #E7E1D6;
+  /* Form-control borders only (`border-input`: Input, Checkbox, StateSelector, the
+   * rich-text editors, Command, outline Button). Was #E7E1D6 — the same value as
+   * --border — which is 1.27:1 against --card #FFFCF7, so fields read as ghosts;
+   * WCAG 2.2 requires 3:1 for the boundary of a UI component (1.4.11 Non-text Contrast).
+   * #95886F is the lightest value in this hue family that clears 3:1 on ALL THREE app
+   * surfaces (3.40 / 3.15 / 3.29 vs surface / app / elevated).
+   *
+   * Deliberately NOT applied to --border: that would darken every card and divider in
+   * the product, which is a visual redesign rather than an accessibility fix. Card
+   * borders are decoration, not component boundaries, and are not held to 1.4.11.
+   */
+  --input: #95886F;
   --ring: #1F6F5C;
   
   /* Chart palette — pine-first, colorblind-differentiated */

@@ -443,12 +443,12 @@ export function LoginForm() {
           <CardContent className="pt-8">
             {/* Shared alerts */}
             {resetSuccess && mode === 'login' && (
-              <Alert className="bg-emerald-500/10 border-emerald-500/20 text-emerald-600 mb-6">
+              <Alert className="bg-emerald-500/10 border-emerald-500/20 text-status-success mb-6">
                 <AlertDescription>Password updated successfully. Log in with your new password.</AlertDescription>
               </Alert>
             )}
             {accountDeleted && mode === 'login' && (
-              <Alert className="bg-emerald-500/10 border-emerald-500/20 text-emerald-600 mb-6">
+              <Alert className="bg-emerald-500/10 border-emerald-500/20 text-status-success mb-6">
                 <AlertDescription>
                   Your account was deleted. All of your data has been removed — thanks for being part of the
                   portal. You can create a new account any time.
@@ -474,7 +474,7 @@ export function LoginForm() {
                         <FormControl>
                           <Input
                             type="email" autoComplete="email"
-                            className="bg-background border-border text-foreground placeholder:text-muted-foreground h-11"
+                            className="bg-background border-input text-foreground placeholder:text-muted-foreground h-11"
                             placeholder="coach@example.com"
                             {...field}
                           />
@@ -507,7 +507,7 @@ export function LoginForm() {
                           <Input
                             type="password"
                             autoComplete="current-password"
-                            className="bg-background border-border text-foreground h-11"
+                            className="bg-background border-input text-foreground h-11"
                             {...field}
                           />
                         </FormControl>
@@ -537,7 +537,7 @@ export function LoginForm() {
                     type="text"
                     inputMode="numeric"
                     autoComplete="one-time-code"
-                    className="bg-background border-border text-foreground placeholder:text-muted-foreground h-11 tracking-[0.3em] text-center"
+                    className="bg-background border-input text-foreground placeholder:text-muted-foreground h-11 tracking-[0.3em] text-center"
                     placeholder="123456"
                     value={deviceCode}
                     onChange={(e) => setDeviceCode(e.target.value)}
@@ -584,7 +584,7 @@ export function LoginForm() {
                   <Input
                     id="reset-email-address"
                     type="email" autoComplete="email"
-                    className="bg-background border-border text-foreground placeholder:text-muted-foreground h-11"
+                    className="bg-background border-input text-foreground placeholder:text-muted-foreground h-11"
                     placeholder="coach@example.com"
                     value={resetEmail}
                     onChange={(e) => setResetEmail(e.target.value)}
@@ -618,7 +618,7 @@ export function LoginForm() {
                     type="text"
                     inputMode="numeric"
                     autoComplete="one-time-code"
-                    className="bg-background border-border text-foreground placeholder:text-muted-foreground h-11 tracking-[0.3em] text-center"
+                    className="bg-background border-input text-foreground placeholder:text-muted-foreground h-11 tracking-[0.3em] text-center"
                     placeholder="123456"
                     value={resetCode}
                     onChange={(e) => setResetCode(e.target.value)}
@@ -633,7 +633,7 @@ export function LoginForm() {
                     id="reset-new-password"
                     type="password"
                     autoComplete="new-password"
-                    className="bg-background border-border text-foreground h-11"
+                    className="bg-background border-input text-foreground h-11"
                     value={resetNewPassword}
                     onChange={(e) => setResetNewPassword(e.target.value)}
                   />

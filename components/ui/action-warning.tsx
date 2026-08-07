@@ -10,7 +10,7 @@ import { AlertTriangle } from 'lucide-react'
  * while the sponsor never received anything, capacity was already consumed, and no
  * retry path existed.
  *
- * Uses the --badge-warning-* tokens rather than Tailwind's `text-amber-600`, which the
+ * Uses the --badge-warning-* tokens rather than Tailwind's `text-status-warning`, which the
  * accessibility pass measured at 2.68:1 against this background (needs 4.5:1). These
  * tokens were already defined in globals.css and unused.
  */

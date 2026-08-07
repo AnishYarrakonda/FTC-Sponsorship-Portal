@@ -118,11 +118,11 @@ export function CoachVerificationCard({ coach }: { coach: CoachData }) {
         {/* Status Pills */}
         <div className="flex flex-wrap items-center gap-2 pt-1">
           {coach.coach_verified ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 text-[10px] font-medium px-2 py-0.5">
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-status-success text-[10px] font-medium px-2 py-0.5">
               <CheckCircle className="h-3 w-3" /> Verified
             </span>
           ) : (
-            <span className="inline-flex items-center rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 text-[10px] font-medium px-2 py-0.5">
+            <span className="inline-flex items-center rounded-full bg-amber-500/10 border border-amber-500/20 text-status-warning text-[10px] font-medium px-2 py-0.5">
               {coach.coach_credentials_url ? 'Credentials uploaded' : 'No credentials'}
             </span>
           )}
@@ -369,7 +369,7 @@ export function CoachVerificationCard({ coach }: { coach: CoachData }) {
                             onChange={(e) => setDenyReason(e.target.value)}
                             required
                             aria-required
-                            className="h-24 bg-background border-border resize-none"
+                            className="h-24 bg-background border-input resize-none"
                           />
                           <p className="text-xs text-muted-foreground">
                             Required — this is emailed to the coach and shown on their status page.

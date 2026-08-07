@@ -109,7 +109,7 @@ export function ModerationMock() {
             </div>
             <div className="mt-0.5 text-xs text-muted-foreground">{subject}</div>
           </div>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/5 px-2 py-0.5 text-xs font-medium text-amber-600">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/5 px-2 py-0.5 text-xs font-medium text-status-warning">
             <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
             In review
           </span>

@@ -73,12 +73,12 @@ function PreviewPane({ submission }: { submission: Submission }) {
         <span className="text-muted-foreground/40">·</span>
         <span className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
           Ask:{' '}
-          <span className={cn('text-foreground', isOverAsk && 'text-amber-500')}>
+          <span className={cn('text-foreground', isOverAsk && 'text-status-warning')}>
             ${(financialAsk / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </span>
         </span>
         {isOverAsk && (
-          <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+          <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-status-warning dark:text-amber-400">
             ⚠ Exceeds line items (${(lineItemSum / 100).toFixed(2)})
           </span>
         )}
@@ -306,7 +306,7 @@ function ApprovePreviewDrawer({ open, onClose, submission, onConfirm, isPending 
                 ${(financialAsk / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
               </span>
               {lineItemSum > 0 && currentTeamAsk !== lineItemSum && (
-                <span className="ml-1 text-amber-500 text-xs">
+                <span className="ml-1 text-status-warning text-xs">
                   (line items: ${(lineItemSum / 100).toFixed(2)})
                 </span>
               )}
@@ -491,7 +491,7 @@ export function ModerationQueue({ initialSubmissions }: { initialSubmissions: Su
       {bulkResults && (
         <div className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm space-y-1">
           {bulkResults.filter(r => r.ok).length > 0 && (
-            <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+            <div className="flex items-center gap-2 text-status-success dark:text-emerald-400">
               <CheckCircle2 className="h-4 w-4" strokeWidth={1.5} />
               {bulkResults.filter(r => r.ok).length} succeeded
             </div>
