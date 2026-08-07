@@ -10,13 +10,22 @@ export default async function AccountLayout({ children }: { children: React.Reac
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, coach_verified, sponsor_id')
     .eq('id', user.id)
     .single()
 
-  // Coaches and sponsors have settings embedded in their own portals
-  if (profile?.role === 'coach') redirect('/dashboard?tab=settings')
-  if (profile?.role === 'sponsor') redirect('/sponsor/settings')
+  // Coaches and sponsors have settings embedded in their own portals — but ONLY once
+  // they are through the gate. Redirecting unconditionally made account settings
+  // unreachable for exactly the people most likely to need it:
+  //
+  //   unverified coach -> /dashboard?tab=settings -> (coach) layout -> /awaiting-verification
+  //   pending sponsor  -> /sponsor/settings       -> (sponsor) layout -> pending screen
+  //
+  // Those users have already uploaded a government photo ID, and they could not delete
+  // their account or export their data. That is a data-rights problem, not a UX one, so
+  // they fall through to the standalone /settings page instead.
+  if (profile?.role === 'coach' && profile.coach_verified) redirect('/dashboard?tab=settings')
+  if (profile?.role === 'sponsor' && profile.sponsor_id) redirect('/sponsor/settings')
 
   const userName = user.full_name ?? user.email ?? 'Admin'
   const userEmail = user.email ?? ''

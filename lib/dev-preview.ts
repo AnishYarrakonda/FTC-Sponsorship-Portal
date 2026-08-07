@@ -11,6 +11,8 @@
  *
  * Launch with:  npm run dev:sponsor-preview
  */
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from './supabase/types'
 
 export const SPONSOR_PREVIEW =
   process.env.NODE_ENV !== 'production' &&
@@ -374,10 +376,29 @@ function makeBuilder(rows: unknown[]) {
   return builder
 }
 
-export function createMockSupabaseClient() {
+/**
+ * Typed as a full SupabaseClient (same `as unknown as` pattern as lib/dev-bypass.ts and
+ * lib/dev-coach-preview.ts) so `createAdminClient()` can return it in sponsor-preview
+ * mode without widening its return type at every call site.
+ *
+ * `rpc` and `storage` are stubs rather than omissions on purpose: this client is now
+ * reachable from server actions, which previously got a LIVE production service-role
+ * client under `npm run dev:sponsor-preview`. A missing member would crash the preview;
+ * a stub keeps it browsable and, more importantly, keeps the write off production.
+ */
+export function createMockSupabaseClient(): SupabaseClient<Database> {
   return {
     from(table: string) {
       return makeBuilder(FIXTURES[table] ?? [])
     },
-  }
+    rpc: async () => ({ data: null, error: null }),
+    storage: {
+      from: () => ({
+        createSignedUrl: async () => ({ data: { signedUrl: '#dev-mock' }, error: null }),
+        upload: async () => ({ data: { path: 'dev-mock' }, error: null }),
+        remove: async () => ({ data: [], error: null }),
+        getPublicUrl: () => ({ data: { publicUrl: '#dev-mock' } }),
+      }),
+    },
+  } as unknown as SupabaseClient<Database>
 }
