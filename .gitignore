@@ -79,9 +79,12 @@ next-env.d.ts
 *.crt
 *.jks
 *.keystore
-secrets.*
-credentials.*
-service-account*.json
+# Root-anchored on purpose: a bare `credentials.*` also matches the real source
+# file app/actions/credentials.ts. It survives today only because it was tracked
+# before this pattern existed — untrack it once and it silently disappears.
+/secrets.*
+/credentials.*
+/service-account*.json
 *.jwt
 *.sid
 

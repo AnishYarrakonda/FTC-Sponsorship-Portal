@@ -1,3 +1,57 @@
 .env.local
 .env*.local
 .env.local.bak
+
+# A .vercelignore file REPLACES .gitignore for upload filtering — it does not
+# stack with it. Everything security-sensitive in .gitignore must therefore be
+# repeated here, or `vercel deploy` uploads it into the deployment source.
+
+# Internal audit + operations docs. The QA report enumerates exploitable
+# findings with working repro commands and the production project ref.
+/docs/
+*QA-REPORT*.md
+*QA-FINDINGS*.md
+*REMEDIATION*.md
+*HANDOFF*.md
+
+# secrets, keys, credentials.
+# Root-anchored on purpose: a bare `credentials.*` also matches the real source
+# file app/actions/credentials.ts and fails the build with module-not-found.
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.jks
+*.keystore
+/secrets.*
+/credentials.*
+/service-account*.json
+*.jwt
+*.sid
+/.clerk/
+
+# database dumps + backups (contain real user data)
+*.dump
+*.sql.gz
+*.sqlite
+*.sqlite3
+/backups/
+/supabase/.dump/
+
+# uploaded artifacts (coach photo IDs, team media)
+/uploads/
+/tmp/
+
+# local scratch / agent working files
+/scratchpad/
+/.scratch/
+*.local.md
+.claude/settings.local.json
+
+# local-only tooling (not needed by the build)
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/coverage/
