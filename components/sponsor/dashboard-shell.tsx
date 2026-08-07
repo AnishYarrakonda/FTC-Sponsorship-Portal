@@ -1,5 +1,7 @@
 'use client'
 
+import { isAwaitingSponsor } from '@/lib/submission-status'
+
 import Link from 'next/link'
 import {
   Building2,
@@ -53,7 +55,9 @@ export function SponsorDashboardShell({
   submissions: Submission[]
   notifications: any[]
 }) {
-  const pendingCount = submissions?.filter(s => s.status === 'pending').length ?? 0
+  // Same defect as the sidebar badge: 'pending' means awaiting the ADMIN. A pitch this
+  // sponsor can act on is dispatched / delivered / opened.
+  const pendingCount = submissions?.filter(s => isAwaitingSponsor(s.status)).length ?? 0
   const approvedCount = submissions?.filter(s => s.status === 'approved').length ?? 0
   
   // Guard against null sponsor

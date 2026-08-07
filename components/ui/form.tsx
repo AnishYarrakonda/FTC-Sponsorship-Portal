@@ -142,6 +142,11 @@ function FormMessage({ className, ...props }: React.ComponentProps<"p">) {
     <p
       data-slot="form-message"
       id={formMessageId}
+      // 124 call sites had no role/aria-live, so pressing Next on an invalid signup step
+      // appeared to do nothing at all to a screen-reader user — the error rendered
+      // visually and was never announced. role="alert" implies aria-live="assertive".
+      role={error ? "alert" : undefined}
+      aria-live={error ? "assertive" : undefined}
       className={cn("text-destructive text-sm", className)}
       {...props}
     >

@@ -40,6 +40,12 @@ export async function POST(req: NextRequest) {
         if (error) {
           console.error('[clerk-webhook] failed to delete profile', error)
           Sentry.captureException(error)
+          // P0-12: this used to fall through to the {success:true} below. Svix treats
+          // any 2xx as delivered and NEVER retries, so a transient DB failure left the
+          // Clerk identity deleted and the profile, team, submissions and personal data
+          // orphaned — unreachable by any UI, because nothing can resolve a dead
+          // clerk_user_id. Returning 500 makes Svix retry with backoff.
+          return NextResponse.json({ error: 'profile delete failed' }, { status: 500 })
         }
         break
       }

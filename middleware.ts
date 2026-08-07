@@ -10,14 +10,28 @@ const isPublicRoute = createRouteMatcher([
   '/legal(.*)',
   '/sponsors/apply(.*)',
   '/sponsor-view(.*)',
-  '/teams(.*)',
+  // '/teams(.*)' removed with P0-8: there are no public team portfolio pages any more.
+  // Sponsor-facing reach is the token-gated /sponsor-view/[token] route above.
   '/api/webhooks(.*)',
   '/api/cron(.*)',
   '/api/health',
 ])
 
 // Auth pages: authenticated users should never see these.
-const isAuthPage = createRouteMatcher(['/login(.*)', '/signup(.*)', '/verify-email(.*)'])
+//
+// /sponsors/apply is here for P0-13. It is a PUBLIC page whose action upserts
+// role:'sponsor' onto the caller's profile, so a signed-in coach or admin who wandered
+// in could silently rewrite their own role and lose their portal with no way back.
+// createSponsorApplication now refuses a cross-role overwrite (app/actions/auth.ts), and
+// this bounce stops them reaching the form at all. A signed-in user with NO profile row
+// still recovers: /dashboard sends them to /complete-profile, which since 3ab1895 offers
+// the sponsor-application form as one of its two branches.
+const isAuthPage = createRouteMatcher([
+  '/login(.*)',
+  '/signup(.*)',
+  '/verify-email(.*)',
+  '/sponsors/apply(.*)',
+])
 
 const isApiRoute = createRouteMatcher(['/api(.*)'])
 
@@ -58,7 +72,11 @@ export default clerkMiddleware(async (auth, req) => {
 
 export const config = {
   matcher: [
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpg|jpeg|gif|png|svg|ico|webp|woff2?|ttf|otf|map)).*)',
+    // `txt` and `xml` were missing from this exclusion list, so /robots.txt,
+    // /sitemap.xml and /llms.txt entered clerkMiddleware, failed isPublicRoute and
+    // 307-redirected to /login. All three build fine as static routes; the site was
+    // simply unindexable, and silently so, because they render perfectly for humans.
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpg|jpeg|gif|png|svg|ico|webp|woff2?|ttf|otf|map|txt|xml|json|webmanifest)).*)',
     '/(api|trpc)(.*)',
   ],
 }

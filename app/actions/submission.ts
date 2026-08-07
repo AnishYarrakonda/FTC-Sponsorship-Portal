@@ -77,8 +77,13 @@ export async function saveSubmission(
   }
 
   if (status === 'pending') {
+    // Reads the coach-safe view, not the sponsors base table: 0063 removed the coach
+    // branch from `sponsors_select` so a coach now reads zero rows from `sponsors`
+    // (P0-4 — the base table exposes contact_email and the admin's private `notes`).
+    // The view applies the same active/capacity/geo predicate, so a sponsor missing
+    // from it is genuinely one this coach may not pitch.
     const { data: sponsor } = await supabase
-      .from('sponsors')
+      .from('v_sponsors_public')
       .select('status')
       .eq('id', data.sponsorId)
       .single()
@@ -194,13 +199,17 @@ export async function autoSaveSubmissionDraft(
     return { error: 'Sponsor ID is required to autosave' }
   }
 
+  // NOTE: `status` is deliberately NOT part of the shared payload.
+  // It used to be hard-coded to 'draft' here, so merely autosaving an edit to a
+  // `changes_requested` or `declined` pitch silently demoted it back to `draft` and
+  // erased the coach's own needs-attention alert — the one signal telling them the admin
+  // had asked for something. Autosave persists content; it must never change state.
   const payload = {
     team_id: teamId,
     sponsor_id: data.sponsorId,
     custom_pitch_alignment: data.customPitchAlignment ?? null,
     specific_needs_statement: data.specificNeedsStatement ?? null,
     local_connection_notes: data.localConnectionNotes ?? null,
-    status: 'draft' as const,
     requested_amount_cents: financialAsk
   }
 
@@ -241,9 +250,11 @@ export async function autoSaveSubmissionDraft(
     return { id: existingTarget.id }
   }
 
+  // A brand-new row genuinely starts as a draft; only the UPDATE paths above must
+  // leave the existing status alone.
   const { data: inserted, error } = await supabase
     .from('submissions')
-    .insert(payload)
+    .insert({ ...payload, status: 'draft' as const })
     .select('id')
     .single()
 

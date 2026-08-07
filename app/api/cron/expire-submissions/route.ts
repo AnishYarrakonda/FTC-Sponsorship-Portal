@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createInAppNotification } from '@/lib/notify'
 import crypto from 'crypto'
 import { env } from '@/lib/env'
 import * as Sentry from '@sentry/nextjs'
@@ -35,6 +36,16 @@ export async function GET(req: Request) {
     // Expire only the awaiting-sponsor states (dispatched/delivered/opened) and release
     // each reservation back to the sponsor's cap. Funded ('approved') rows are never
     // touched — the release RPC is guarded to live states only. (Fixes C-2.)
+    // Capture who is about to be expired BEFORE the RPC runs — afterwards the rows no
+    // longer match the awaiting-sponsor filter and there is no way to find them again.
+    // Nobody was ever told their request lapsed: the cron released the money in silence.
+    const { data: expiring } = await supabase
+      .from('submissions')
+      .select('id, sponsor_id, reserved_amount_cents, teams:team_id(owner_id, team_name), sponsors:sponsor_id(company_name)')
+      .in('status', ['dispatched', 'delivered', 'opened'])
+      .not('expires_at', 'is', null)
+      .lt('expires_at', new Date().toISOString())
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: expireResult, error } = await (supabase as any).rpc('expire_overdue_submissions')
 
@@ -55,6 +66,47 @@ export async function GET(req: Request) {
     if (cleanupError) {
       console.error('[cron] cleanup-tokens error', cleanupError)
       Sentry.captureException(cleanupError)
+    }
+
+    // Tell the humans. Coach first — they are the one waiting on an answer.
+    for (const row of expiring ?? []) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const team = row.teams as any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sponsorName = (row.sponsors as any)?.company_name ?? 'the sponsor'
+      try {
+        if (team?.owner_id) {
+          await createInAppNotification({
+            recipientId: team.owner_id,
+            type: 'general',
+            title: `Your pitch to ${sponsorName} expired`,
+            body:
+              `${sponsorName} did not respond within the 14-day window, so the request has closed and ` +
+              `their reserved funding has been released. You can send them a new pitch from your dashboard.`,
+            submissionId: row.id,
+          })
+        }
+      } catch (notifyError) {
+        // A notification failure must never abort the expiry sweep.
+        console.error('[cron] failed to notify coach of expiry', row.id, notifyError)
+        Sentry.captureException(notifyError)
+      }
+    }
+
+    // A durable record that this ran. Previously the ONLY success signal was the
+    // console.log below, and Vercel Hobby retains about an hour of logs — so "did the
+    // cron run last night?" was literally unanswerable, and a nightly 500 would have
+    // gone unnoticed while reservations silently piled up.
+    const { error: auditError } = await supabase.from('audit_log').insert({
+      actor_id: null,
+      action: 'cron_expire_submissions',
+      entity_type: 'submissions',
+      entity_id: null,
+      metadata: { expired: expiredCount, ids: (expiring ?? []).map((r) => r.id) },
+    })
+    if (auditError) {
+      console.error('[cron] failed to write audit row', auditError)
+      Sentry.captureException(auditError)
     }
 
     console.log(`[cron] Expired ${expiredCount} submissions`)

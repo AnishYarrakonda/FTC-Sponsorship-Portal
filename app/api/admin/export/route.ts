@@ -43,17 +43,23 @@ function rowToCsv(row: unknown[]): string {
   return row.map(escapeCell).join(',')
 }
 
+/** PostgREST caps an unbounded select at 1000 rows and says nothing about it. */
+const PAGE_SIZE = 1000
+
 export async function GET() {
   let adminClient: Awaited<ReturnType<typeof requireAdmin>>['adminClient']
+  let actorId: string
 
   try {
     const auth = await requireAdmin()
     adminClient = auth.adminClient
+    actorId = auth.user.id
   } catch {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { data: submissions, error } = await adminClient
+  const buildQuery = () =>
+    adminClient
     .from('submissions')
     .select(`
       id,
@@ -79,16 +85,34 @@ export async function GET() {
         funding_used_cents
       )
     `)
-    .in('status', ['approved', 'dispatched'])
+    // 'delivered' and 'opened' were missing. They are the states a submission enters the
+    // moment Resend reports delivery, so a LIVE submission silently vanished from every
+    // report the admin ran — the export looked complete and was not.
+    .in('status', ['approved', 'dispatched', 'delivered', 'opened'])
+    // A deterministic total order is REQUIRED for .range() paging below. Without an
+    // ORDER BY, Postgres may return rows in a different order per page, so pages can
+    // both duplicate and omit rows — silently, in a financial export. `id` is the PK,
+    // so this is a total order.
+    .order('id', { ascending: true })
 
-  if (error) {
-    console.error('[export] Query failed', error)
-    return NextResponse.json({ error: 'Export failed' }, { status: 500 })
+  // Paginate. The original query had no .range(), and PostgREST silently truncates at
+  // 1000 rows — the export would have quietly started omitting data with no error and
+  // no visible sign, which is the worst possible failure mode for a financial report.
+  const submissions: Awaited<ReturnType<typeof buildQuery>>['data'] = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data: page, error } = await buildQuery().range(from, from + PAGE_SIZE - 1)
+    if (error) {
+      console.error('[export] Query failed', error)
+      return NextResponse.json({ error: 'Export failed' }, { status: 500 })
+    }
+    if (!page || page.length === 0) break
+    submissions.push(...page)
+    if (page.length < PAGE_SIZE) break
   }
 
   const lines: string[] = [rowToCsv(CSV_HEADERS)]
 
-  for (const s of submissions ?? []) {
+  for (const s of submissions) {
     const team = s.teams as unknown as Record<string, unknown> | null
     const sponsor = s.sponsors as unknown as Record<string, unknown> | null
 
@@ -117,6 +141,24 @@ export async function GET() {
   }
 
   const csv = lines.join('\n')
+
+  // This file contains every sponsor contact email and the full text of every pitch —
+  // the single most sensitive artifact the product can emit — and it left no trace at
+  // all. Every other privileged path in the codebase writes audit_log; this one did not.
+  const { error: auditError } = await adminClient.from('audit_log').insert({
+    actor_id: actorId,
+    action: 'export_submissions_csv',
+    entity_type: 'submissions',
+    entity_id: null,
+    metadata: {
+      row_count: submissions.length,
+      statuses: ['approved', 'dispatched', 'delivered', 'opened'],
+      includes_sponsor_contact_emails: true,
+    },
+  })
+  if (auditError) {
+    console.error('[export] failed to write audit row', auditError)
+  }
 
   return new Response(csv, {
     headers: {

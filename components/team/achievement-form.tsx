@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { describeActionError } from '@/lib/client-errors'
 
 export function AchievementForm({ teamId }: { teamId: string }) {
   const [error, setError] = useState<string | null>(null)
@@ -31,12 +32,17 @@ export function AchievementForm({ teamId }: { teamId: string }) {
   async function onSubmit(values: AchievementInput) {
     setIsPending(true)
     setError(null)
-    const result = await addAchievement(teamId, values)
-    setIsPending(false)
-    if (result?.error) {
-      setError(result.error)
-    } else {
+    try {
+      const result = await addAchievement(teamId, values)
+      if (result?.error) {
+        setError(result.error)
+        setIsPending(false)
+        return
+      }
       router.push('/dashboard')
+    } catch (e) {
+      setError(describeActionError(e, 'addAchievement'))
+      setIsPending(false)
     }
   }
 

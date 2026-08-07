@@ -80,6 +80,19 @@ export const FOOTER_COLUMNS = [
   },
 ] as const
 
+// ─── Credits (footer) ────────────────────────────────────────────────────────
+// Framing is deliberate — keep it. All three built it in the sense of being
+// involved; the technical work (architecture, DB, security, UI, all code) was
+// Anish alone. Rishi and Shreyas originated the idea. Don't flatten these into
+// one equal list of names.
+export const BUILT_BY = 'Anish Yarrakonda'
+export const IDEA_BY = [
+  { name: 'Rishi Jhaveri', role: 'outreach lead' },
+  { name: 'Shreyas Vempati', role: 'team captain' },
+] as const
+export const TEAM_NAME = 'Exodius'
+export const TEAM_NUMBER = '31579'
+
 // ─── Hero copy ───────────────────────────────────────────────────────────────
 export const HERO_MORPHING_WORDS = ['sponsorship', 'partnership', 'opportunity', 'investment', 'connection', 'breakthrough', 'endorsement', 'contribution'] as const
 export const HERO_DESCRIPTION = 'The professional sponsorship pipeline for FIRST Tech Challenge coaches. Build a verified portfolio, send moderated pitches, and connect with the industry leaders powering the next generation.'

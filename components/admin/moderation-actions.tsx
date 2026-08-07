@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { CardFooter } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { ActionWarning } from '@/components/ui/action-warning'
 import { CheckCircle2 } from 'lucide-react'
 import { requestEdit, declineSubmission, approveSubmission } from '@/app/actions/moderation'
 
@@ -23,6 +24,7 @@ export function ModerationActions({ submissionId, onApproveClick }: { submission
   const [feedback, setFeedback] = useState('')
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const [warning, setWarning] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
   function flashSuccess(msg: string) {
@@ -40,7 +42,10 @@ export function ModerationActions({ submissionId, onApproveClick }: { submission
       }
       setEditOpen(false)
       setFeedback('')
-      flashSuccess('Changes requested — coach has been notified.')
+      setWarning(result?.warning ?? null)
+      flashSuccess(
+        result?.warning ? 'Changes requested.' : 'Changes requested — coach has been notified.'
+      )
     })
   }
 
@@ -54,6 +59,7 @@ export function ModerationActions({ submissionId, onApproveClick }: { submission
       }
       setDeclineOpen(false)
       setFeedback('')
+      setWarning(result?.warning ?? null)
       flashSuccess('Submission declined.')
     })
   }
@@ -70,7 +76,11 @@ export function ModerationActions({ submissionId, onApproveClick }: { submission
         setError(result.error)
         return
       }
-      flashSuccess('Approved & dispatched to sponsor!')
+      // P0-11: `warning` means the approval COMMITTED and capacity is already reserved,
+      // but the pitch email to the sponsor failed. Claiming "dispatched to sponsor!"
+      // here is the exact lie that made this failure undetectable.
+      setWarning(result?.warning ?? null)
+      flashSuccess(result?.warning ? 'Approved — see the notice below.' : 'Approved & dispatched to sponsor!')
     })
   }
 
@@ -81,6 +91,7 @@ export function ModerationActions({ submissionId, onApproveClick }: { submission
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
+      {warning && <ActionWarning>{warning}</ActionWarning>}
       {successMsg && (
         <div className="w-full flex items-center gap-2 rounded-md bg-emerald-500/10 border border-emerald-900/50 text-emerald-400 px-3 py-2 text-sm">
           <CheckCircle2 className="h-4 w-4 flex-shrink-0" />

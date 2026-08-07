@@ -17,6 +17,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { StateSelector } from '@/components/ui/state-selector'
 import { UploadCloud, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
+import { describeActionError } from '@/lib/client-errors'
 
 function SectionHeader({ title, sub }: { title: string; sub?: string }) {
   return (
@@ -85,14 +86,19 @@ export function CompleteProfileForm({ email, defaultName }: { email: string; def
     formData.append('data', JSON.stringify(jsonValues))
     formData.append('photoIdFile', photoIdFile)
 
-    const result = await completeCoachProfile(formData)
-    if (result?.error) {
-      setError(result.error)
-      setIsPending(false)
-      return
-    }
+    try {
+      const result = await completeCoachProfile(formData)
+      if (result?.error) {
+        setError(result.error)
+        setIsPending(false)
+        return
+      }
 
-    router.push('/awaiting-verification')
+      router.push('/awaiting-verification')
+    } catch (e) {
+      setError(describeActionError(e, 'completeCoachProfile'))
+      setIsPending(false)
+    }
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {

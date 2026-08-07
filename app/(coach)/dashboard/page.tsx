@@ -1,6 +1,11 @@
 import { getAuthedProfile } from '@/lib/actions-utils'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { deriveTeamSlug, uniquifyTeamSlug } from '@/lib/team-slug'
+import type { Database } from '@/lib/supabase/types'
 import { redirect } from 'next/navigation'
+
+type TeamStatus = Database['public']['Enums']['team_status']
+type TaxStatus = Database['public']['Enums']['tax_status_type']
 import { DashboardShell } from '@/components/coach/dashboard-shell'
 import { RoleRedirectBanner } from '@/components/auth/role-redirect-banner'
 import Link from 'next/link'
@@ -27,7 +32,12 @@ export default async function DashboardPage() {
     supabase.from('notifications').select('*').eq('recipient_id', user.id).order('created_at', { ascending: false }).limit(50),
     supabase
       .from('submissions')
-      .select('id, status, admin_feedback, updated_at, created_at, team_id, sponsor_id, teams:team_id(team_name), sponsors:sponsor_id(company_name)')
+      // NOTE: no `sponsors:sponsor_id(company_name)` embed. A PostgREST embed resolves
+      // against the BASE TABLE, and 0063 makes `sponsors_select` admin-only to close
+      // P0-4 — so for a coach the embed silently returns null and every sponsor name on
+      // this page renders blank. Names are resolved below from v_sponsors_public, which
+      // is SECURITY DEFINER and includes any sponsor this coach has already pitched.
+      .select('id, status, admin_feedback, updated_at, created_at, team_id, sponsor_id, teams:team_id(team_name)')
       .then((res: any) => {
         if (res.error) {
           console.error('[Dashboard] Failed to fetch submissions:', res.error)
@@ -40,7 +50,8 @@ export default async function DashboardPage() {
           team_name: s.teams?.team_name,
           owner_id: user.id,
           sponsor_id: s.sponsor_id,
-          company_name: s.sponsors?.company_name,
+          // filled in from v_sponsors_public after both queries resolve
+          company_name: undefined as string | undefined,
           status: s.status,
           admin_feedback: s.admin_feedback,
           is_locked: !['draft', 'changes_requested', 'declined'].includes(s.status),
@@ -52,6 +63,28 @@ export default async function DashboardPage() {
         return { data: data || [] }
       }),
   ])
+
+  // Resolve sponsor company names for this coach's own submissions. Kept out of the
+  // query above because the embed cannot see them post-0063 (see the note there).
+  // A second read of the view without the status filter, so a pitch to a sponsor that
+  // has since gone inactive or filled its cap still shows a name rather than a blank.
+  {
+    const missingIds = Array.from(
+      new Set((submissions ?? []).map((s: any) => s.sponsor_id).filter(Boolean))
+    ) as string[]
+
+    if (missingIds.length > 0) {
+      const { data: names } = await supabase
+        .from('v_sponsors_public')
+        .select('id, company_name')
+        .in('id', missingIds)
+
+      const byId = new Map((names ?? []).map((r: any) => [r.id, r.company_name]))
+      for (const s of submissions as any[]) {
+        s.company_name = byId.get(s.sponsor_id) ?? undefined
+      }
+    }
+  }
 
   // 2. Role & Verification Guards
   if (profile?.role === 'admin') {
@@ -74,8 +107,15 @@ export default async function DashboardPage() {
     
     // Constraint Safeguard: Existing teams MUST have a team number.
     // If missing, we force status to 'incubator' to satisfy the DB constraint.
+    // Both enum columns are narrowed here rather than cast away at the insert:
+    // pending_team_data is untyped jsonb, and the `as any` that used to paper over that
+    // is exactly what hid the missing NOT NULL `slug` below (P0-14).
     const ftcTeamNumber = payloadData.ftcTeamNumber ?? null
-    const status = (payloadData.status === 'existing' && !ftcTeamNumber) ? 'incubator' : (payloadData.status || 'incubator')
+    const status: TeamStatus =
+      payloadData.status === 'existing' && ftcTeamNumber ? 'existing' : 'incubator'
+    const rawTaxStatus = payloadData.taxStatus || 'None'
+    const taxStatus: TaxStatus =
+      rawTaxStatus === '501c3' || rawTaxStatus === 'School' ? rawTaxStatus : 'None'
 
     const rawBudgetItems = (payloadData.budgetItems as Array<any> | undefined) || []
     const normalizedBudgetItems = rawBudgetItems.map((item) => ({
@@ -87,48 +127,85 @@ export default async function DashboardPage() {
     const totalAsk = normalizedBudgetItems.reduce((sum, item) => sum + item.total_cents, 0)
 
     const adminClient = createAdminClient()
-    const { data: newTeam, error: createError } = await adminClient
+
+    // P0-14: teams.slug is NOT NULL UNIQUE with no DB default (0046:5,20). Both inserts
+    // below omitted it and were cast `as any`, so tsc never saw the missing field and
+    // both failed 23502 at runtime — stranding every re-verified coach on the
+    // "Setting up your workspace…" spinner below, forever.
+    const teamName = (payloadData.teamName || profile.full_name || 'My Team').trim()
+    const baseSlug = deriveTeamSlug(teamName, ftcTeamNumber)
+
+    const teamPayload = {
+      owner_id: user.id,
+      status: status,
+      ftc_team_number: ftcTeamNumber,
+      team_name: teamName,
+      slug: baseSlug,
+      organization: payloadData.organization?.trim() || null,
+      city: payloadData.city?.trim() || '',
+      state: payloadData.state?.trim() || '',
+      mission_statement: payloadData.missionStatement?.trim() || 'Mission pending.',
+      tax_status: taxStatus,
+      budget_items: normalizedBudgetItems,
+      financial_ask_cents: totalAsk,
+      technical_summary: payloadData.technicalSummary?.trim() || null,
+      outreach_summary: payloadData.outreachSummary?.trim() || null,
+    }
+
+    let { data: newTeam, error: createError } = await adminClient
       .from('teams')
-      .insert({
-        owner_id: user.id,
-        status: status,
-        ftc_team_number: ftcTeamNumber,
-        team_name: (payloadData.teamName || profile.full_name || 'My Team').trim(),
-        organization: payloadData.organization?.trim() || null,
-        city: payloadData.city?.trim() || '',
-        state: payloadData.state?.trim() || '',
-        mission_statement: payloadData.missionStatement?.trim() || 'Mission pending.',
-        tax_status: payloadData.taxStatus || 'None',
-        budget_items: normalizedBudgetItems,
-        financial_ask_cents: totalAsk,
-        technical_summary: payloadData.technicalSummary?.trim() || null,
-        outreach_summary: payloadData.outreachSummary?.trim() || null,
-      } as any)
+      .insert(teamPayload)
       .select('*')
       .single()
+
+    // Two teams can share a name, so a slug collision is expected, not exceptional.
+    if (createError?.code === '23505') {
+      ;({ data: newTeam, error: createError } = await adminClient
+        .from('teams')
+        .insert({ ...teamPayload, slug: uniquifyTeamSlug(baseSlug) })
+        .select('*')
+        .single())
+    }
 
     if (!createError && newTeam) {
       await adminClient.from('profiles').update({ pending_team_data: null }).eq('id', user.id)
       redirect('/dashboard')
     } else {
       console.error('[Dashboard] Auto-provisioning critical failure:', createError)
-      
+
       // ABSOLUTE FALLBACK: If even the "smart" insert fails, create a barebones incubator record
       // to ensure the user is NEVER stuck on the loading screen.
-      const { data: fallbackTeam } = await adminClient
+      const fallbackName = (profile.full_name || 'My Team').trim()
+      const fallbackSlug = deriveTeamSlug(fallbackName)
+      const fallbackPayload = {
+        owner_id: user.id,
+        status: 'incubator' as TeamStatus,
+        team_name: fallbackName,
+        slug: fallbackSlug,
+        tax_status: 'None' as TaxStatus,
+      }
+
+      let { data: fallbackTeam, error: fallbackError } = await adminClient
         .from('teams')
-        .insert({
-          owner_id: user.id,
-          status: 'incubator',
-          team_name: (profile.full_name || 'My Team').trim(),
-          tax_status: 'None',
-        } as any)
+        .insert(fallbackPayload)
         .select('*')
         .single()
+
+      if (fallbackError?.code === '23505') {
+        ;({ data: fallbackTeam, error: fallbackError } = await adminClient
+          .from('teams')
+          .insert({ ...fallbackPayload, slug: uniquifyTeamSlug(fallbackSlug) })
+          .select('*')
+          .single())
+      }
 
       if (fallbackTeam) {
         redirect('/dashboard')
       }
+
+      // Both inserts failed. Previously this fell through in silence to the spinner
+      // below with no log line at all beyond the first console.error.
+      console.error('[Dashboard] Fallback team provisioning ALSO failed:', fallbackError)
     }
   }
 

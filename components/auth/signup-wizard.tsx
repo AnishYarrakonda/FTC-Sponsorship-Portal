@@ -21,6 +21,7 @@ import { ChevronDown, ChevronRight, ChevronLeft, UploadCloud, ArrowRight, AlertC
 import { StateSelector } from '@/components/ui/state-selector'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
+import { describeActionError } from '@/lib/client-errors'
 
 const STEP_LABELS = ['Account', 'Verification', 'Your Team']
 
@@ -215,18 +216,26 @@ export function SignupWizard() {
       formData.append('photoIdFile', photoIdFile)
     }
 
-    const result = await createCoachProfile(formData)
+    try {
+      const result = await createCoachProfile(formData)
 
-    if (result?.error) {
-      setError(result.error)
+      if (result?.error) {
+        setError(result.error)
+        setProfileFailed(true)
+        setIsPending(false)
+        return
+      }
+
+      setProfileFailed(false)
+      // Matches the previous flow: coaches proceed to upload/await verification.
+      router.push('/upload-credentials')
+    } catch (e) {
+      // The Clerk account already exists at this point, so leaving the form dead here
+      // stranded the user with a session and no profile row and no way to retry.
+      setError(describeActionError(e, 'createCoachProfile'))
       setProfileFailed(true)
       setIsPending(false)
-      return
     }
-
-    setProfileFailed(false)
-    // Matches the previous flow: coaches proceed to upload/await verification.
-    router.push('/upload-credentials')
   }
 
   // Re-invoke the profile action with the data already in the form.
@@ -298,8 +307,9 @@ export function SignupWizard() {
                   </Alert>
                 )}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground/80">Verification Code</label>
+                  <label htmlFor="signup-verification-code" className="text-sm font-medium text-foreground/80">Verification Code</label>
                   <Input
+                    id="signup-verification-code"
                     type="text"
                     inputMode="numeric"
                     autoComplete="one-time-code"
@@ -387,7 +397,7 @@ export function SignupWizard() {
                         <FormField control={form.control} name="email" render={({ field }) => (
                           <FormItem>
                             <FormLabel className="text-foreground/80">Email Address</FormLabel>
-                            <FormControl><Input className="bg-background border-border text-foreground placeholder:text-muted-foreground" type="email" placeholder="coach@example.com" {...field} /></FormControl>
+                            <FormControl><Input className="bg-background border-border text-foreground placeholder:text-muted-foreground" type="email" autoComplete="email" placeholder="coach@example.com" {...field} /></FormControl>
                             <FormMessage />
                           </FormItem>
                         )} />
@@ -395,14 +405,14 @@ export function SignupWizard() {
                           <FormField control={form.control} name="password" render={({ field }) => (
                             <FormItem>
                               <FormLabel className="text-foreground/80">Password</FormLabel>
-                              <FormControl><Input className="bg-background border-border text-foreground" type="password" {...field} /></FormControl>
+                              <FormControl><Input className="bg-background border-border text-foreground" type="password" autoComplete="new-password" {...field} /></FormControl>
                               <FormMessage />
                             </FormItem>
                           )} />
                           <FormField control={form.control} name="confirmPassword" render={({ field }) => (
                             <FormItem>
                               <FormLabel className="text-foreground/80">Confirm Password</FormLabel>
-                              <FormControl><Input className="bg-background border-border text-foreground" type="password" {...field} /></FormControl>
+                              <FormControl><Input className="bg-background border-border text-foreground" type="password" autoComplete="new-password" {...field} /></FormControl>
                               <FormMessage />
                             </FormItem>
                           )} />

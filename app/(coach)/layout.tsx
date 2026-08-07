@@ -15,15 +15,25 @@ export default async function CoachLayout({ children }: { children: React.ReactN
   }
   const { supabase, user } = authed
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('role, coach_verified')
     .eq('id', user.id)
     .single()
 
-  if (profile?.role === 'admin') redirect('/admin?redirected=coach')
-  if (profile?.role === 'sponsor') redirect('/sponsor/dashboard?redirected=coach')
-  if (profile?.role === 'coach' && !profile.coach_verified) redirect('/awaiting-verification')
+  // Fail CLOSED. Every guard below used optional chaining with no `else`, so a null
+  // profile — a failed query, a Supabase blip, a deleted row — fell straight through
+  // and rendered the coach shell to whoever asked. (admin) and (sponsor) both fail
+  // closed; the permissive one was guarding the largest surface.
+  if (profileError || !profile) {
+    console.error('[coach-layout] could not resolve profile; denying access', profileError)
+    redirect('/complete-profile')
+  }
+
+  if (profile.role === 'admin') redirect('/admin?redirected=coach')
+  if (profile.role === 'sponsor') redirect('/sponsor/dashboard?redirected=coach')
+  if (profile.role !== 'coach') redirect('/complete-profile')
+  if (!profile.coach_verified) redirect('/awaiting-verification')
 
   const userName = user.full_name ?? user.email ?? 'Coach'
   const userEmail = user.email ?? ''

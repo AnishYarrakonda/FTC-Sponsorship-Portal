@@ -9,6 +9,8 @@ import {
 } from 'lucide-react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { FadeUp } from '@/components/motion/fade-up'
+import { isAwaitingSponsor } from '@/lib/submission-status'
+import { describeActionError } from '@/lib/client-errors'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -83,7 +85,11 @@ export function DashboardShell({
     router.replace(`${pathname}${sp.size ? `?${sp}` : ''}`, { scroll: false })
   }
 
-  const activePitches = submissions.filter(s => s.status === 'pending' || s.status === 'dispatched' || s.status === 'approved').length
+  // `delivered` and `opened` were missing, so the headline "active pitches" KPI
+  // under-counted precisely the pitches that are live with a sponsor right now.
+  const activePitches = submissions.filter(
+    s => s.status === 'pending' || isAwaitingSponsor(s.status) || s.status === 'approved'
+  ).length
   const totalFunded = submissions.filter(s => s.status === 'approved').length
 
   return (
@@ -174,15 +180,25 @@ function OverviewTab({
       return
     }
     startGraduation(async () => {
-      const res = await updateTeam(team.id, {
-        status: 'existing',
-        ftcTeamNumber: num,
-        teamName: gradName.trim() || team.team_name
-      } as any)
-      if (res.error) toast.error(res.error)
-      else {
-        toast.success('Congratulations! You are now an official Existing Team.')
-        window.location.reload()
+      try {
+        // The `as any` that used to be here was unnecessary — updateTeam already takes
+        // Partial<TeamOnboardingInput> — and it was the only reason nobody noticed that
+        // updateTeam had no branch for `status` or `ftcTeamNumber` at all. Graduation
+        // wrote the team name, left status='incubator' and ftc_team_number NULL, and
+        // still showed the success toast below. Both fields are now written; the cast is
+        // gone so a future dropped field is a type error.
+        const res = await updateTeam(team.id, {
+          status: 'existing',
+          ftcTeamNumber: num,
+          teamName: gradName.trim() || team.team_name,
+        })
+        if (res?.error) toast.error(res.error)
+        else {
+          toast.success('Congratulations! You are now an official Existing Team.')
+          window.location.reload()
+        }
+      } catch (e) {
+        toast.error(describeActionError(e, 'updateTeam.graduate'))
       }
     })
   }
@@ -677,13 +693,17 @@ function FindSponsorsTab({ sponsors, submissions }: { sponsors: Sponsor[], submi
 
 /* ── Submissions tab ────────────────────────────────────────────────────────── */
 
-type SubmissionFilter = 'all' | 'approved' | 'declined' | 'pending' | 'draft'
+type SubmissionFilter = 'all' | 'approved' | 'declined' | 'pending' | 'draft' | 'closed'
 
+// `expired` and `bounced` previously matched NO tab, so a lapsed or undeliverable pitch
+// was reachable only under "All" — the two states a coach most needs to notice, because
+// both mean the sponsor will never respond. "Pending" also missed delivered/opened.
 const SUBMISSION_FILTERS: { id: SubmissionFilter; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'approved', label: 'Accepted' },
-  { id: 'pending', label: 'Pending' },
+  { id: 'pending', label: 'In progress' },
   { id: 'declined', label: 'Rejected' },
+  { id: 'closed', label: 'Expired / undelivered' },
   { id: 'draft', label: 'Drafts' },
 ]
 
@@ -694,7 +714,8 @@ function SubmissionsTab({ submissions, onNewPitch }: { submissions: SubmissionSu
   const filtered = submissions.filter(s => {
     if (filter === 'all') return true
     if (filter === 'declined') return s.status === 'declined' || s.status === 'changes_requested'
-    if (filter === 'pending') return s.status === 'pending' || s.status === 'dispatched'
+    if (filter === 'pending') return s.status === 'pending' || isAwaitingSponsor(s.status)
+    if (filter === 'closed') return s.status === 'expired' || s.status === 'bounced'
     return s.status === filter
   })
 

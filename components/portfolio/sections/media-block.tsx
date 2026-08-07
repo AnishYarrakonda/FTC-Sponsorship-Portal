@@ -1,18 +1,17 @@
+import { safeMediaUrls, safeYoutubeUrl } from '@/lib/safe-url'
+
 interface Props {
   mediaUrls: string[]
   youtubeUrl: string | null
   teamName: string
 }
 
-function isYouTubeUrl(u: string) {
-  try {
-    const h = new URL(u).hostname.toLowerCase()
-    return h === 'youtu.be' || h.endsWith('youtube.com')
-  } catch { return false }
-}
-
-export function MediaBlock({ mediaUrls, youtubeUrl, teamName }: Props) {
-  const safeYoutube = youtubeUrl && isYouTubeUrl(youtubeUrl) ? youtubeUrl : null
+export function MediaBlock({ mediaUrls: rawMediaUrls, youtubeUrl, teamName }: Props) {
+  // Render-side allowlist. teams.media_urls is untyped jsonb and predates updateTeam
+  // validation, so rows written earlier may point at arbitrary third-party hosts —
+  // which on a sponsor-facing page leaks the sponsor's IP to whoever the coach chose.
+  const mediaUrls = safeMediaUrls(rawMediaUrls)
+  const safeYoutube = safeYoutubeUrl(youtubeUrl)
   if (mediaUrls.length === 0 && !safeYoutube) return null
 
   return (

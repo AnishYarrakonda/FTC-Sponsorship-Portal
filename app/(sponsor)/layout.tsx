@@ -1,4 +1,5 @@
 import { getAuthedProfile } from '@/lib/actions-utils'
+import { AWAITING_SPONSOR_STATUSES } from '@/lib/submission-status'
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { SponsorSidebar } from '@/components/sponsor/sponsor-sidebar'
@@ -13,7 +14,6 @@ export default async function SponsorLayout({ children }: { children: React.Reac
   }
   const { supabase, user } = authed
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: profile } = await supabase
     .from('profiles')
     .select('*, sponsors(*)')
@@ -48,12 +48,15 @@ export default async function SponsorLayout({ children }: { children: React.Reac
     )
   }
 
-  // Count pending submissions for the sidebar badge
+  // Sidebar badge: pitches awaiting THIS SPONSOR's decision.
+  // This filtered on status='pending', which means "awaiting the ADMIN" and is a state a
+  // sponsor-visible pitch never has — so the badge read 0 while real pitches waited.
   const { count: pendingCount } = await supabase
     .from('submissions')
     .select('id', { count: 'exact', head: true })
     .eq('sponsor_id', profile.sponsor_id)
-    .eq('status', 'pending')
+    .in('status', [...AWAITING_SPONSOR_STATUSES])
+    .is('deleted_at', null)
 
   const companyName = sponsor?.company_name ?? 'Your Company'
   const userName = user.full_name ?? user.email ?? 'Sponsor'

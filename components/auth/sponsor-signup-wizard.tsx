@@ -21,6 +21,7 @@ import { ChevronDown, ChevronRight, ChevronLeft, ArrowRight, CheckCircle2 } from
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
+import { describeActionError } from '@/lib/client-errors'
 
 const INDUSTRIES = ['Technology', 'Manufacturing', 'Finance', 'Education', 'Healthcare', 'Energy', 'Retail', 'Other']
 const FUNDING_FREQUENCIES = ['One-time', 'Quarterly', 'Annual'] as const
@@ -214,11 +215,16 @@ export function SponsorSignupWizard() {
   async function onSubmit(values: SponsorSignupInput) {
     setIsPending(true)
     setError(null)
-    const result = await createSponsorApplication(values)
-    if (result?.error) { setError(result.error); setIsPending(false); return }
+    try {
+      const result = await createSponsorApplication(values)
+      if (result?.error) { setError(result.error); setIsPending(false); return }
 
-    // Matches the previous flow: sponsors land on the awaiting-verification page.
-    router.push('/awaiting-verification')
+      // Matches the previous flow: sponsors land on the awaiting-verification page.
+      router.push('/awaiting-verification')
+    } catch (e) {
+      setError(describeActionError(e, 'createSponsorApplication'))
+      setIsPending(false)
+    }
   }
 
   const toggleFocusArea = (area: string) => {
@@ -299,8 +305,9 @@ export function SponsorSignupWizard() {
                   </Alert>
                 )}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground/80">Verification Code</label>
+                  <label htmlFor="sponsor-verification-code" className="text-sm font-medium text-foreground/80">Verification Code</label>
                   <Input
+                    id="sponsor-verification-code"
                     type="text"
                     inputMode="numeric"
                     autoComplete="one-time-code"
@@ -364,14 +371,14 @@ export function SponsorSignupWizard() {
                           <FormItem><FormLabel>Representative Name</FormLabel><FormControl><Input placeholder="Jane Doe" {...field} /></FormControl><FormMessage /></FormItem>
                         )} />
                         <FormField control={form.control} name="email" render={({ field }) => (
-                          <FormItem><FormLabel>Work Email Address</FormLabel><FormControl><Input type="email" placeholder="jane@company.com" {...field} /></FormControl><FormMessage /></FormItem>
+                          <FormItem><FormLabel>Work Email Address</FormLabel><FormControl><Input type="email" autoComplete="email" placeholder="jane@company.com" {...field} /></FormControl><FormMessage /></FormItem>
                         )} />
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                           <FormField control={form.control} name="password" render={({ field }) => (
-                            <FormItem><FormLabel>Password</FormLabel><FormControl><Input type="password" {...field} /></FormControl><FormMessage /></FormItem>
+                            <FormItem><FormLabel>Password</FormLabel><FormControl><Input type="password" autoComplete="new-password" {...field} /></FormControl><FormMessage /></FormItem>
                           )} />
                           <FormField control={form.control} name="confirmPassword" render={({ field }) => (
-                            <FormItem><FormLabel>Confirm Password</FormLabel><FormControl><Input type="password" {...field} /></FormControl><FormMessage /></FormItem>
+                            <FormItem><FormLabel>Confirm Password</FormLabel><FormControl><Input type="password" autoComplete="new-password" {...field} /></FormControl><FormMessage /></FormItem>
                           )} />
                         </div>
                         <p className="text-xs text-muted-foreground">Password must be at least 12 characters and include uppercase, lowercase, and a number.</p>

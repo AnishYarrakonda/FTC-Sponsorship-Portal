@@ -5,6 +5,12 @@ import { redirect } from 'next/navigation'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { SignOutButton } from './sign-out-button'
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'Awaiting verification',
+}
+
 
 export default async function AwaitingVerificationPage() {
   const authed = await getAuthedProfile()

@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { isAwaitingSponsor, isTerminal } from '@/lib/submission-status'
+import { statusLabel } from '@/components/ui/status-badge'
 import { useRouter } from 'next/navigation'
 import { 
   Building2, 
@@ -110,8 +112,17 @@ export function SponsorReviewShell({ submission, team }: { submission: any; team
       )
 
       if ('success' in result && result.success) {
-        toast.success(`Submission ${status} successfully.`)
-        router.push('/sponsor/dashboard')
+        // P0-11: the decision COMMITTED but a confirmation email failed. Navigating away
+        // on a green toast is what made this class of failure invisible; hold the sponsor
+        // here long enough to actually read it.
+        const warning = 'warning' in result ? result.warning : undefined
+        if (warning) {
+          toast.warning(warning, { duration: 12000 })
+          setTimeout(() => router.push('/sponsor/dashboard'), 1200)
+        } else {
+          toast.success(`Submission ${status} successfully.`)
+          router.push('/sponsor/dashboard')
+        }
       } else {
         toast.error(result.error || 'Failed to update submission.')
       }
@@ -291,12 +302,30 @@ export function SponsorReviewShell({ submission, team }: { submission: any; team
         {/* Right Column: Actions */}
         <div className="space-y-6">
           <div className="sticky top-8 space-y-6">
-            {['approved', 'declined', 'changes_requested'].includes(submissionData.status) ? (
+            {/*
+              This gated only on ['approved','declined','changes_requested'], so an
+              `expired` or `bounced` submission fell into the ELSE branch and rendered a
+              LIVE Decision Console. Every RPC rejects those states with 'invalid_status',
+              so the sponsor's funding decision silently evaporated on submit. Inverted to
+              an allowlist: the console renders only for states a decision can actually be
+              recorded against.
+            */}
+            {!isAwaitingSponsor(submissionData.status) ? (
               <Card className="border-border bg-card shadow-sm">
                 <CardHeader>
-                  <CardTitle className="text-lg">Decision Recorded</CardTitle>
+                  <CardTitle className="text-lg">
+                    {isTerminal(submissionData.status) && submissionData.status !== 'approved' && submissionData.status !== 'declined'
+                      ? 'No Longer Actionable'
+                      : 'Decision Recorded'}
+                  </CardTitle>
                   <CardDescription className="text-[13px]">
-                    This submission has already been marked as <strong className="text-foreground font-medium">{submissionData.status.replace(/_/g, ' ')}</strong>.
+                    {submissionData.status === 'expired' ? (
+                      <>This request expired before a decision was made, and its reserved funding has been released. Ask the team to resubmit if you would still like to fund it.</>
+                    ) : submissionData.status === 'bounced' ? (
+                      <>The email carrying this request could not be delivered, so it is no longer actionable. Contact the team or the portal administrators to have it resent.</>
+                    ) : (
+                      <>This submission has already been marked as <strong className="text-foreground font-medium">{statusLabel(submissionData.status)}</strong>.</>
+                    )}
                   </CardDescription>
                 </CardHeader>
               </Card>

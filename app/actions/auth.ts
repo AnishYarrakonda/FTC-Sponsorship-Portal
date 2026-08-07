@@ -10,6 +10,7 @@ import {
 import { sponsorSignupSchema, type SponsorSignupInput } from '@/lib/schemas/sponsor-signup'
 import { getClientIp } from '@/lib/actions-utils'
 import { mapDbError } from '@/lib/errors'
+import { validateUploadedFile } from '@/lib/file-validation'
 import * as Sentry from '@sentry/nextjs'
 import {
   sendCredentialUploadAlert,
@@ -26,12 +27,6 @@ import {
 
 const MAX_CREDENTIAL_FILE_SIZE = 5 * 1024 * 1024 // 5MB
 const ALLOWED_CREDENTIAL_MIMES = ['application/pdf', 'image/jpeg', 'image/png'] as const
-const EXT_BY_MIME: Record<string, string> = {
-  'application/pdf': 'pdf',
-  'image/jpeg': 'jpg',
-  'image/png': 'png',
-}
-
 /**
  * Validates size, MIME allowlist, and magic bytes; returns the canonical
  * extension derived from the (verified) MIME type — never trusts the client
@@ -40,31 +35,15 @@ const EXT_BY_MIME: Record<string, string> = {
 export async function validateCredentialFile(
   file: File
 ): Promise<{ ext: string; error?: never } | { ext?: never; error: string }> {
-  if (file.size > MAX_CREDENTIAL_FILE_SIZE) {
-    return { error: 'File too large. Maximum size is 5MB.' }
-  }
-  if (!ALLOWED_CREDENTIAL_MIMES.includes(file.type as (typeof ALLOWED_CREDENTIAL_MIMES)[number])) {
-    return { error: 'Invalid file type. Only PDF, JPG, and PNG are allowed.' }
-  }
-
-  const buffer = await file.arrayBuffer()
-  const bytes = new Uint8Array(buffer).subarray(0, 4)
-  const hex = Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
-
-  let isValid = false
-  if (file.type === 'application/pdf' && hex.startsWith('25504446')) isValid = true
-  if (file.type === 'image/jpeg' && hex.startsWith('ffd8ff')) isValid = true
-  if (file.type === 'image/png' && hex === '89504e47') isValid = true
-
-  if (!isValid) {
-    return { error: 'The file contents do not match its type. Please upload a valid PDF, JPG, or PNG.' }
-  }
-
-  const ext = EXT_BY_MIME[file.type]
-  if (!ext) return { error: 'Invalid file type.' }
-  return { ext }
+  // Delegates to lib/file-validation so this and uploadTeamLogo cannot drift apart —
+  // the logo path was doing extension-only checks while this one did it correctly.
+  const result = await validateUploadedFile(file, {
+    allowedMimes: ALLOWED_CREDENTIAL_MIMES,
+    maxBytes: MAX_CREDENTIAL_FILE_SIZE,
+    label: 'File',
+  })
+  if (result.error !== undefined) return { error: result.error }
+  return { ext: result.ext }
 }
 
 // ---------------------------------------------------------------------------
@@ -265,10 +244,72 @@ export async function createSponsorApplication(
 
   const adminClient = createAdminClient()
 
+  // The email is authoritative from CLERK, never from the client — the same rule
+  // completeCoachProfile already follows at :199-206 ("authoritative from Clerk").
+  //
+  // Without this, `payload.email` (pure client input) is written to profiles.email, and
+  // approveSponsorApplication LINKS SPONSOR COMPANIES BY THAT COLUMN. profiles.email has
+  // no UNIQUE constraint, so: sign up with any address, call this action with
+  // email:"victim@bigcorp.com", and your profile sits there as role='sponsor',
+  // sponsor_id=NULL. When the admin approves the REAL application from that company, the
+  // link query picks the oldest unlinked sponsor profile with a matching email — the
+  // attacker's — handing them the victim's funding cap, pitch inbox and decision powers.
+  let verifiedEmail: string | undefined
+  try {
+    const clerk = await clerkClient()
+    const clerkUser = await clerk.users.getUser(clerkUserId)
+    verifiedEmail =
+      clerkUser.primaryEmailAddress?.emailAddress ?? clerkUser.emailAddresses[0]?.emailAddress
+  } catch (e) {
+    console.error('createSponsorApplication: failed to resolve Clerk user', e)
+  }
+  if (!verifiedEmail) {
+    return { error: 'Could not resolve your account email. Please sign out and back in.' }
+  }
+  const sessionEmail = verifiedEmail.trim().toLowerCase()
+
+  if (payload.email && payload.email !== sessionEmail) {
+    return {
+      error:
+        `This application must use the email address on your account (${sessionEmail}). ` +
+        `Sign out and apply from the correct account if you need a different one.`,
+    }
+  }
+
+  // P0-13: this action upserts role:'sponsor' onto whatever profile the current
+  // Clerk session owns. Without a guard, a signed-in COACH or ADMIN who lands on
+  // /sponsors/apply and completes the wizard has their role silently rewritten to
+  // 'sponsor' with sponsor_id NULL — the (sponsor) layout then blocks everything and
+  // there is no admin UI anywhere to change a role back. If the only admin does this,
+  // /admin is lost. The upsert also clobbers email, full_name, phone_number,
+  // address_line1, coppa_acknowledged and tos_accepted.
+  //
+  // Mirrors the guard completeCoachProfile already has at :233-240, but scoped: an
+  // EXISTING SPONSOR must still be allowed through, because the stranded-sponsor
+  // recovery form (CompleteSponsorApplicationForm, added in 3ab1895) re-calls this
+  // action for a profile that already exists. Only a cross-role overwrite is refused.
+  const { data: existingProfile } = await adminClient
+    .from('profiles')
+    .select('id, role')
+    .eq('clerk_user_id', clerkUserId)
+    .maybeSingle()
+
+  if (existingProfile && existingProfile.role !== 'sponsor') {
+    return {
+      error:
+        `You are already signed in as a ${existingProfile.role}. Sponsor applications must use a ` +
+        `separate account — sign out first, then apply.`,
+    }
+  }
+
   // Abuse throttle. This flow runs post-Clerk-signup (semi-authenticated), but
   // account creation is cheap, so cap applications per IP and per email. The
-  // throttle FAILS OPEN: if the RPC itself errors we report to Sentry and let
-  // the application through rather than blocking legitimate sponsors.
+  // throttle FAILS OPEN: if the RPC itself errors we log and let the application
+  // through rather than blocking legitimate sponsors.
+  //
+  // The failure is written to console.error as well as Sentry. Sentry has no DSN in
+  // any Vercel environment today, so a Sentry-only report is a no-op and the throttle
+  // would fail open completely silently.
   try {
     const ip = await getClientIp()
     const [ipRes, emailRes] = await Promise.all([
@@ -278,21 +319,22 @@ export async function createSponsorApplication(
         p_window: '1 hour',
       }),
       adminClient.rpc('check_throttle', {
-        p_key: `sponsor-apply-email:${payload.email}`,
+        p_key: `sponsor-apply-email:${sessionEmail}`,
         p_limit: 2,
         p_window: '1 day',
       }),
     ])
     if (ipRes.error || emailRes.error) {
-      Sentry.captureException(
-        new Error(
-          `[createSponsorApplication] check_throttle RPC failed: ${ipRes.error?.message ?? ''} ${emailRes.error?.message ?? ''}`
-        )
+      const err = new Error(
+        `[createSponsorApplication] check_throttle RPC failed (failing OPEN): ${ipRes.error?.message ?? ''} ${emailRes.error?.message ?? ''}`
       )
+      console.error(err.message, { ip: ipRes.error, email: emailRes.error })
+      Sentry.captureException(err)
     } else if (ipRes.data === false || emailRes.data === false) {
       return { error: 'Too many applications — please try again later.' }
     }
   } catch (e) {
+    console.error('[createSponsorApplication] throttle threw (failing OPEN)', e)
     Sentry.captureException(e)
   }
 
@@ -304,7 +346,7 @@ export async function createSponsorApplication(
       {
         clerk_user_id: clerkUserId,
         role: 'sponsor',
-        email: payload.email,
+        email: sessionEmail,
         full_name: payload.fullName,
         phone_number: payload.phoneNumber,
         address_line1: payload.companyAddress,
@@ -331,31 +373,74 @@ export async function createSponsorApplication(
   }
 
   // Create a Sponsor Application entry — but never a duplicate: a retry (or a
-  // double-submit) with an existing pending application for this email is a
-  // no-op, so admins only ever see one row per applicant.
-  const { data: existingApp } = await adminClient
+  // double-submit) with an existing pending application for this email is a no-op,
+  // so admins only ever see one row per applicant.
+  //
+  // P0-15: this lookup used to filter `.eq('status', 'pending')` against
+  // sponsor_applications.contact_email, which is UNIQUE (0035:18). For a REJECTED
+  // prior applicant the filter matched nothing, so the code took the insert branch,
+  // the insert failed 23505, the error was only console.error'd, and the action
+  // returned success. The applicant was left with role='sponsor', sponsor_id=NULL,
+  // parked on /awaiting-verification forever, and no application ever reached the
+  // admin queue. The status filter is gone: the UNIQUE column is looked up by email
+  // alone, which is the only lookup that can actually predict the insert.
+  const { data: existingApp, error: existingAppError } = await adminClient
     .from('sponsor_applications')
-    .select('id')
-    .eq('contact_email', payload.email)
-    .eq('status', 'pending')
+    .select('id, status')
+    .eq('contact_email', sessionEmail)
     .maybeSingle()
 
+  if (existingAppError) {
+    console.error('Failed to look up existing sponsor application:', existingAppError)
+    return { error: mapDbError(existingAppError, 'createSponsorApplication.lookup') }
+  }
+
   let isNewApplication = false
+
   if (!existingApp) {
     const { error: appError } = await adminClient.from('sponsor_applications').insert({
       company_name: payload.companyName,
       contact_name: payload.fullName,
-      contact_email: payload.email,
+      contact_email: sessionEmail,
       proposed_cap_cents: payload.proposedCapCents,
       message: payload.sponsorshipReason,
     })
 
+    // Previously console.error only, then fell through to `return` with no error —
+    // the wizard read that as success and the lead was lost with zero signal.
     if (appError) {
       console.error('Failed to create sponsor application entry:', appError)
-    } else {
-      isNewApplication = true
+      return { error: mapDbError(appError, 'createSponsorApplication.insert') }
     }
+    isNewApplication = true
+  } else if (existingApp.status === 'rejected') {
+    // Product decision (2026-08-06): a previously-rejected applicant may re-apply.
+    // Reopen the existing row as pending with the new answers so it re-enters the
+    // admin queue, rather than 23505-failing on the UNIQUE email.
+    const { error: reopenError } = await adminClient
+      .from('sponsor_applications')
+      .update({
+        company_name: payload.companyName,
+        contact_name: payload.fullName,
+        proposed_cap_cents: payload.proposedCapCents,
+        message: payload.sponsorshipReason,
+        status: 'pending',
+        reviewed_by: null,
+        reviewed_at: null,
+      })
+      .eq('id', existingApp.id)
+
+    if (reopenError) {
+      console.error('Failed to reopen rejected sponsor application:', reopenError)
+      return { error: mapDbError(reopenError, 'createSponsorApplication.reopen') }
+    }
+    isNewApplication = true
+  } else if (existingApp.status === 'approved') {
+    // Already a sponsor. Don't create a second company row (see the
+    // approveSponsorApplication idempotency fix in admin.ts) and don't re-notify.
+    return
   }
+  // status === 'pending': genuine retry / double-submit. Stay quiet, as before.
 
   // Send notifications (only for a genuinely new application — retries stay quiet)
   if (!isNewApplication) return
@@ -363,7 +448,7 @@ export async function createSponsorApplication(
     // Confirmation to sponsor
     await sendSponsorApplicationConfirmation(
       payload.companyName,
-      payload.email,
+      sessionEmail,
       payload.fullName,
       payload.proposedCapCents
     )
@@ -372,7 +457,7 @@ export async function createSponsorApplication(
     await sendSponsorApplicationAlert(
       payload.companyName,
       payload.fullName,
-      payload.email,
+      sessionEmail,
       payload.proposedCapCents
     )
 

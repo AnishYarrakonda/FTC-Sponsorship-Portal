@@ -13,16 +13,28 @@ export default function AnalyticsCharts() {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
+  const [loadError, setLoadError] = useState<string | null>(null)
+
   useEffect(() => {
     const fetchData = async () => {
       const supabase = createClient()
 
-      const [{ data: subs }, { data: sponsors }] = await Promise.all([
-        supabase.from('submissions').select('*'),
-        supabase.from('sponsors').select('*'),
-      ])
+      const [{ data: subs, error: subsError }, { data: sponsors, error: sponsorsError }] =
+        await Promise.all([
+          supabase.from('submissions').select('*'),
+          supabase.from('sponsors').select('*'),
+        ])
 
-      if (!subs || !sponsors) return
+      // This used to be a bare `if (!subs || !sponsors) return`, which skipped the
+      // setLoading(false) at the end of the effect — so any query failure left the page
+      // rendering "Loading charts..." forever, with no error and no retry. There is also
+      // no try/catch around the effect, so a throw did the same thing.
+      if (subsError || sponsorsError || !subs || !sponsors) {
+        console.error('[analytics-charts] failed to load', { subsError, sponsorsError })
+        setLoadError('Charts could not be loaded. Refresh the page to try again.')
+        setLoading(false)
+        return
+      }
 
       // Timeline: submissions over time
       const timeline: Record<string, { date: string; submitted: number; approved: number }> = {}
@@ -42,18 +54,28 @@ export default function AnalyticsCharts() {
         utilization: Math.round((s.funding_used_cents / s.funding_cap_cents) * 100),
       })).sort((a: any, b: any) => b.utilization - a.utilization).slice(0, 10)
 
-      // Status breakdown
+      // Status breakdown. This counted only 4 of the 10 enum values, so every pitch that
+      // was actually live with a sponsor (dispatched/delivered/opened) plus every expired,
+      // bounced or changes_requested one simply vanished from the chart — and the totals
+      // did not add up to totalSubmissions, with nothing to indicate why.
+      const countOf = (...statuses: string[]) =>
+        subs.filter((s: any) => statuses.includes(s.status)).length
+
       const statusCounts = {
-        approved: subs.filter((s: any) => s.status === 'approved').length,
-        declined: subs.filter((s: any) => s.status === 'declined').length,
-        pending: subs.filter((s: any) => s.status === 'pending').length,
-        draft: subs.filter((s: any) => s.status === 'draft').length,
+        approved: countOf('approved'),
+        awaiting: countOf('dispatched', 'delivered', 'opened'),
+        pending: countOf('pending'),
+        declined: countOf('declined', 'changes_requested'),
+        closed: countOf('expired', 'bounced'),
+        draft: countOf('draft'),
       }
       const statusData = [
         { name: 'Approved', value: statusCounts.approved, color: 'var(--chart-2)' },
+        { name: 'With sponsor', value: statusCounts.awaiting, color: 'var(--chart-1)' },
+        { name: 'Pending review', value: statusCounts.pending, color: 'var(--chart-3)' },
         { name: 'Declined', value: statusCounts.declined, color: 'var(--chart-4)' },
-        { name: 'Pending', value: statusCounts.pending, color: 'var(--chart-3)' },
-        { name: 'Draft', value: statusCounts.draft, color: 'var(--chart-5)' },
+        { name: 'Expired / undelivered', value: statusCounts.closed, color: 'var(--chart-5)' },
+        { name: 'Draft', value: statusCounts.draft, color: 'var(--muted-foreground)' },
       ].filter(s => s.value > 0)
 
       // Ask size distribution
@@ -92,10 +114,15 @@ export default function AnalyticsCharts() {
       setLoading(false)
     }
 
-    fetchData()
+    fetchData().catch((e) => {
+      console.error('[analytics-charts] fetch threw', e)
+      setLoadError('Charts could not be loaded. Refresh the page to try again.')
+      setLoading(false)
+    })
   }, [])
 
   if (loading) return <div className="text-muted-foreground text-sm py-8">Loading charts...</div>
+  if (loadError) return <div className="text-destructive text-sm py-8" role="alert">{loadError}</div>
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (!active || !payload?.length) return null

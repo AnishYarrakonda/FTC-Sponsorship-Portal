@@ -14,7 +14,17 @@ interface DbErrorLike {
  */
 export function mapDbError(error: DbErrorLike | null | undefined, context: string): string {
   if (error) {
-    Sentry.captureException(new Error(`[db:${context}] ${error.code ?? ''} ${error.message ?? 'unknown'}`), {
+    const summary = `[db:${context}] ${error.code ?? ''} ${error.message ?? 'unknown'}`
+
+    // console.error as well as Sentry, deliberately. Sentry has no DSN in ANY Vercel
+    // environment today, and instrumentation.ts early-returns when it is unset, so
+    // captureException is a no-op — which made all ~20 mapDbError call sites across
+    // every action file produce no log line anywhere. Vercel runtime logs are the only
+    // channel that actually works right now, and this one line is what makes every
+    // other failure in this list investigable.
+    console.error(summary, { code: error.code, details: error.details, hint: error.hint })
+
+    Sentry.captureException(new Error(summary), {
       extra: { code: error.code, details: error.details, hint: error.hint, context },
     })
   }

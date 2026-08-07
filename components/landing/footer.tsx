@@ -1,6 +1,14 @@
 import Link from 'next/link'
 import { Globe, Mail, AtSign } from 'lucide-react'
-import { FOOTER_COLUMNS, FOOTER_SOCIALS, CURRENT_SEASON } from '@/lib/site-config'
+import {
+  FOOTER_COLUMNS,
+  FOOTER_SOCIALS,
+  CURRENT_SEASON,
+  BUILT_BY,
+  IDEA_BY,
+  TEAM_NAME,
+  TEAM_NUMBER,
+} from '@/lib/site-config'
 
 const ICON_MAP = { Globe, Mail, AtSign } as const
 type IconKey = keyof typeof ICON_MAP
@@ -57,9 +65,29 @@ export function LandingFooter() {
           ))}
         </div>
 
-        <div className="mt-16 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-6 text-sm text-muted-foreground">
-          <span suppressHydrationWarning>© {new Date().getFullYear()} FTC Matchmaker</span>
-          <span className="font-mono text-xs">Built for Season {CURRENT_SEASON}</span>
+        <div className="mt-16 border-t border-border pt-6 text-sm text-muted-foreground">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span suppressHydrationWarning>© {new Date().getFullYear()} FTC Matchmaker</span>
+            <span className="font-mono text-xs">Built for Season {CURRENT_SEASON}</span>
+          </div>
+          <div className="mt-5 space-y-1">
+            <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground/80">
+              FIRST Tech Challenge Team {TEAM_NAME} #{TEAM_NUMBER}
+            </p>
+            <p className="pt-1 text-[13px] text-foreground">
+              Built by three of its members. Designed and engineered by{' '}
+              <span className="font-medium">{BUILT_BY}</span>
+            </p>
+            <p className="text-[12.5px] text-muted-foreground">
+              From an original idea by{' '}
+              {IDEA_BY.map((c, i) => (
+                <span key={c.name}>
+                  {i > 0 && ' and '}
+                  {c.name} <span className="text-muted-foreground/70">({c.role})</span>
+                </span>
+              ))}
+            </p>
+          </div>
         </div>
       </div>
     </footer>

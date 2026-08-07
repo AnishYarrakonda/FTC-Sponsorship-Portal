@@ -2,6 +2,12 @@ import { auth, currentUser } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { getAuthedProfile } from '@/lib/actions-utils'
 import { CompleteProfileChooser } from '@/components/auth/complete-profile-chooser'
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'Finish setting up your account',
+}
+
 
 /**
  * Orphan recovery: an authenticated Clerk user whose `profiles` row was never

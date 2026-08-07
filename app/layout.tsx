@@ -13,7 +13,11 @@ const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-serif" })
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" })
 
 export const metadata: Metadata = {
-  title: "FTC Matchmaker",
+  // `template` so each route contributes its own title instead of all 34 sharing one.
+  title: {
+    default: "FTC Matchmaker",
+    template: "%s · FTC Matchmaker",
+  },
   description: "The moderated sponsorship pipeline for FIRST Tech Challenge teams. Build a verified portfolio, send admin-reviewed pitches, and connect with sponsors.",
 }
 
@@ -28,6 +32,12 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
+    // NOTE (report §12, "the cheapest win in the audit"): the recommended
+    // `clerkJSVariant="headless"` does NOT exist in @clerk/nextjs v7.5.7 — the prop was
+    // removed after v5. Verified: `grep -rho "clerkJS[A-Za-z]*" node_modules/@clerk/`
+    // yields only clerkJSScriptUrl / clerkJSUrl / clerkJSVersion. Applying it produced a
+    // type error, not a saving. The bundle observation may still be valid, but the
+    // prescribed fix is stale for this version — see docs/REMEDIATION-LOG.md.
     <ClerkProvider>
       <html
         lang="en"

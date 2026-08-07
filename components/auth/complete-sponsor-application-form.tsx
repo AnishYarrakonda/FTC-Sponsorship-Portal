@@ -18,6 +18,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ChevronDown, CheckCircle2, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
+import { describeActionError } from '@/lib/client-errors'
 
 const INDUSTRIES = ['Technology', 'Manufacturing', 'Finance', 'Education', 'Healthcare', 'Energy', 'Retail', 'Other']
 const FUNDING_FREQUENCIES = ['One-time', 'Quarterly', 'Annual'] as const
@@ -89,13 +90,18 @@ export function CompleteSponsorApplicationForm({ email, defaultName }: { email: 
   async function onSubmit(values: SponsorSignupInput) {
     setError(null)
     setIsPending(true)
-    const result = await createSponsorApplication(values)
-    if (result?.error) {
-      setError(result.error)
+    try {
+      const result = await createSponsorApplication(values)
+      if (result?.error) {
+        setError(result.error)
+        setIsPending(false)
+        return
+      }
+      router.push('/awaiting-verification')
+    } catch (e) {
+      setError(describeActionError(e, 'createSponsorApplication'))
       setIsPending(false)
-      return
     }
-    router.push('/awaiting-verification')
   }
 
   const toggleFocusArea = (area: string) => {

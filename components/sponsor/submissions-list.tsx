@@ -15,14 +15,24 @@ import {
 } from '@/components/ui/dropdown-menu'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
+import { isAwaitingSponsor } from '@/lib/submission-status'
 
+/**
+ * "New Request" is a GROUP, not a single status. A dispatched pitch moves to `delivered`
+ * within seconds of the Resend webhook firing, and to `opened` when the sponsor reads the
+ * email — so it spends nearly its entire decidable life in a state this list could not
+ * filter for. Selecting "New Request" therefore HID the very pitches awaiting a decision,
+ * while the sidebar badge (corrected to count AWAITING_SPONSOR_STATUSES) said there were
+ * three. `bounced` had no entry at all.
+ */
 const STATUS_FILTERS = [
   { value: 'all', label: 'All statuses' },
-  { value: 'dispatched', label: 'New Request' },
+  { value: 'awaiting', label: 'Awaiting your decision' },
   { value: 'approved', label: 'Approved' },
   { value: 'declined', label: 'Declined' },
   { value: 'changes_requested', label: 'Changes Requested' },
   { value: 'expired', label: 'Expired' },
+  { value: 'bounced', label: 'Undelivered' },
 ] as const
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -35,7 +45,9 @@ export function SponsorSubmissionsList({ submissions }: { submissions: any[] }) 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return submissions.filter((s) => {
-      const matchesStatus = status === 'all' || s.status === status
+      const matchesStatus =
+        status === 'all' ||
+        (status === 'awaiting' ? isAwaitingSponsor(s.status) : s.status === status)
       const name = String(s.teams?.team_name ?? '').toLowerCase()
       const num = String(s.teams?.ftc_team_number ?? '')
       const matchesQuery = q === '' || name.includes(q) || num.includes(q)

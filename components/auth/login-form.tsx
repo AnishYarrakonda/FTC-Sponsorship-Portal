@@ -14,6 +14,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import Link from 'next/link'
 import { ChevronRight, ChevronLeft } from 'lucide-react'
 import { useSearchParams, useRouter } from 'next/navigation'
+import { safeInternalPath } from '@/lib/client-errors'
 
 // Map known Clerk error codes to friendly, actionable messages (wrong password
 // vs unknown email vs rate-limited), falling back to Clerk's own message.
@@ -55,7 +56,11 @@ export function LoginForm() {
   const router = useRouter()
   const resetSuccess = searchParams.get('reset') === 'success'
   const accountDeleted = searchParams.get('deleted') === '1'
-  const redirectUrl = searchParams.get('redirect_url') || '/'
+  // Open-redirect guard. `redirect_url` is attacker-controllable
+  // (…/login?redirect_url=https://evil.example/) and was fed straight into
+  // router.push() at three sites below. middleware.ts only ever sets a pathname, so
+  // anything that is not a same-origin path is not ours and is discarded.
+  const redirectUrl = safeInternalPath(searchParams.get('redirect_url'))
   const { isLoaded, signIn, setActive } = useSignIn()
   const { isLoaded: authLoaded, isSignedIn } = useAuth()
 
@@ -468,7 +473,7 @@ export function LoginForm() {
                         <FormLabel className="text-foreground/80">Email Address</FormLabel>
                         <FormControl>
                           <Input
-                            type="email"
+                            type="email" autoComplete="email"
                             className="bg-background border-border text-foreground placeholder:text-muted-foreground h-11"
                             placeholder="coach@example.com"
                             {...field}
@@ -501,6 +506,7 @@ export function LoginForm() {
                         <FormControl>
                           <Input
                             type="password"
+                            autoComplete="current-password"
                             className="bg-background border-border text-foreground h-11"
                             {...field}
                           />
@@ -525,8 +531,9 @@ export function LoginForm() {
             {mode === 'device-verify' && (
               <div className="space-y-6">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground/80">Verification Code</label>
+                  <label htmlFor="device-verification-code" className="text-sm font-medium text-foreground/80">Verification Code</label>
                   <Input
+                    id="device-verification-code"
                     type="text"
                     inputMode="numeric"
                     autoComplete="one-time-code"
@@ -573,9 +580,10 @@ export function LoginForm() {
             {mode === 'forgot-request' && (
               <div className="space-y-6">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground/80">Email Address</label>
+                  <label htmlFor="reset-email-address" className="text-sm font-medium text-foreground/80">Email Address</label>
                   <Input
-                    type="email"
+                    id="reset-email-address"
+                    type="email" autoComplete="email"
                     className="bg-background border-border text-foreground placeholder:text-muted-foreground h-11"
                     placeholder="coach@example.com"
                     value={resetEmail}
@@ -604,8 +612,9 @@ export function LoginForm() {
             {mode === 'forgot-reset' && (
               <div className="space-y-6">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground/80">Verification Code</label>
+                  <label htmlFor="reset-verification-code" className="text-sm font-medium text-foreground/80">Verification Code</label>
                   <Input
+                    id="reset-verification-code"
                     type="text"
                     inputMode="numeric"
                     autoComplete="one-time-code"
@@ -619,9 +628,11 @@ export function LoginForm() {
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground/80">New Password</label>
+                  <label htmlFor="reset-new-password" className="text-sm font-medium text-foreground/80">New Password</label>
                   <Input
+                    id="reset-new-password"
                     type="password"
+                    autoComplete="new-password"
                     className="bg-background border-border text-foreground h-11"
                     value={resetNewPassword}
                     onChange={(e) => setResetNewPassword(e.target.value)}

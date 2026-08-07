@@ -846,6 +846,8 @@ export type Database = {
         Row: {
           company_name: string | null
           created_at: string | null
+          // Added by 0063_sponsors_coach_exposure.sql.
+          geo_states: string[] | null
           funding_cap_cents: number | null
           funding_used_cents: number | null
           id: string | null
@@ -857,6 +859,7 @@ export type Database = {
         Insert: {
           company_name?: string | null
           created_at?: string | null
+          geo_states?: string[] | null
           funding_cap_cents?: number | null
           funding_used_cents?: number | null
           id?: string | null
@@ -868,6 +871,7 @@ export type Database = {
         Update: {
           company_name?: string | null
           created_at?: string | null
+          geo_states?: string[] | null
           funding_cap_cents?: number | null
           funding_used_cents?: number | null
           id?: string | null
@@ -946,6 +950,12 @@ export type Database = {
       check_throttle: {
         Args: { p_key: string; p_limit: number; p_window: string }
         Returns: boolean
+      }
+      // Hand-added for migration 0070_remint_submission_access_token.sql. Regenerate
+      // with `supabase gen types` once the migrations are applied.
+      remint_submission_access_token: {
+        Args: { p_admin_id: string; p_submission_id: string }
+        Returns: Json
       }
       current_profile_id: { Args: never; Returns: string }
       expire_overdue_submissions: { Args: never; Returns: Json }

@@ -29,10 +29,32 @@ export async function approveSubmission(submissionId: string) {
   // mints access token, and stamps sent_at / expires_at on the submission row.
   // No fallback: budget integrity must not be bypassed, so a failure surfaces
   // to the admin who can retry rather than silently overflowing capacity.
+  // P1-21: this passed p_amount_cents: 0, which makes approve_submission_atomic fall
+  // back to the team's CURRENT financial_ask_cents (0047:61-62) — a value the coach can
+  // still change after submitting. So the amount reserved against the sponsor's cap was
+  // not necessarily the amount the admin reviewed and approved.
+  //
+  // submissions.requested_amount_cents is snapshotted at submit time
+  // (app/actions/submission.ts:105) and is what the moderation queue renders, so it is
+  // the figure the admin actually saw. Pass it explicitly. Falling back to 0 preserves
+  // the old behaviour for legacy rows that never got a snapshot.
+  const { data: reviewed, error: reviewedError } = await adminClient
+    .from('submissions')
+    .select('requested_amount_cents')
+    .eq('id', submissionId)
+    .single()
+
+  // If this read fails we must NOT fall through to 0: that silently restores exactly the
+  // P1-21 behaviour this block exists to remove (the RPC would re-derive the amount from
+  // the team's *current* financial_ask_cents). Fail loudly instead.
+  if (reviewedError) {
+    return { error: mapDbError(reviewedError, 'approveSubmission.readAmount') }
+  }
+
   const { data: rpcResult, error: rpcError } = await adminClient.rpc('approve_submission_atomic', {
     p_submission_id: submissionId,
     p_admin_id: user.id,
-    p_amount_cents: 0,
+    p_amount_cents: reviewed?.requested_amount_cents ?? 0,
   })
 
   if (rpcError) {
@@ -112,6 +134,70 @@ export async function approveSubmission(submissionId: string) {
   revalidatePath('/dashboard')
 
   return warning ? { success: true, warning } : { success: true }
+}
+
+/**
+ * P0-11 recovery path. An approval that committed but whose sponsor email failed left
+ * the pitch in a permanently unrecoverable state: capacity consumed, coach told it was
+ * approved, sponsor never contacted, re-approval impossible (approve_submission_atomic
+ * asserts status='pending'), and no retry action in existence.
+ *
+ * Mints a fresh access token via remint_submission_access_token (0070) — the original
+ * plaintext is unrecoverable, only its hash is stored — revoking any previous unused
+ * one, then re-runs the gated dispatch. Reserves nothing and moves no money: the
+ * reservation from the original approval is still live and is deliberately left alone.
+ */
+export async function redispatchSubmission(submissionId: string) {
+  const parsed = moderationSchema.safeParse({ submissionId })
+  if (!parsed.success) return { error: 'Invalid submission ID' }
+
+  let user, adminClient
+  try {
+    const auth = await requireAdmin()
+    user = auth.user
+    adminClient = auth.adminClient
+  } catch (e: any) {
+    return { error: e.message }
+  }
+
+  const { data: rpcData, error: rpcError } = await adminClient.rpc(
+    'remint_submission_access_token',
+    { p_submission_id: submissionId, p_admin_id: user.id }
+  )
+
+  if (rpcError) return { error: mapDbError(rpcError as { code?: string; message?: string }, 'redispatchSubmission.rpc') }
+
+  const result = rpcData as { ok: boolean; error?: string; token?: string; current_status?: string }
+  if (!result.ok) {
+    const messages: Record<string, string> = {
+      submission_not_found: 'Submission not found.',
+      forbidden: 'You do not have permission to do that.',
+      submission_expired: 'This pitch has expired — its reservation was already released, so it cannot be resent.',
+      not_redispatchable: `This pitch is "${result.current_status}" and can no longer be sent to the sponsor.`,
+    }
+    return { error: messages[result.error ?? ''] ?? 'Could not resend this pitch.' }
+  }
+
+  const dispatchResult = await dispatchApprovedSubmission(submissionId, result.token!)
+
+  await adminClient.from('audit_log').insert({
+    actor_id: user.id,
+    action: 'redispatch_submission',
+    entity_type: 'submissions',
+    entity_id: submissionId,
+    metadata: { success: dispatchResult.success, error: dispatchResult.error ?? null },
+  })
+
+  if (!dispatchResult.success) {
+    return {
+      error:
+        'The pitch still could not be sent to the sponsor. A new access link was minted, so it is safe ' +
+        'to try again. If this keeps happening, contact engineering.',
+    }
+  }
+
+  revalidatePath('/moderation')
+  return { success: true }
 }
 
 export async function declineSubmission(submissionId: string, feedback: string) {

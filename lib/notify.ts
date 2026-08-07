@@ -11,6 +11,7 @@ import { createHash } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { env } from '@/lib/env'
 import * as Sentry from '@sentry/nextjs'
+import { SUPPORT_EMAIL } from '@/lib/site-config'
 
 const resend = new Resend(env.RESEND_API_KEY)
 
@@ -189,20 +190,30 @@ export async function sendHandshakeEmail(
       coachEmail: coachProfile.email,
     }
 
+    // Both halves of this template instruct the recipient to "reply to this email" with
+    // W-9 and payment instructions — the actual money handoff. RESEND_FROM_EMAIL is
+    // forced to noreply@ in production (lib/env.ts:70-76) and `replyTo` was set NOWHERE
+    // in the codebase, so every one of those replies went to an unread mailbox and the
+    // handoff simply stopped. Point each side at the other's real address.
+    const coachEmail = coachProfile.email
+    const sponsorEmail = sponsor.contact_email as string
+
     const [coachResult, sponsorResult] = await Promise.all([
-      // To coach
+      // To coach — replies reach the sponsor.
       sendViaResend('sendHandshakeEmail(coach)', {
         from: env.RESEND_FROM_EMAIL,
-        to: coachProfile.email,
+        to: coachEmail,
+        replyTo: sponsorEmail || SUPPORT_EMAIL,
         subject: `Match Made! ${sponsor.company_name} will sponsor your team for $${(amountCents / 100).toFixed(2)}`,
         react: HandshakeEmail({ ...shared, recipientName: coachProfile.full_name ?? 'Coach', isSponsor: false }),
       }, {
         idempotencyKey: createHash('sha256').update(submissionId + 'handshake-coach').digest('hex'),
       }),
-      // To sponsor
+      // To sponsor — replies reach the coach, who owns the W-9 and payment details.
       sendViaResend('sendHandshakeEmail(sponsor)', {
         from: env.RESEND_FROM_EMAIL,
-        to: sponsor.contact_email as string,
+        to: sponsorEmail,
+        replyTo: coachEmail || SUPPORT_EMAIL,
         subject: `Match Made! You're sponsoring ${team.team_name} for $${(amountCents / 100).toFixed(2)}`,
         react: HandshakeEmail({ ...shared, recipientName: sponsor.contact_name as string ?? 'Sponsor', isSponsor: true }),
       }, {

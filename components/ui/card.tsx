@@ -40,12 +40,28 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
-function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
+/**
+ * Two accessibility defects fixed here (report §14), across 31 usages in 20 files:
+ *
+ *  1. This rendered a <div>, so pages whose only title was a CardTitle had ZERO headings
+ *     in the document — `document.querySelectorAll('h1..h6').length === 0` on both /login
+ *     and /sponsors/apply. Screen-reader users navigate by heading; there was nothing to
+ *     navigate. Now renders a real heading, with `as` to pick the right level for the
+ *     page's outline (h3 is the safe default inside a card).
+ *
+ *  2. The inline `fontSize: "15px"` BEAT every className, so the 12 call sites passing
+ *     `text-2xl` / `text-xl` silently rendered at 15px. Sizing moved into the default
+ *     class list, where a caller's className can legitimately override it.
+ */
+function CardTitle({
+  className,
+  as: Comp = "h3",
+  ...props
+}: React.ComponentProps<"h3"> & { as?: "h1" | "h2" | "h3" | "h4" }) {
   return (
-    <div
+    <Comp
       data-slot="card-title"
-      className={cn("leading-snug", className)}
-      style={{ fontSize: "15px", fontWeight: 500, color: "var(--text-primary)" }}
+      className={cn("text-[15px] font-medium leading-snug text-[var(--text-primary)]", className)}
       {...props}
     />
   )

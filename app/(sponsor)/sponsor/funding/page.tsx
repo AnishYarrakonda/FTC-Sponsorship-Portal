@@ -84,7 +84,14 @@ export default async function SponsorFundingPage() {
                     <TrendingUp className="h-4 w-4 text-primary" />
                   </div>
                   <div>
-                    <div className="font-medium">{(t.teams as any).team_name}</div>
+                    {/*
+                      transactions_ledger.team_id has been nullable ON DELETE SET NULL
+                      since 0061, so `t.teams` is null for any ledger row whose team was
+                      deleted — exactly the state 0061 exists to create. Without the
+                      optional chain this threw and took down the entire Funding page,
+                      hiding every other transaction with it.
+                    */}
+                    <div className="font-medium">{(t.teams as any)?.team_name ?? 'Team no longer on the platform'}</div>
                     <div className="text-xs text-muted-foreground">{new Date(t.created_at).toLocaleDateString()}</div>
                   </div>
                 </div>

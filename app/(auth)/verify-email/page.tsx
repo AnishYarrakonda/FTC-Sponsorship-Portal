@@ -2,6 +2,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'Verify your email',
+}
+
 
 // Email verification now happens inline during the signup wizard (Clerk email
 // code), so this page is informational. It stays reachable as a friendly

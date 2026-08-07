@@ -1,4 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { safeHttpUrl, safeMediaUrls, safeYoutubeUrl } from '@/lib/safe-url'
+import { isAwaitingSponsor } from '@/lib/submission-status'
+import { statusLabel } from '@/components/ui/status-badge'
 import { notFound } from 'next/navigation'
 import { createHash } from 'crypto'
 import { SponsorDecisionPanel } from '@/components/sponsor/sponsor-decision-panel'
@@ -13,16 +16,6 @@ function taxBadge(status: string): { label: string; className: string } | null {
   if (status === '501c3') return { label: '✓ IRS 501(c)(3) Tax-Exempt', className: 'bg-[var(--badge-success-bg)] text-[var(--badge-success-text)] border-[var(--badge-success-text)]/20' }
   if (status === 'School') return { label: '✓ Public School Program', className: 'bg-[var(--bg-elevated)] text-[var(--text-primary)] border-[var(--border-default)]' }
   return null
-}
-
-function safeHttpUrl(url: unknown): string | null {
-  if (typeof url !== 'string') return null
-  try {
-    const parsed = new URL(url)
-    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.href : null
-  } catch {
-    return null
-  }
 }
 
 export default async function SponsorViewPage({ params }: Props) {
@@ -50,8 +43,18 @@ export default async function SponsorViewPage({ params }: Props) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const team = submission.teams as Record<string, any>
   const budgetItems = (team.budget_items as { label: string; qty: number; unit_cost_cents: number; total_cents: number }[]) ?? []
-  const totalAsk = (team.financial_ask_cents as number) ?? 0
-  const mediaUrls = (team.media_urls as string[]) ?? []
+  // P1-20: this read the LIVE team ask, but what actually settles is
+  // submissions.reserved_amount_cents, snapshotted when the admin approved. A coach who
+  // edited their portfolio after submitting made the sponsor read one number and fund a
+  // different one. Show the figure that is genuinely on the table.
+  const totalAsk =
+    (submission.reserved_amount_cents as number | null) ||
+    (submission.requested_amount_cents as number | null) ||
+    ((team.financial_ask_cents as number) ?? 0)
+  // Render-side allowlist. updateTeam did no validation, so rows written before that fix
+  // may hold arbitrary hosts, and media_urls remained mutable AFTER admin approval — the
+  // admin reviews image A, the coach edits, the sponsor opens image B.
+  const mediaUrls = safeMediaUrls(team.media_urls)
   const achievements = ((team.team_achievements as { id: string; season: string | null; event_name: string; award: string | null; description: string | null }[]) ?? [])
     .slice()
     .sort((a, b) => (b.season ?? '').localeCompare(a.season ?? ''))
@@ -71,12 +74,7 @@ export default async function SponsorViewPage({ params }: Props) {
   ].filter(Boolean) as string[]
 
   const tax = taxBadge(team.tax_status as string)
-  const youtubeUrl = (() => {
-    try {
-      const h = new URL(String(team.youtube_url ?? '')).hostname.toLowerCase()
-      return h === 'youtu.be' || h.endsWith('youtube.com') ? String(team.youtube_url) : null
-    } catch { return null }
-  })()
+  const youtubeUrl = safeYoutubeUrl(team.youtube_url)
   const githubUrl = safeHttpUrl(team.github_link)
 
   return (
@@ -286,7 +284,28 @@ export default async function SponsorViewPage({ params }: Props) {
         )}
 
         {/* Decision Panel */}
-        {!expired && !decided && (
+        {/*
+          The two gates above are properties of the TOKEN (expires_at / used_at) and say
+          nothing about the SUBMISSION. A pitch can reach a non-decidable state while its
+          emailed link stays live and unrevoked:
+            * `bounced` — app/api/webhooks/resend/route.ts flips the status and releases
+              the reservation but never revokes the token;
+            * `declined` / `changes_requested` decided in the PORTAL —
+              sponsor_decide_submission_atomic never touches submission_access_tokens.
+          Rendering a live console for those is not merely cosmetic: the token page's RPC,
+          record_sponsor_decision_atomic (0047:198-219), CLAIMS THE TOKEN BEFORE it checks
+          status, so one click burns the only link and then returns invalid_status. The
+          sponsor's funding decision evaporates and the link is permanently dead.
+        */}
+        {!expired && !decided && !isAwaitingSponsor(submission.status as string) && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            This proposal is no longer awaiting your decision (current status:{' '}
+            <strong>{statusLabel(submission.status as string)}</strong>). If you believe this is
+            wrong, reply to the email that brought you here and the team will have it re-sent.
+          </div>
+        )}
+
+        {!expired && !decided && isAwaitingSponsor(submission.status as string) && (
           <SponsorDecisionPanel
             token={token}
             totalAskCents={totalAsk}

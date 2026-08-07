@@ -4,6 +4,8 @@ import {
   CheckCircle2,
   Clock,
   FileEdit,
+  MailCheck,
+  MailOpen,
   MailWarning,
   PauseCircle,
   PlayCircle,
@@ -34,6 +36,12 @@ export const STATUS_CONFIG: Record<string, { label: string; tone: Tone; icon: Lu
   draft: { label: 'Draft', tone: 'pending', icon: FileEdit },
   pending: { label: 'Pending review', tone: 'pending', icon: Clock },
   dispatched: { label: 'Sent to sponsor', tone: 'warning', icon: Send },
+  // `delivered` and `opened` are real submission_status values written by the Resend
+  // webhook (app/api/webhooks/resend/route.ts). Neither had a config here, so a live
+  // pitch rendered through FALLBACK as the raw lowercase string and effectively fell
+  // out of both the admin and coach dashboards mid-flight.
+  delivered: { label: 'Delivered to sponsor', tone: 'warning', icon: MailCheck },
+  opened: { label: 'Opened by sponsor', tone: 'warning', icon: MailOpen },
   approved: { label: 'Approved', tone: 'success', icon: CheckCircle2 },
   declined: { label: 'Declined', tone: 'rejected', icon: XCircle },
   changes_requested: { label: 'Changes requested', tone: 'warning', icon: AlertCircle },

@@ -1,12 +1,14 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
-import { teamOnboardingSchema, type TeamOnboardingInput } from '@/lib/schemas/team'
+import { teamOnboardingSchema, teamOnboardingBaseSchema, type TeamOnboardingInput } from '@/lib/schemas/team'
 import { achievementSchema, type AchievementInput } from '@/lib/schemas/achievement'
 import { validateFTCTeam, type FTCTeam } from '@/lib/ftc-roster'
+import { deriveTeamSlug, uniquifyTeamSlug } from '@/lib/team-slug'
 import { redirect } from 'next/navigation'
 import { requireAuth } from '@/lib/actions-utils'
 import { mapDbError } from '@/lib/errors'
+import { validateUploadedFile, IMAGE_MIMES } from '@/lib/file-validation'
 
 function normalizePressLinks(
   links: TeamOnboardingInput['pressLinks'] | undefined
@@ -66,11 +68,17 @@ export async function createTeam(data: TeamOnboardingInput) {
   const normalizedBudgetItems = normalizeBudgetItems(payloadData.budgetItems)
   const totalAsk = normalizedBudgetItems.reduce((sum, item) => sum + item.total_cents, 0)
 
+  // P0-14: teams.slug is NOT NULL UNIQUE with no DB default (0046:5,20). This insert
+  // omitted it and the `as never` cast at the call below hid that from tsc.
+  const teamName = payloadData.teamName.trim()
+  const baseSlug = deriveTeamSlug(teamName, payloadData.ftcTeamNumber)
+
   const teamPayload = {
     owner_id: user.id,
     status: payloadData.status,
     ftc_team_number: payloadData.ftcTeamNumber ?? null,
-    team_name: payloadData.teamName.trim(),
+    team_name: teamName,
+    slug: baseSlug,
     organization: payloadData.organization?.trim() || null,
     city: payloadData.city.trim(),
     state: payloadData.state.trim(),
@@ -118,11 +126,15 @@ export async function createTeam(data: TeamOnboardingInput) {
   let teamId: string | null = null
 
   if (existingTeam?.id) {
-    const updatePayload = { ...teamPayload } as Record<string, unknown>
-    delete updatePayload.owner_id
+    // An existing team keeps the slug it already has: it may be linked from elsewhere,
+    // and re-deriving it from a renamed team would silently break those links.
+    // Destructured rather than `as Record<string, unknown>` + delete, so the payload
+    // stays fully typed against the generated Update type.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { owner_id: _ownerId, slug: _slug, ...updatePayload } = teamPayload
     const { data: updated, error: updateError } = await supabase
       .from('teams')
-      .update(updatePayload as never)
+      .update(updatePayload)
       .eq('id', existingTeam.id)
       .eq('owner_id', user.id)
       .select('id')
@@ -133,16 +145,25 @@ export async function createTeam(data: TeamOnboardingInput) {
     }
     teamId = updated.id
   } else {
-    const { data: team, error } = await supabase
+    let { data: team, error } = await supabase
       .from('teams')
-      .insert(teamPayload as never)
+      .insert(teamPayload)
       .select('id')
       .single()
+
+    // Two teams can share a name, so a slug collision is expected, not exceptional.
+    if (error?.code === '23505') {
+      ;({ data: team, error } = await supabase
+        .from('teams')
+        .insert({ ...teamPayload, slug: uniquifyTeamSlug(baseSlug) })
+        .select('id')
+        .single())
+    }
 
     if (error) {
       return { error: mapDbError(error, 'team.create.insert') }
     }
-    teamId = team.id
+    teamId = team!.id
   }
 
   // Audit log — coach create is a material event admins should see
@@ -175,18 +196,23 @@ export async function uploadTeamLogo(teamId: string, formData: FormData) {
   const file = formData.get('file') as File | null
   if (!file || file.size === 0) return { error: 'No file provided' }
 
-  const ext = file.name.split('.').pop()?.toLowerCase()
-  if (!ext || !['jpg', 'jpeg', 'png', 'webp'].includes(ext)) {
-    return { error: 'Logo must be a JPG, PNG, or WebP image' }
-  }
-  if (file.size > 2 * 1024 * 1024) {
-    return { error: 'Logo must be under 2 MB' }
-  }
+  // Was: trust `file.name`'s extension, trust `file.type`, then store the object in a
+  // PUBLIC bucket with `contentType: file.type`. Both inputs are attacker-controlled, so
+  // arbitrary bytes could be hosted under a content type of the uploader's choosing.
+  // Now validated by MIME allowlist + magic bytes, and both the path extension and the
+  // stored content type are derived from the VERIFIED type, never from the filename.
+  const validation = await validateUploadedFile(file, {
+    allowedMimes: IMAGE_MIMES,
+    maxBytes: 2 * 1024 * 1024,
+    label: 'Logo',
+  })
+  if (validation.error) return { error: validation.error }
+  const { ext, mime } = validation
 
   const filePath = `${clerkUserId}/${teamId}.${ext}`
   const { error: uploadError } = await supabase.storage
     .from('team-logos')
-    .upload(filePath, file, { upsert: true, contentType: file.type })
+    .upload(filePath, file, { upsert: true, contentType: mime })
 
   if (uploadError) return { error: uploadError.message }
 
@@ -204,6 +230,22 @@ export async function uploadTeamLogo(teamId: string, formData: FormData) {
 }
 
 export async function updateTeam(id: string, data: Partial<TeamOnboardingInput>) {
+  // STEP 1 — VALIDATE. This action was the ONLY mutating action in app/actions/* missing
+  // step 1 of the project's canonical 5-step shape: createTeam validated, the edit path
+  // did not. Everything the schema enforces was bypassable through it — the
+  // supabase-host allowlist on mediaUrls, pressLinks[].url validation, every LIMITS
+  // length cap (the DB columns are bare `text`), the budget-item bounds, and the
+  // cross-field rule that budget items must sum to financialAskCents.
+  //
+  // `.partial()` because this is a patch: the coach's portfolio is saved section by
+  // section and a full-object schema would reject every partial save.
+  const parsed = teamOnboardingBaseSchema.partial().safeParse(data)
+  if (!parsed.success) {
+    return { error: 'Validation failed: ' + parsed.error.issues.map((i) => i.message).join(', ') }
+  }
+  // Build from parsed.data, never from the raw input — otherwise validation is decorative.
+  const clean = parsed.data
+
   let user, supabase
   try {
     const auth = await requireAuth()
@@ -215,47 +257,61 @@ export async function updateTeam(id: string, data: Partial<TeamOnboardingInput>)
 
   const updatePayload: Record<string, unknown> = {}
 
-  if (typeof data.teamName === 'string') updatePayload.team_name = data.teamName.trim()
-  if (typeof data.organization === 'string') updatePayload.organization = data.organization.trim() || null
-  if (typeof data.city === 'string') updatePayload.city = data.city.trim()
-  if (typeof data.state === 'string') updatePayload.state = data.state.trim()
-  if (data.tagline !== undefined) updatePayload.tagline = data.tagline?.trim() || null
-  if (typeof data.missionStatement === 'string') updatePayload.mission_statement = data.missionStatement.trim()
-  if (data.taxStatus) updatePayload.tax_status = data.taxStatus
-  if (data.communityInterestText !== undefined) updatePayload.community_interest_text = data.communityInterestText?.trim() || null
-  if (data.studentInterestCount !== undefined) updatePayload.student_interest_count = data.studentInterestCount
-  if (data.sustainabilityPlan !== undefined) updatePayload.sustainability_plan = data.sustainabilityPlan?.trim() || null
-  if (data.seedFundingGoalsCents !== undefined) updatePayload.seed_funding_goals_cents = data.seedFundingGoalsCents
-  if (data.technicalSummary !== undefined) updatePayload.technical_summary = data.technicalSummary?.trim() || null
-  if (data.outreachSummary !== undefined) updatePayload.outreach_summary = data.outreachSummary?.trim() || null
-  if (data.mediaUrls !== undefined) updatePayload.media_urls = data.mediaUrls
-  if (data.youtubeUrl !== undefined) updatePayload.youtube_url = data.youtubeUrl || null
+  // status / ftcTeamNumber had NO branch here at all, while createTeam writes both
+  // (team.ts:77-78). The only caller that needs them is the incubator-graduation flow in
+  // components/coach/dashboard-shell.tsx, which sends {status,ftcTeamNumber,teamName} —
+  // so graduation wrote the name, left status='incubator' and ftc_team_number NULL, and
+  // still toasted "Congratulations! You are now an official Existing Team." The coach
+  // could repeat it forever. (An `as any` at that call site is what hid it from tsc —
+  // the same cast-hides-a-dropped-field pattern as P0-14.)
+  if (clean.status) updatePayload.status = clean.status
+  if (clean.ftcTeamNumber !== undefined) updatePayload.ftc_team_number = clean.ftcTeamNumber ?? null
+  if (typeof clean.teamName === 'string') updatePayload.team_name = clean.teamName.trim()
+  if (typeof clean.organization === 'string') updatePayload.organization = clean.organization.trim() || null
+  if (typeof clean.city === 'string') updatePayload.city = clean.city.trim()
+  if (typeof clean.state === 'string') updatePayload.state = clean.state.trim()
+  if (clean.tagline !== undefined) updatePayload.tagline = clean.tagline?.trim() || null
+  if (typeof clean.missionStatement === 'string') updatePayload.mission_statement = clean.missionStatement.trim()
+  if (clean.taxStatus) updatePayload.tax_status = clean.taxStatus
+  if (clean.communityInterestText !== undefined) updatePayload.community_interest_text = clean.communityInterestText?.trim() || null
+  if (clean.studentInterestCount !== undefined) updatePayload.student_interest_count = clean.studentInterestCount
+  if (clean.sustainabilityPlan !== undefined) updatePayload.sustainability_plan = clean.sustainabilityPlan?.trim() || null
+  if (clean.seedFundingGoalsCents !== undefined) updatePayload.seed_funding_goals_cents = clean.seedFundingGoalsCents
+  if (clean.technicalSummary !== undefined) updatePayload.technical_summary = clean.technicalSummary?.trim() || null
+  if (clean.outreachSummary !== undefined) updatePayload.outreach_summary = clean.outreachSummary?.trim() || null
+  if (clean.mediaUrls !== undefined) updatePayload.media_urls = clean.mediaUrls
+  if (clean.youtubeUrl !== undefined) updatePayload.youtube_url = clean.youtubeUrl || null
 
-  if (data.budgetItems !== undefined) {
-    const normalizedBudgetItems = normalizeBudgetItems(data.budgetItems as TeamOnboardingInput['budgetItems'])
+  if (clean.budgetItems !== undefined) {
+    const normalizedBudgetItems = normalizeBudgetItems(clean.budgetItems as TeamOnboardingInput['budgetItems'])
     updatePayload.budget_items = normalizedBudgetItems
     updatePayload.financial_ask_cents = normalizedBudgetItems.reduce((sum, item) => sum + item.total_cents, 0)
-  } else if (data.financialAskCents !== undefined) {
-    updatePayload.financial_ask_cents = data.financialAskCents
   }
+  // Deliberately NO `else if (clean.financialAskCents)` branch.
+  // lib/schemas/team.ts justifies dropping the cross-field refinement for the patch path
+  // by asserting that updateTeam always derives financial_ask_cents from budgetItems —
+  // an else-branch accepting a client-supplied figure made that assertion false, and the
+  // value flows straight into submissions.requested_amount_cents (submission.ts:105) and
+  // is reserved against the sponsor's cap by approve_submission_atomic. The ask is now
+  // ALWAYS the sum of the line items, which is what the portfolio UI shows the coach.
 
-  if (data.githubLink !== undefined) updatePayload.github_link = data.githubLink?.trim() || null
-  if (data.subteamBreakdown !== undefined) updatePayload.subteam_breakdown = data.subteamBreakdown?.trim() || null
-  if (data.visualPitchItems !== undefined) updatePayload.visual_pitch_items = data.visualPitchItems
-  if (data.coachPhotoUrl !== undefined) updatePayload.coach_photo_url = data.coachPhotoUrl || null
+  if (clean.githubLink !== undefined) updatePayload.github_link = clean.githubLink?.trim() || null
+  if (clean.subteamBreakdown !== undefined) updatePayload.subteam_breakdown = clean.subteamBreakdown?.trim() || null
+  if (clean.visualPitchItems !== undefined) updatePayload.visual_pitch_items = clean.visualPitchItems
+  if (clean.coachPhotoUrl !== undefined) updatePayload.coach_photo_url = clean.coachPhotoUrl || null
   // Team Story & People
-  if (data.foundedYear !== undefined) updatePayload.founded_year = data.foundedYear ?? null
-  if (data.teamSize !== undefined) updatePayload.team_size = data.teamSize ?? null
-  if (data.seasonsCompeted !== undefined) updatePayload.seasons_competed = data.seasonsCompeted ?? null
-  if (data.coachExperience !== undefined) updatePayload.coach_experience = data.coachExperience?.trim() || null
+  if (clean.foundedYear !== undefined) updatePayload.founded_year = clean.foundedYear ?? null
+  if (clean.teamSize !== undefined) updatePayload.team_size = clean.teamSize ?? null
+  if (clean.seasonsCompeted !== undefined) updatePayload.seasons_competed = clean.seasonsCompeted ?? null
+  if (clean.coachExperience !== undefined) updatePayload.coach_experience = clean.coachExperience?.trim() || null
   // Credibility
-  if (data.pastSponsors !== undefined) updatePayload.past_sponsors = data.pastSponsors ?? []
-  if (data.pressLinks !== undefined) updatePayload.press_links = normalizePressLinks(data.pressLinks)
-  if (data.communityEndorsements !== undefined) updatePayload.community_endorsements = data.communityEndorsements?.trim() || null
+  if (clean.pastSponsors !== undefined) updatePayload.past_sponsors = clean.pastSponsors ?? []
+  if (clean.pressLinks !== undefined) updatePayload.press_links = normalizePressLinks(clean.pressLinks)
+  if (clean.communityEndorsements !== undefined) updatePayload.community_endorsements = clean.communityEndorsements?.trim() || null
   // Community & Ethics Impact
-  if (data.studentsReached !== undefined) updatePayload.students_reached = data.studentsReached ?? null
-  if (data.eventsHosted !== undefined) updatePayload.events_hosted = data.eventsHosted ?? null
-  if (data.volunteerHours !== undefined) updatePayload.volunteer_hours = data.volunteerHours ?? null
+  if (clean.studentsReached !== undefined) updatePayload.students_reached = clean.studentsReached ?? null
+  if (clean.eventsHosted !== undefined) updatePayload.events_hosted = clean.eventsHosted ?? null
+  if (clean.volunteerHours !== undefined) updatePayload.volunteer_hours = clean.volunteerHours ?? null
 
   if (Object.keys(updatePayload).length === 0) {
     return { success: true }
@@ -274,8 +330,8 @@ export async function updateTeam(id: string, data: Partial<TeamOnboardingInput>)
   // Handle achievements sync. Only rewrite when the content actually changed, so an
   // unchanged save doesn't churn achievement ids/created_at or spend two extra DB
   // round-trips deleting and re-inserting identical rows.
-  if (data.achievements) {
-    const incoming = data.achievements.map(a => ({
+  if (clean.achievements) {
+    const incoming = clean.achievements.map(a => ({
       team_id: id,
       season: a.season,
       event_name: a.eventName,
@@ -297,12 +353,32 @@ export async function updateTeam(id: string, data: Partial<TeamOnboardingInput>)
       existingSigs.every((s, i) => s === incomingSigs[i])
 
     if (!unchanged) {
-      await supabase.from('team_achievements').delete().eq('team_id', id)
+      // This sequence DELETES every achievement and then re-inserts. If the re-insert
+      // fails the coach has silently lost their entire awards history and the action
+      // still returned {success:true}. There is no transaction available through
+      // PostgREST, so the delete is not attempted until the payload is known-good, the
+      // delete itself is checked, and a failed re-insert is reported rather than
+      // swallowed — with the rows we tried to write echoed to the log so they are
+      // recoverable from Vercel's runtime logs.
+      const { error: delError } = await supabase.from('team_achievements').delete().eq('team_id', id)
+      if (delError) {
+        return { error: mapDbError(delError, 'team.update.achievements.delete') }
+      }
+
       if (incoming.length > 0) {
         const { error: achError } = await supabase.from('team_achievements').insert(incoming)
         if (achError) {
-          console.error('Failed to sync achievements:', achError)
-          // We don't return error here because the main team update succeeded
+          console.error(
+            'Failed to re-insert achievements after delete — the team update was saved but the ' +
+              'achievements list is now EMPTY. Rows attempted:',
+            JSON.stringify(incoming),
+            achError
+          )
+          return {
+            error:
+              'Your team details were saved, but the achievements could not be updated and have been ' +
+              'cleared. Please re-enter them and save again.',
+          }
         }
       }
     }
@@ -315,7 +391,7 @@ export async function updateTeam(id: string, data: Partial<TeamOnboardingInput>)
     action: 'update_team',
     entity_type: 'teams',
     entity_id: id,
-    metadata: { fields_updated: Object.keys(data) },
+    metadata: { fields_updated: Object.keys(clean) },
   })
   if (updateAuditError) {
     console.error('Failed to write update_team audit log:', updateAuditError.message)

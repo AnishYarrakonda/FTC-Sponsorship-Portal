@@ -5,6 +5,7 @@ import { recordSponsorDecision } from '@/app/actions/sponsor-decision'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { ActionWarning } from '@/components/ui/action-warning'
 
 interface Props {
   token: string
@@ -17,7 +18,9 @@ type Step = 'choose' | 'partial' | 'confirm_decline' | 'done'
 export function SponsorDecisionPanel({ token, totalAskCents, teamName }: Props) {
   const [step, setStep] = useState<Step>('choose')
   const [partialAmount, setPartialAmount] = useState('')
-  const [result, setResult] = useState<{ ok: boolean; error?: string } | null>(null)
+  // P0-11: this was typed { ok, error } — discarding `warning` AT THE TYPE LEVEL, so
+  // recordSponsorDecision's warning could never be read even by accident.
+  const [result, setResult] = useState<{ ok: boolean; error?: string; warning?: string } | null>(null)
   const [isPending, startTransition] = useTransition()
 
   const totalDisplay = `$${(totalAskCents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
@@ -36,9 +39,20 @@ export function SponsorDecisionPanel({ token, totalAskCents, teamName }: Props) 
         <CardContent className="pt-6 text-center space-y-2">
           <p className="text-2xl">🎉</p>
           <p className="font-bold text-green-800 text-lg">Decision Recorded!</p>
-          <p className="text-green-700 text-sm">
-            A confirmation email has been sent to both you and the team coach. They will follow up with payment details.
-          </p>
+          {/*
+            Previously this hard-coded "A confirmation email has been sent to both you and
+            the team coach" — shown to an external sponsor who had just committed real
+            money, even when the send had failed. Only claim it when it is true.
+          */}
+          {result?.warning ? (
+            <div className="pt-1">
+              <ActionWarning>{result.warning}</ActionWarning>
+            </div>
+          ) : (
+            <p className="text-green-700 text-sm">
+              A confirmation email has been sent to both you and the team coach. They will follow up with payment details.
+            </p>
+          )}
         </CardContent>
       </Card>
     )

@@ -40,7 +40,22 @@ function richTextField(min: number | null, max: number, minMsg: string | null, m
     })
 }
 
-export const teamOnboardingSchema = z.object({
+/**
+ * The raw object shape, WITHOUT the cross-field superRefine below.
+ *
+ * Exported because `updateTeam` needs `.partial()` for its section-by-section patches,
+ * and in Zod 4 `.partial()` THROWS on a schema carrying refinements:
+ *   "TypeError: .partial() cannot be used on object schemas containing refinements"
+ * Calling it on `teamOnboardingSchema` would have crashed every portfolio save. Caught by
+ * lib/__tests__/remediation-invariants.test.ts.
+ *
+ * Dropping the refinements is correct for the patch path rather than merely convenient:
+ * they are whole-object rules (status↔ftcTeamNumber, budget items summing to
+ * financialAskCents) that cannot be evaluated against a patch that contains one side and
+ * not the other — and `updateTeam` recomputes `financial_ask_cents` from `budgetItems`
+ * itself, so that invariant holds by construction on that path.
+ */
+export const teamOnboardingBaseSchema = z.object({
   status: z.enum(['existing', 'incubator']),
   ftcTeamNumber: z.number().int().min(1, 'Team number must be positive').max(999999, 'Invalid FTC team number').optional(),
   teamName: z.string().trim().min(2, 'Team name must be at least 2 characters').max(120, 'Team name must be 120 characters or fewer'),
@@ -130,7 +145,13 @@ export const teamOnboardingSchema = z.object({
   pressLinks: z.array(
     z.object({
       label: z.string().trim().min(1, 'Label required').max(LIMITS.pressLinkLabel, 'Label is too long'),
-      url: z.string().trim().url('Press links must be valid URLs'),
+      // z.url() alone accepts `javascript:alert(1)` — it parses as a valid URL. These
+      // links are rendered on the sponsor-facing pitch page, so restrict the scheme.
+      url: z
+        .string()
+        .trim()
+        .url('Press links must be valid URLs')
+        .refine((u) => /^https?:\/\//i.test(u), 'Press links must start with http:// or https://'),
     })
   ).max(15, 'Please limit press links to 15').default([]),
   communityEndorsements: richTextField(null, LIMITS.communityEndorsements, null, 'Must be 2000 characters or fewer').optional(),
@@ -138,7 +159,9 @@ export const teamOnboardingSchema = z.object({
   studentsReached: z.number().int().nonnegative().optional(),
   eventsHosted: z.number().int().nonnegative().optional(),
   volunteerHours: z.number().int().nonnegative().optional(),
-}).superRefine((data, ctx) => {
+})
+
+export const teamOnboardingSchema = teamOnboardingBaseSchema.superRefine((data, ctx) => {
   if (data.status === 'existing' && !data.ftcTeamNumber) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,

@@ -1,3 +1,10 @@
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'Terms of Service',
+  description: 'The terms governing use of the FTC Matchmaker sponsorship platform.',
+}
+
 export default function TermsOfServicePage() {
   return (
     <div className="container mx-auto max-w-3xl py-12 space-y-8">

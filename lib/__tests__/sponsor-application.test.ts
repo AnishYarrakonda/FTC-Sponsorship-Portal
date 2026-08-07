@@ -114,7 +114,10 @@ describe('submitSponsorApplication — happy path & validation', () => {
     expect(mocks.insertMock).toHaveBeenCalledWith({
       company_name: 'Acme Robotics',
       contact_name: 'Jane Doe',
-      contact_email: 'Jane@Example.com',
+      // Lowercased by sponsorApplicationSchema as of the P1 email-case fix: profiles.email
+      // is Clerk-lowercased and approveSponsorApplication links the two by equality, so a
+      // raw "Jane@Example.com" matched zero rows and locked the sponsor out permanently.
+      contact_email: 'jane@example.com',
       proposed_cap_cents: 100_000,
       message: VALID_INPUT.message,
     })

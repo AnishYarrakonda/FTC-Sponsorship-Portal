@@ -450,7 +450,8 @@ export function PortfolioTab({ team, achievements }: { team: Team, achievements:
                     className="h-9 w-9 text-muted-foreground hover:text-destructive transition-colors"
                     onClick={() => removeAch(index)}
                   >
-                    <Trash className="h-4 w-4" />
+                    <Trash aria-hidden="true" className="h-4 w-4" />
+                    <span className="sr-only">Remove budget line item</span>
                   </Button>
                   <FormField control={form.control} name={`achievements.${index}.description`} render={({ field }) => (
                     <FormItem className="col-span-1 md:col-span-3">
@@ -615,7 +616,8 @@ export function PortfolioTab({ team, achievements }: { team: Team, achievements:
                   className="h-9 w-9 text-muted-foreground hover:text-destructive transition-colors"
                   onClick={() => removePress(index)}
                 >
-                  <Trash className="h-4 w-4" />
+                  <Trash aria-hidden="true" className="h-4 w-4" />
+                  <span className="sr-only">Remove press link</span>
                 </Button>
               </div>
             ))}
@@ -788,7 +790,8 @@ export function PortfolioTab({ team, achievements }: { team: Team, achievements:
                           field.onChange(newItems)
                         }}
                       >
-                        <Trash className="h-4 w-4" />
+                        <Trash aria-hidden="true" className="h-4 w-4" />
+                        <span className="sr-only">Remove image</span>
                       </button>
                     </div>
                   </div>
@@ -876,9 +879,10 @@ export function PortfolioTab({ team, achievements }: { team: Team, achievements:
                 {visualItems.map((item: any, index) => (
                   <div key={item.id} className="relative rounded-lg overflow-hidden border border-border bg-accent/50 aspect-video group">
                     <Image src={item.url} alt={`Slide ${index + 1}`} fill className="object-cover" />
-                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-2.5">
+                    <div className="absolute inset-0 bg-black/60 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 flex flex-col justify-between p-2.5">
                       <button type="button" onClick={() => removeVisual(index)} className="self-end p-1.5 bg-red-500/20 text-red-300 rounded hover:bg-red-500/40 transition-colors">
-                        <Trash className="h-3.5 w-3.5" />
+                        <Trash aria-hidden="true" className="h-3.5 w-3.5" />
+                        <span className="sr-only">Remove visual pitch item</span>
                       </button>
                       <FormField control={form.control} name={`visualPitchItems.${index}.caption`} render={({ field }) => (
                         <FormControl><Input className="bg-background/80 border-none text-xs h-8 placeholder:text-muted-foreground text-foreground" placeholder="Add caption…" {...field} value={field.value ?? ''} /></FormControl>

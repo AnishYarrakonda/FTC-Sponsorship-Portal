@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { ActionWarning } from '@/components/ui/action-warning'
 import { verifyCoach, denyCoach } from '@/app/actions/admin'
 import { CheckCircle, ExternalLink, XCircle, AlertTriangle, Building, MapPin, Phone, Calendar, Target, ShieldCheck } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -36,6 +37,7 @@ export type CoachData = {
 export function CoachVerificationCard({ coach }: { coach: CoachData }) {
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const [warning, setWarning] = useState<string | null>(null)
   const [dismissed, setDismissed] = useState(false)
   const [isDenyModalOpen, setIsDenyModalOpen] = useState(false)
   const [denyReason, setDenyReason] = useState('')
@@ -49,7 +51,12 @@ export function CoachVerificationCard({ coach }: { coach: CoachData }) {
       if (result?.error) {
         setError(result.error)
       } else {
-        if (verified) setDismissed(true)
+        // P0-11: verifyCoach returns a warning when the coach WAS verified but their
+        // team could not be provisioned. Dropping it left the admin thinking the coach
+        // was fully set up while the coach sat on "Setting up your workspace…".
+        const w = 'warning' in result ? result.warning : undefined
+        setWarning(w ?? null)
+        if (verified && !w) setDismissed(true)
       }
     })
   }
@@ -136,6 +143,11 @@ export function CoachVerificationCard({ coach }: { coach: CoachData }) {
           </p>
         )}
         {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
+        {warning && (
+          <div className="mt-2">
+            <ActionWarning>{warning}</ActionWarning>
+          </div>
+        )}
       </div>
 
       {/* Actions */}

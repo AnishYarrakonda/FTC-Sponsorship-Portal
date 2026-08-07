@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import type { Submission } from '@/lib/supabase/types'
+import { describeActionError } from '@/lib/client-errors'
 
 const AUTOSAVE_DELAY_MS = 2000
 
@@ -95,18 +96,25 @@ export function PortfolioForm({ initialSubmission, initialValues, sponsors = [],
   async function onSubmit(values: SubmissionInput, status: 'draft' | 'pending') {
     setIsPending(true)
     setError(null)
-    const result = await saveSubmission(values, status, submissionId)
-    if (result?.error) {
-      const msg = result.error === 'rate_limited' && 'message' in result
-        ? (result as { message: string }).message
-        : result.error
-      setError(msg)
+    try {
+      const result = await saveSubmission(values, status, submissionId)
+      if (result?.error) {
+        const msg = result.error === 'rate_limited' && 'message' in result
+          ? (result as { message: string }).message
+          : result.error
+        setError(msg)
+        setIsPending(false)
+        return
+      }
+      if (status === 'draft') {
+        setIsPending(false)
+        setAutosaveState('saved')
+      }
+    } catch (e) {
+      // Without this the form stayed disabled forever on any thrown error, with no
+      // message — and the retry button discards the rejection too.
+      setError(describeActionError(e, 'saveSubmission'))
       setIsPending(false)
-      return
-    }
-    if (status === 'draft') {
-      setIsPending(false)
-      setAutosaveState('saved')
     }
   }
 

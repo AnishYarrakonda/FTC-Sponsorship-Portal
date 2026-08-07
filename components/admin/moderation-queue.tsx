@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog'
 import { CheckCircle2, AlertCircle, CheckSquare, Square, ChevronDown, ChevronUp, Users } from 'lucide-react'
 import Link from 'next/link'
+import { ActionWarning } from '@/components/ui/action-warning'
 import { EmptyState } from '@/components/ui/empty-state'
 import { cn, htmlToPlainText } from '@/lib/utils'
 
@@ -35,6 +36,13 @@ interface BulkResult {
   id: string
   ok: boolean
   error?: string
+  /**
+   * P0-11: the action committed, but a decision-critical side effect failed — almost
+   * always the pitch email to the sponsor, whose capacity is ALREADY reserved by the
+   * approval RPC. Previously computed by moderation.ts and read by nothing, so the row
+   * silently left the queue and the admin was told it had been dispatched.
+   */
+  warning?: string
 }
 
 function FieldBlock({ label, children }: { label: string; children: React.ReactNode }) {
@@ -367,7 +375,7 @@ export function ModerationQueue({ initialSubmissions }: { initialSubmissions: Su
       const results: BulkResult[] = []
       for (const id of ids) {
         const res = await approveSubmission(id)
-        results.push({ id, ok: !res?.error, error: res?.error })
+        results.push({ id, ok: !res?.error, error: res?.error, warning: res?.warning })
       }
       setBulkResults(results)
       const succeeded = results.filter(r => r.ok).map(r => r.id)
@@ -385,7 +393,7 @@ export function ModerationQueue({ initialSubmissions }: { initialSubmissions: Su
         const res = bulkAction === 'decline'
           ? await declineSubmission(id, feedback)
           : await requestEdit(id, feedback)
-        results.push({ id, ok: !res?.error, error: res?.error })
+        results.push({ id, ok: !res?.error, error: res?.error, warning: res?.warning })
       }
       setBulkResults(results)
       const succeeded = results.filter(r => r.ok).map(r => r.id)
@@ -399,7 +407,9 @@ export function ModerationQueue({ initialSubmissions }: { initialSubmissions: Su
       const res = await approveSubmission(submissionId)
       if (!res?.error) {
         removeSubmissions([submissionId])
-        setBulkResults(null)
+        // Keep the row's warning on screen after it leaves the queue — it is the only
+        // signal that the sponsor never actually received the pitch.
+        setBulkResults(res?.warning ? [{ id: submissionId, ok: true, warning: res.warning }] : null)
       } else {
         // Surface the failure through the same results banner the bulk path uses —
         // closing the dialog with no feedback left admins thinking approval worked.
@@ -491,6 +501,11 @@ export function ModerationQueue({ initialSubmissions }: { initialSubmissions: Su
               <AlertCircle className="h-4 w-4" strokeWidth={1.5} />
               {r.id.slice(0, 8)}…: {r.error}
             </div>
+          ))}
+          {bulkResults.filter(r => r.ok && r.warning).map(r => (
+            <ActionWarning key={`warn-${r.id}`}>
+              {r.id.slice(0, 8)}…: {r.warning}
+            </ActionWarning>
           ))}
         </div>
       )}

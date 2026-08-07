@@ -20,6 +20,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import type { Sponsor } from '@/lib/supabase/types'
+import { describeActionError } from '@/lib/client-errors'
 
 type Props = {
   initialSponsor?: Pick<
@@ -52,14 +53,19 @@ export function SponsorForm({ initialSponsor }: Props) {
   async function onSubmit(values: SponsorInput) {
     setIsPending(true)
     setError(null)
-    const result = initialSponsor
-      ? await adminUpdateSponsor(initialSponsor.id, values)
-      : await adminCreateSponsor(values)
-    setIsPending(false)
-    if (result?.error) {
-      setError(result.error)
-    } else {
+    try {
+      const result = initialSponsor
+        ? await adminUpdateSponsor(initialSponsor.id, values)
+        : await adminCreateSponsor(values)
+      if (result?.error) {
+        setError(result.error)
+        setIsPending(false)
+        return
+      }
       router.push('/sponsors')
+    } catch (e) {
+      setError(describeActionError(e, 'adminSaveSponsor'))
+      setIsPending(false)
     }
   }
 
