@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z } from '@/lib/zod-config'
 import { htmlToPlainText } from '@/lib/utils'
 
 // Pitch fields are plain text. Any HTML a coach pastes (or legacy TipTap markup) is flattened

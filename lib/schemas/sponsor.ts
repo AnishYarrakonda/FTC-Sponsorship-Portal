@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z } from '@/lib/zod-config'
 
 export const sponsorApplicationSchema = z.object({
   companyName: z.string().min(2, 'Company name is required'),

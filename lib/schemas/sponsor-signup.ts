@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z } from '@/lib/zod-config'
 
 export const sponsorSignupSchema = z.object({
   // Step 1: Account

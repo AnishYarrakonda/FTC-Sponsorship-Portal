@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z } from '@/lib/zod-config'
 import DOMPurify from 'isomorphic-dompurify'
 import { LIMITS } from './limits'
 

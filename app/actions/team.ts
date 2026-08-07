@@ -196,6 +196,20 @@ export async function uploadTeamLogo(teamId: string, formData: FormData) {
   const file = formData.get('file') as File | null
   if (!file || file.size === 0) return { error: 'No file provided' }
 
+  // `teamId` is caller-supplied. The ownership filter used to live only on the teams
+  // UPDATE at the end — but an UPDATE matching zero rows is not an error, so passing
+  // someone else's teamId wrote a file into storage and still returned { success: true }.
+  // Ownership is now proven BEFORE anything is written.
+  const { data: ownedTeam, error: ownershipError } = await supabase
+    .from('teams')
+    .select('id')
+    .eq('id', teamId)
+    .eq('owner_id', user.id)
+    .maybeSingle()
+
+  if (ownershipError) return { error: mapDbError(ownershipError, 'team.uploadLogo.ownership') }
+  if (!ownedTeam) return { error: 'Team not found' }
+
   // Was: trust `file.name`'s extension, trust `file.type`, then store the object in a
   // PUBLIC bucket with `contentType: file.type`. Both inputs are attacker-controlled, so
   // arbitrary bytes could be hosted under a content type of the uploader's choosing.

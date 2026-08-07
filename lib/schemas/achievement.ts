@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z } from '@/lib/zod-config'
 
 export const achievementSchema = z.object({
   season: z.string().min(4, 'Season is required (e.g. 2023-24)'),

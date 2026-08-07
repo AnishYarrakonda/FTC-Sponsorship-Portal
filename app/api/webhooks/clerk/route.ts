@@ -106,5 +106,10 @@ async function syncProfileEmail(
   if (error) {
     console.error('[clerk-webhook] failed to sync profile email', error)
     Sentry.captureException(error)
+    // Must THROW, not swallow. Svix treats any 2xx as delivered and never retries, so
+    // returning 200 here made every email-sync failure permanent and invisible — the
+    // same defect as P0-12 (`user.deleted`), which was fixed while this path was not.
+    // The caller's catch turns this into a 500 and Svix redelivers.
+    throw new Error(`profile email sync failed: ${error.message}`)
   }
 }

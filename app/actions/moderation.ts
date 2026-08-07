@@ -160,6 +160,44 @@ export async function redispatchSubmission(submissionId: string) {
     return { error: e.message }
   }
 
+  // A pitch renders LIVE portfolio data at dispatch time, not a snapshot taken at
+  // approval. `updateTeam` has no post-dispatch lock, so if the coach edited the
+  // portfolio after the admin approved it, a resend would carry content no admin ever
+  // reviewed straight to the sponsor — defeating the Admin-Gatekept Outreach mandate.
+  //
+  // Checked BEFORE the remint on purpose: remint_submission_access_token revokes the
+  // previous unused token, so refusing afterwards would destroy a working link.
+  const { data: sub, error: subError } = await adminClient
+    .from('submissions')
+    .select('sent_at, team_id')
+    .eq('id', submissionId)
+    .maybeSingle()
+
+  if (subError) {
+    return { error: mapDbError(subError as { code?: string; message?: string }, 'redispatchSubmission.preread') }
+  }
+  if (!sub) return { error: 'Submission not found.' }
+
+  if (sub.sent_at && sub.team_id) {
+    const { data: team, error: teamError } = await adminClient
+      .from('teams')
+      .select('updated_at')
+      .eq('id', sub.team_id)
+      .maybeSingle()
+
+    if (teamError) {
+      return { error: mapDbError(teamError as { code?: string; message?: string }, 'redispatchSubmission.teamread') }
+    }
+    if (team?.updated_at && new Date(team.updated_at) > new Date(sub.sent_at)) {
+      return {
+        error:
+          'This team edited its portfolio after the pitch was approved, so resending would show the ' +
+          'sponsor content no admin has reviewed. Review the current portfolio first; if it should go ' +
+          'out, decline this pitch and have the coach resubmit it for approval.',
+      }
+    }
+  }
+
   const { data: rpcData, error: rpcError } = await adminClient.rpc(
     'remint_submission_access_token',
     { p_submission_id: submissionId, p_admin_id: user.id }

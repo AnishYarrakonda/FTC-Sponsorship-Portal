@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z } from '@/lib/zod-config'
 
 const locationRegex = /^[A-Za-z][A-Za-z .'-]{1,79}$/
 

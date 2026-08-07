@@ -22,8 +22,16 @@ const envSchema = z.object({
   // Comma-separated list of admin recipient emails for system alerts.
   // If unset, notify falls back to a profiles.role='admin' query.
   ADMIN_NOTIFICATION_EMAILS: z.string().optional(),
-  // Sentry (optional — only required in production)
-  SENTRY_DSN: z.string().url().optional(),
+  // Sentry. `.optional()` permits the variable to be ABSENT; it does not permit it to be
+  // INVALID — and every request path imports this module, so in production `parseEnv()`
+  // throws and 500s the ENTIRE SITE on a malformed value. `.env.local` ships the literal
+  // placeholder `your_sentry_dsn`, which sits there as an inviting copy-paste for exactly
+  // the moment someone sets this in Vercel and pastes a project name instead of a DSN.
+  //
+  // `.catch(undefined)` makes a malformed OBSERVABILITY value degrade to "no Sentry"
+  // instead of taking the product down. The genuinely required secrets above keep failing
+  // fast, which is the behaviour that actually protects a deploy.
+  SENTRY_DSN: z.string().url().optional().catch(undefined),
   // Cron
   CRON_SECRET: z.string().min(1),
 }).superRefine((env, ctx) => {
