@@ -3,6 +3,7 @@ import { AWAITING_SPONSOR_STATUSES } from '@/lib/submission-status'
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { SponsorSidebar } from '@/components/sponsor/sponsor-sidebar'
+import { SUPPORT_EMAIL } from '@/lib/site-config'
 
 export default async function SponsorLayout({ children }: { children: React.ReactNode }) {
   const authed = await getAuthedProfile()
@@ -38,7 +39,7 @@ export default async function SponsorLayout({ children }: { children: React.Reac
           </p>
           <p className="text-xs text-muted-foreground">
             Need to update your application?{' '}
-            <a className="underline" href="mailto:support@exodiusftc.com">
+            <a className="underline" href={`mailto:${SUPPORT_EMAIL}`}>
               Contact support
             </a>
             .

@@ -17,7 +17,19 @@ export const DISPATCH_SEASON_LABEL = `Season ${CURRENT_SEASON} dispatch window o
 export const SHOWCASE_TEAM = { number: '12345', name: 'Ironclad Robotics' } as const
 
 // ─── Contact ─────────────────────────────────────────────────────────────────
-export const SUPPORT_EMAIL = 'support@exodiusftc.com'
+/**
+ * The address humans reach the team on. Shown in the footer, the FAQ, the sponsor
+ * portal, and used as the fallback `replyTo` on outbound mail.
+ *
+ * NOT the address mail is sent FROM — that is `RESEND_FROM_EMAIL`, which must stay on a
+ * domain verified in Resend (Resend cannot send as a gmail.com address). The two are
+ * deliberately different: we send from a verified domain and receive on a real inbox.
+ *
+ * A Gmail address is used on purpose. The previous value, support@exodiusftc.com, had no
+ * MX record behind it — mail sent there bounced, which meant a sponsor replying to a
+ * pitch reached nobody.
+ */
+export const SUPPORT_EMAIL = 'exodiusftc@gmail.com'
 
 // ─── Portfolio mock (product showcase) ───────────────────────────────────────
 export const PORTFOLIO_MOCK = {

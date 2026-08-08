@@ -1,6 +1,7 @@
 'use client'
 
 import { isAwaitingSponsor } from '@/lib/submission-status'
+import { SUPPORT_EMAIL } from '@/lib/site-config'
 
 import Link from 'next/link'
 import {
@@ -69,7 +70,7 @@ export function SponsorDashboardShell({
         title="No sponsor linked"
         description="Your account is registered as a sponsor, but no company record was found. Please contact an administrator."
         action={
-          <a href="mailto:support@exodiusftc.com" className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}>
+          <a href={`mailto:${SUPPORT_EMAIL}`} className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}>
             Contact support
           </a>
         }
