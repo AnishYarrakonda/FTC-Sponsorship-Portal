@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" })
 export const metadata: Metadata = {
   // `template` so each route contributes its own title instead of all 34 sharing one.
   title: {
-    default: "FTC Matchmaker",
-    template: "%s · FTC Matchmaker",
+    default: "FTC Pitfund",
+    template: "%s · FTC Pitfund",
   },
   description: "The moderated sponsorship pipeline for FIRST Tech Challenge teams. Build a verified portfolio, send admin-reviewed pitches, and connect with sponsors.",
 }

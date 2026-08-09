@@ -254,7 +254,7 @@ export function SignupWizard() {
     <section className="fixed inset-0 overflow-y-auto bg-[radial-gradient(ellipse_at_top,hsl(var(--accent)/0.3),transparent_60%)] bg-background text-foreground">
       <header className="fixed left-0 right-0 top-0 flex items-center justify-between px-6 py-4 border-b border-border/80 z-20 bg-background/50 backdrop-blur">
         <Link href="/" className="text-xs tracking-[0.14em] uppercase text-muted-foreground hover:text-foreground transition-colors">
-          MATCHMAKER
+          PITFUND
         </Link>
         <Link href="/login">
           <Button variant="outline" className="h-9 rounded-lg border-border bg-card text-foreground hover:bg-accent">

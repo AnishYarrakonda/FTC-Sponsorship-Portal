@@ -44,7 +44,7 @@ export function FeatureGrid() {
       <FadeUp>
         <SectionHeading 
           title="Built for coaches who don't have time to send dozens of cold emails."
-          description="FTC Matchmaker replaces the spray-and-pray sponsorship workflow with a single pipeline that your admins, your grantors, and your team lead can all trust."
+          description="FTC Pitfund replaces the spray-and-pray sponsorship workflow with a single pipeline that your admins, your grantors, and your team lead can all trust."
         />
       </FadeUp>
 

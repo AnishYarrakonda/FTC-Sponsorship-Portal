@@ -22,12 +22,12 @@ export default function CoachSignupWelcomeEmail({
   return (
     <Html>
       <Head />
-      <Preview>Welcome to the FTC Matchmaker!</Preview>
+      <Preview>Welcome to FTC Pitfund!</Preview>
       <Body style={main}>
         <Container style={container}>
           <Heading style={h1}>Welcome, {coachName}!</Heading>
           <Text style={text}>
-            Thank you for creating an account on the FTC Matchmaker. We&apos;re excited to help you secure funding for your team.
+            Thank you for creating an account on FTC Pitfund. We&apos;re excited to help you secure funding for your team.
           </Text>
           
           <Section style={section}>
@@ -49,10 +49,10 @@ export default function CoachSignupWelcomeEmail({
             In the meantime, you can explore the portal and get familiar with the dashboard.
           </Text>
           
-          <Text style={text}>— The FTC Matchmaker team</Text>
+          <Text style={text}>— The FTC Pitfund team</Text>
           <Hr style={hr} />
           <Text style={footer}>
-            FTC Matchmaker · Supporting the next generation of engineers. You received
+            FTC Pitfund · Supporting the next generation of engineers. You received
             this email because you created a coach account on the portal.
           </Text>
         </Container>

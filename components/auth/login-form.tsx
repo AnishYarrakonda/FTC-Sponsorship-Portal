@@ -417,7 +417,7 @@ export function LoginForm() {
       {/* Header */}
       <header className="fixed left-0 right-0 top-0 flex items-center justify-between px-6 py-4 border-b border-border/80 z-20 bg-background/50 backdrop-blur">
         <Link href="/" className="text-xs tracking-[0.14em] uppercase text-muted-foreground hover:text-foreground transition-colors">
-          MATCHMAKER
+          PITFUND
         </Link>
         <Link href="/signup">
           <Button

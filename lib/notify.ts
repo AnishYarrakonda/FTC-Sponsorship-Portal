@@ -328,7 +328,7 @@ export async function sendCoachDenialEmail(
   return sendViaResend('sendCoachDenialEmail', {
     from: env.RESEND_FROM_EMAIL,
     to,
-    subject: 'Application Update Required — FTC Matchmaker',
+    subject: 'Application Update Required — FTC Pitfund',
     react: CoachDenialEmail({ coachName, reason }),
   })
 }
@@ -353,7 +353,7 @@ export async function sendCoachVerificationEmail(
     return await sendViaResend('sendCoachVerificationEmail', {
       from: env.RESEND_FROM_EMAIL,
       to: profile.email,
-      subject: 'Welcome to the FTC Matchmaker!',
+      subject: 'Welcome to FTC Pitfund!',
       react: CoachVerificationEmail({ coachName }),
     })
   } catch (err) {
@@ -398,7 +398,7 @@ export async function sendCoachSignupWelcomeEmail(
   return sendViaResend('sendCoachSignupWelcomeEmail', {
     from: env.RESEND_FROM_EMAIL,
     to: coachEmail,
-    subject: 'Welcome to the FTC Matchmaker!',
+    subject: 'Welcome to FTC Pitfund!',
     react: CoachSignupWelcomeEmail({ coachName }),
   })
 }
@@ -432,7 +432,7 @@ export async function sendWelcomeInAppNotification(
   return createInAppNotification({
     recipientId,
     type: 'general',
-    title: 'Welcome to the FTC Matchmaker! 🎉',
+    title: 'Welcome to FTC Pitfund! 🎉',
     body: `Hi ${name},\n\nWe're thrilled to have you here. Your account is currently pending verification—our team reviews photo IDs within 24-48 hours.\n\nIn the meantime, you can start building your team portfolio to get a head start on your funding requests!`,
     skipEmail: true, // coach already receives sendCoachSignupWelcomeEmail
   })

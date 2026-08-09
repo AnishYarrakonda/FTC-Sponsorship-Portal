@@ -314,7 +314,7 @@ export default async function SponsorViewPage({ params }: Props) {
         )}
 
         <p className="text-center text-xs text-muted-foreground pb-8">
-          Verified by FTC Matchmaker
+          Verified by FTC Pitfund
         </p>
       </div>
     </div>

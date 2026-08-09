@@ -1,13 +1,16 @@
 import type { Metadata } from 'next'
+import { BackButton } from '@/components/ui/back-button'
 
 export const metadata: Metadata = {
   title: 'Terms of Service',
-  description: 'The terms governing use of the FTC Matchmaker sponsorship platform.',
+  description: 'The terms governing use of the FTC Pitfund sponsorship platform.',
 }
 
 export default function TermsOfServicePage() {
   return (
     <div className="container mx-auto max-w-3xl py-12 space-y-8">
+      <BackButton />
+
       <div>
         <h1 className="text-3xl font-bold">Terms of Service</h1>
         <p className="text-muted-foreground mt-2" suppressHydrationWarning>Last updated: {new Date().toLocaleDateString()}</p>
@@ -16,7 +19,7 @@ export default function TermsOfServicePage() {
       <div className="prose prose-invert">
         <h2>1. Acceptance of Terms</h2>
         <p>
-          By creating an account on the FTC Matchmaker, you agree to comply with these terms. This platform connects FIRST Tech Challenge (FTC) robotics teams with potential corporate sponsors.
+          By creating an account on FTC Pitfund, you agree to comply with these terms. This platform connects FIRST Tech Challenge (FTC) robotics teams with potential corporate sponsors.
         </p>
 
         <h2>2. Eligibility</h2>

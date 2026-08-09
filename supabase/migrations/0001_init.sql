@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Migration: 0001_init.sql
--- Project:   FTC Sponsorship Portal ("Project Matchmaker")
+-- Project:   FTC Sponsorship Portal ("FTC Pitfund")
 -- Purpose:   Initial schema — tables, enums, indexes, triggers, RLS policies,
 --            helper functions, and analytics views.
 -- Idempotent: enums are dropped and recreated; tables use IF NOT EXISTS.

@@ -29,7 +29,7 @@ export function PortalBrand() {
       className="flex h-14 shrink-0 items-center gap-2.5 border-b border-border px-4 transition-colors hover:bg-accent/60"
     >
       <PortalBrandMark />
-      <span className="text-sm font-semibold tracking-tight text-foreground">FTC Matchmaker</span>
+      <span className="text-sm font-semibold tracking-tight text-foreground">FTC Pitfund</span>
     </Link>
   )
 }

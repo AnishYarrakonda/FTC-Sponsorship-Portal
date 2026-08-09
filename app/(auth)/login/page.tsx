@@ -4,7 +4,7 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: 'Sign in',
-  description: 'Sign in to your FTC Matchmaker coach, sponsor or admin account.',
+  description: 'Sign in to your FTC Pitfund coach, sponsor or admin account.',
 }
 
 

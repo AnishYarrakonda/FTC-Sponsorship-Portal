@@ -254,7 +254,7 @@ export function SponsorSignupWizard() {
       <canvas ref={canvasRef} className="fixed inset-0 w-full h-full pointer-events-none opacity-40" />
 
       <header className="fixed left-0 right-0 top-0 flex items-center justify-between px-6 py-4 border-b border-border/80 z-20 bg-background/50 backdrop-blur">
-        <Link href="/" className="text-xs tracking-[0.14em] uppercase text-muted-foreground hover:text-foreground transition-colors">MATCHMAKER</Link>
+        <Link href="/" className="text-xs tracking-[0.14em] uppercase text-muted-foreground hover:text-foreground transition-colors">PITFUND</Link>
         <Link href="/login">
           <Button variant="outline" className="h-9 rounded-lg border-border bg-card text-foreground hover:bg-accent">
             <span className="mr-2">Login</span><ArrowRight className="h-4 w-4" />

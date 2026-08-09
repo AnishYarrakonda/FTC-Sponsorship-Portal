@@ -54,7 +54,7 @@ function ProductHeroMock() {
           <div className="ml-4 flex-1">
             <div className="h-6 w-1/3 max-w-[200px] rounded-md bg-muted/50 flex items-center px-2">
                <Search className="w-3 h-3 text-muted-foreground mr-2" aria-hidden="true" />
-               <span className="text-xs text-muted-foreground">app.ftcmatchmaker.com</span>
+               <span className="text-xs text-muted-foreground">app.ftcpitfund.com</span>
             </div>
           </div>
         </div>

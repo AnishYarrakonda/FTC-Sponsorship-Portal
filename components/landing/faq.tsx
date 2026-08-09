@@ -9,7 +9,7 @@ import { SUPPORT_EMAIL } from '@/lib/site-config'
 
 const items = [
   {
-    q: 'Is FTC Matchmaker COPPA compliant?',
+    q: 'Is FTC Pitfund COPPA compliant?',
     a: 'Yes — structurally, not just on paper. Only verified adult coaches can register. Student PII never enters the database, and row-level security enforces that guarantee even against a misbehaving admin.',
   },
   {
@@ -22,14 +22,14 @@ const items = [
   },
   {
     q: 'Does it cost anything?',
-    a: 'FTC Matchmaker is free for teams during the 2026 season. Sponsors pay nothing to be listed. We do not take a cut of funding.',
+    a: 'FTC Pitfund is free for teams during the 2026 season. Sponsors pay nothing to be listed. We do not take a cut of funding.',
   },
   {
     q: 'What happens to my team data if we leave?',
     a: 'Coaches can export their full portfolio as JSON + PDF and request deletion at any time. Deletion is hard — not soft — and is logged in an immutable audit trail.',
   },
   {
-    q: 'Can my team use FTC Matchmaker without my coach onboard?',
+    q: 'Can my team use FTC Pitfund without my coach onboard?',
     a: 'No. The platform requires a verified adult coach to originate every submission. This is a hard constraint, not a policy — student-only accounts cannot be created.',
   },
 ]

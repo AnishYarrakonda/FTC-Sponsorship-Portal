@@ -53,7 +53,7 @@ export function TopNav() {
             <path d="M9 1L16.5 5.5V12.5L9 17L1.5 12.5V5.5L9 1Z" stroke="currentColor" strokeWidth="1.5" />
             <path d="M9 4L14 7V11.5L9 14.5L4 11.5V7L9 4Z" stroke="currentColor" strokeWidth="1" opacity="0.5" />
           </svg>
-          <span className="text-sm font-semibold tracking-tight text-foreground">FTC Matchmaker</span>
+          <span className="text-sm font-semibold tracking-tight text-foreground">FTC Pitfund</span>
         </Link>
 
         <nav aria-label="Main" className="absolute left-1/2 -translate-x-1/2 hidden md:flex items-center gap-1.5 rounded-full border border-border/80 bg-background/40 p-1.5 backdrop-blur-md shadow-sm">

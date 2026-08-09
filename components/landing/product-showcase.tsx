@@ -53,7 +53,7 @@ export function PortfolioMock() {
     <div className="relative rounded-2xl border border-border bg-background/80 p-3 shadow-xl shadow-foreground/5 backdrop-blur">
       <div className="flex items-center gap-1.5 px-2 py-1.5">
         <WindowDots />
-        <span className="ml-3 font-mono text-xs text-muted-foreground">ftcmatchmaker.app/portfolio</span>
+        <span className="ml-3 font-mono text-xs text-muted-foreground">app.ftcpitfund.com/portfolio</span>
       </div>
       <div className="rounded-lg border border-border bg-card p-5 space-y-4">
         <div className="flex items-center justify-between">
@@ -95,7 +95,7 @@ export function ModerationMock() {
     <div className="relative rounded-2xl border border-border bg-background/80 p-3 shadow-xl shadow-foreground/5 backdrop-blur">
       <div className="flex items-center justify-between px-2 py-1.5">
         <WindowDots />
-        <span className="font-mono text-xs text-muted-foreground">ftcmatchmaker.app/admin/review</span>
+        <span className="font-mono text-xs text-muted-foreground">app.ftcpitfund.com/admin/review</span>
       </div>
       <div className="rounded-lg border border-border bg-card">
         {/* submission header */}

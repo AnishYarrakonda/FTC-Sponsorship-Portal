@@ -10,7 +10,7 @@ const steps = [
   { icon: UserCheck, label: '01', title: 'Apply & verify', body: 'Adult coaches upload credentials. Admin verifies. Student data never enters the system.' },
   { icon: Wrench, label: '02', title: 'Build your base', body: 'One canonical team portfolio — story, budget, achievements, links. Reused everywhere.' },
   { icon: Send, label: '03', title: 'Fork per sponsor', body: 'Customize the ask, local angle, and amount without rewriting your team story.' },
-  { icon: CheckCircle2, label: '04', title: 'Dispatch, reviewed', body: 'Admin approves. FTC Matchmaker sends. You get a trackable URL back within hours.' },
+  { icon: CheckCircle2, label: '04', title: 'Dispatch, reviewed', body: 'Admin approves. FTC Pitfund sends. You get a trackable URL back within hours.' },
 ]
 
 export function HowItWorks() {

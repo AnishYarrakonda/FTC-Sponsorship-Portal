@@ -50,10 +50,10 @@ export default function CredentialUploadAlert({
               Review in admin console
             </Button>
           </Section>
-          <Text style={text}>— The FTC Matchmaker team</Text>
+          <Text style={text}>— The FTC Pitfund team</Text>
           <Hr style={hr} />
           <Text style={footer}>
-            FTC Matchmaker · You received this automated alert because you are an
+            FTC Pitfund · You received this automated alert because you are an
             administrator of the portal.
           </Text>
         </Container>

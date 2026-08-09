@@ -1,4 +1,4 @@
-# FTC Matchmaker — The Common App for FTC Sponsorships
+# FTC Pitfund — The Common App for FTC Sponsorships
 
 A "Dynamic Portfolio" and Verified Grant Portal connecting FIRST Tech Challenge (FTC) robotics teams with verified corporate sponsors. Teams maintain a professional "Portfolio" (Global Team Data) and generate Customized Submissions with unique, trackable URLs for sponsors. Admins vet the quality of the 'Custom Pitch' fields before dispatching links to sponsors.
 
