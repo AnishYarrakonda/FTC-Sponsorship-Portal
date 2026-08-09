@@ -6,14 +6,10 @@
  * Usage:
  *   BASE_URL=https://ftc-sponsorship-portal.vercel.app node scripts/smoke-prod.mjs
  *
- * Optional env:
- *   SEED_TEAM_SLUG — a known public team slug to check /teams/<slug> (skipped if unset)
- *
  * Exits non-zero if any check fails.
  */
 
 const BASE_URL = (process.env.BASE_URL ?? '').replace(/\/+$/, '')
-const SEED_TEAM_SLUG = process.env.SEED_TEAM_SLUG ?? ''
 
 if (!BASE_URL) {
   console.error('BASE_URL env var is required, e.g. BASE_URL=https://ftc-sponsorship-portal.vercel.app')
@@ -42,11 +38,14 @@ async function probe(path, { redirect = 'follow' } = {}) {
 /** @type {{name: string, run: () => Promise<string|null>}[]} checks return null on pass, reason string on fail */
 const checks = [
   {
-    name: 'GET / — 200 + marketing copy',
+    name: 'GET / — 200 + marketing copy + current branding',
     async run() {
       const { res, text } = await probe('/')
       if (res.status !== 200) return `status ${res.status}`
       if (!/FIRST Tech Challenge/i.test(text)) return 'missing expected marketing copy ("FIRST Tech Challenge")'
+      if (!/Pitfund/i.test(text)) return 'landing page does not mention "Pitfund" — rebrand did not ship'
+      // A half-applied rename is worse than none: it reads as an abandoned product.
+      if (/Matchmaker/i.test(text)) return 'landing page still contains the old "Matchmaker" name'
       return null
     },
   },
@@ -80,19 +79,49 @@ const checks = [
     },
   },
   {
-    name: `GET /teams/<seed-slug> — 200${SEED_TEAM_SLUG ? ` (${SEED_TEAM_SLUG})` : ''}`,
+    name: 'GET /legal/privacy — 200 + retention policy published',
     async run() {
-      if (!SEED_TEAM_SLUG) return 'SKIP'
-      const { res } = await probe(`/teams/${encodeURIComponent(SEED_TEAM_SLUG)}`)
+      const { res, text } = await probe('/legal/privacy')
+      if (res.status !== 200) return `status ${res.status}`
+      // The retention guarantee is a commitment to users, not decoration: if this
+      // section ever silently disappears the policy no longer matches what the code does.
+      if (!/Data Retention/i.test(text)) return 'missing the "Data Retention" section'
+      return null
+    },
+  },
+  {
+    name: 'GET /legal/terms — 200',
+    async run() {
+      const { res } = await probe('/legal/terms')
       return res.status === 200 ? null : `status ${res.status}`
     },
   },
   {
-    // Note: only PUBLIC route prefixes reach Next's 404 — clerkMiddleware
-    // redirects unknown non-public paths to /login (asserted separately below).
-    name: 'GET unknown public route (/teams/<garbage>) — 404',
+    name: 'GET /sponsors/apply — 200 (public sponsor intake)',
     async run() {
-      const { res } = await probe('/teams/definitely-not-a-real-team-smoke-check')
+      const { res } = await probe('/sponsors/apply')
+      return res.status === 200 ? null : `status ${res.status}`
+    },
+  },
+  {
+    // P0-8 removed '/teams(.*)' from the public matcher and deleted the public
+    // portfolio page — sponsor reach is the token-gated /sponsor-view/[token] route.
+    // A team slug must NOT be publicly readable any more.
+    name: 'GET /teams/<slug> — no longer public (never 200)',
+    async run() {
+      const { res } = await probe('/teams/definitely-not-a-real-team-smoke-check', {
+        redirect: 'manual',
+      })
+      if (res.status === 200) return 'a /teams/* page rendered publicly — P0-8 regression'
+      return res.status < 500 ? null : `status ${res.status}`
+    },
+  },
+  {
+    // Only PUBLIC route prefixes reach Next's 404 — clerkMiddleware redirects
+    // unknown non-public paths to /login (asserted separately below).
+    name: 'GET unknown public route (/legal/<garbage>) — 404',
+    async run() {
+      const { res } = await probe('/legal/definitely-not-a-real-page-smoke-check')
       return res.status === 404 ? null : `status ${res.status}`
     },
   },
