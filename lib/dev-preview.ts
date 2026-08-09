@@ -398,6 +398,8 @@ export function createMockSupabaseClient(): SupabaseClient<Database> {
         upload: async () => ({ data: { path: 'dev-mock' }, error: null }),
         remove: async () => ({ data: [], error: null }),
         getPublicUrl: () => ({ data: { publicUrl: '#dev-mock' } }),
+        // See dev-bypass: the retention purge lists a prefix before deleting it.
+        list: async () => ({ data: [], error: null }),
       }),
     },
   } as unknown as SupabaseClient<Database>

@@ -19,10 +19,17 @@ export default function AnalyticsCharts() {
     const fetchData = async () => {
       const supabase = createClient()
 
+      // Only the four columns the charts actually read. This was `select('*')`, which
+      // shipped every submission's full row to the BROWSER — including
+      // custom_pitch_alignment / specific_needs_statement / local_connection_notes,
+      // the three largest text columns in the table and ones no chart plots. On an
+      // admin page that is pure egress: Supabase bandwidth out, Vercel bandwidth in.
       const [{ data: subs, error: subsError }, { data: sponsors, error: sponsorsError }] =
         await Promise.all([
-          supabase.from('submissions').select('*'),
-          supabase.from('sponsors').select('*'),
+          supabase
+            .from('submissions')
+            .select('created_at, status, reviewed_at, requested_amount_cents'),
+          supabase.from('sponsors').select('company_name, funding_cap_cents, funding_used_cents'),
         ])
 
       // This used to be a bare `if (!subs || !sponsors) return`, which skipped the
@@ -81,7 +88,11 @@ export default function AnalyticsCharts() {
       // Ask size distribution
       const askBuckets: Record<string, number> = {}
       subs.forEach((s: any) => {
-        const ask = (s.financial_ask_cents || 0) / 100
+        // Was `s.financial_ask_cents` — a column that does not exist on `submissions`
+        // (it is `requested_amount_cents`). The `s: any` cast meant TypeScript never
+        // objected, so the expression was always 0 and this chart reported EVERY
+        // submission as "<$500" regardless of the real ask.
+        const ask = (s.requested_amount_cents || 0) / 100
         const bucket = ask < 500 ? '<$500' : ask < 1000 ? '$500–$1k' : ask < 3000 ? '$1k–$3k' : ask < 5000 ? '$3k–$5k' : '$5k+'
         askBuckets[bucket] = (askBuckets[bucket] || 0) + 1
       })

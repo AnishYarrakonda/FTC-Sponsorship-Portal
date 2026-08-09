@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createInAppNotification } from '@/lib/notify'
+import { sweepUnpurgedCredentials } from '@/lib/credentials-retention'
 import crypto from 'crypto'
 import { env } from '@/lib/env'
 import * as Sentry from '@sentry/nextjs'
@@ -68,6 +69,17 @@ export async function GET(req: Request) {
       Sentry.captureException(cleanupError)
     }
 
+    // Retention catch-up: photo IDs belonging to already-verified coaches. Steady
+    // state is zero rows (verifyCoach purges inline) — this exists to sweep up
+    // coaches verified before the rule existed, plus any purge whose storage call
+    // failed. Backed by a partial index, so the no-op case costs one empty probe.
+    const retention = await sweepUnpurgedCredentials(supabase)
+    if (retention.purged > 0 || retention.failed > 0) {
+      console.log(
+        `[cron] credential retention: purged ${retention.purged}, failed ${retention.failed}`
+      )
+    }
+
     // Tell the humans. Coach first — they are the one waiting on an answer.
     for (const row of expiring ?? []) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -102,7 +114,12 @@ export async function GET(req: Request) {
       action: 'cron_expire_submissions',
       entity_type: 'submissions',
       entity_id: null,
-      metadata: { expired: expiredCount, ids: (expiring ?? []).map((r) => r.id) },
+      metadata: {
+        expired: expiredCount,
+        ids: (expiring ?? []).map((r) => r.id),
+        credentials_purged: retention.purged,
+        credentials_purge_failed: retention.failed,
+      },
     })
     if (auditError) {
       console.error('[cron] failed to write audit row', auditError)

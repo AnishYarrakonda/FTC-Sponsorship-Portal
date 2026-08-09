@@ -63,6 +63,9 @@ export async function uploadCredentials(
       // A fresh upload supersedes any prior denial — back into the queue.
       denial_reason: null,
       denied_at: null,
+      // ...and supersedes the retention marker from the previous review, which now
+      // describes a document that is two uploads out of date.
+      coach_credentials_purged_at: null,
     })
     .eq('id', user.id)
 

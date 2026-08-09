@@ -18,6 +18,7 @@ export type CoachData = {
   created_at: string
   coach_verified: boolean
   coach_credentials_url: string | null
+  coach_credentials_purged_at: string | null
   date_of_birth: string | null
   phone_number: string | null
   address_line1: string | null
@@ -123,7 +124,22 @@ export function CoachVerificationCard({ coach }: { coach: CoachData }) {
             </span>
           ) : (
             <span className="inline-flex items-center rounded-full bg-amber-500/10 border border-amber-500/20 text-status-warning text-[10px] font-medium px-2 py-0.5">
-              {coach.coach_credentials_url ? 'Credentials uploaded' : 'No credentials'}
+              {coach.coach_credentials_url
+                ? 'Credentials uploaded'
+                // A purged ID is NOT the same as one that was never sent. Without this
+                // branch a coach whose document we deliberately destroyed reads as
+                // "No credentials", i.e. as if they had ignored the signup step.
+                : coach.coach_credentials_purged_at
+                  ? 'ID deleted — awaiting re-upload'
+                  : 'No credentials'}
+            </span>
+          )}
+          {coach.coach_verified && coach.coach_credentials_purged_at && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-muted border border-border text-muted-foreground text-[10px] font-medium px-2 py-0.5"
+              title={`Photo ID reviewed and permanently deleted on ${new Date(coach.coach_credentials_purged_at).toLocaleDateString()}. We do not retain identity documents after verification.`}
+            >
+              <ShieldCheck className="h-3 w-3" /> ID deleted after review
             </span>
           )}
           {!coach.coach_verified && hasPendingData && (
@@ -336,6 +352,9 @@ export function CoachVerificationCard({ coach }: { coach: CoachData }) {
               <DialogFooter className="p-4 border-t bg-muted/80 flex items-center justify-between sm:justify-between">
                 <div className="text-sm text-muted-foreground hidden sm:block">
                   Review the ID against the provided details to ensure COPPA compliance.
+                  <span className="block text-xs mt-0.5">
+                    Either decision permanently deletes this document — check it now, you cannot reopen it.
+                  </span>
                 </div>
                 <div className="flex gap-3">
                   <Dialog open={isDenyModalOpen} onOpenChange={setIsDenyModalOpen}>
@@ -397,7 +416,14 @@ export function CoachVerificationCard({ coach }: { coach: CoachData }) {
             </DialogContent>
           </Dialog>
         ) : coach.coach_verified ? (
-           <Button size="sm" variant="outline" onClick={() => handleVerify(false)} disabled={isPending} className="text-muted-foreground hover:text-foreground">
+           <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleVerify(false)}
+            disabled={isPending}
+            title="Removes verified status and notifies the coach. Their photo ID was deleted after the original review, so they will have to upload a new one to be re-verified."
+            className="text-muted-foreground hover:text-foreground"
+          >
             {isPending ? 'Saving…' : 'Revoke Verification'}
           </Button>
         ) : (

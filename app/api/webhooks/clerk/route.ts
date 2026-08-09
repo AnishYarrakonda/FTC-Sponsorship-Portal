@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { verifyWebhook } from '@clerk/nextjs/webhooks'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { purgeUserStorage } from '@/lib/credentials-retention'
 import { env } from '@/lib/env'
 import * as Sentry from '@sentry/nextjs'
 
@@ -33,6 +34,23 @@ export async function POST(req: NextRequest) {
       case 'user.deleted': {
         const clerkUserId = evt.data.id
         if (!clerkUserId) break
+
+        // Storage BEFORE the row. Deleting the profile first orphans every file the
+        // user uploaded — the objects are keyed by Clerk id, but nothing is left to
+        // tell us the id ever existed, so "delete my account" quietly kept their
+        // photo ID on disk forever. Failing here returns 500 and Svix redelivers,
+        // which is safe: prefix deletes are idempotent.
+        const { removed, failedBuckets } = await purgeUserStorage(supabase, clerkUserId)
+        if (failedBuckets.length > 0) {
+          return NextResponse.json(
+            { error: `storage purge failed: ${failedBuckets.join(', ')}` },
+            { status: 500 }
+          )
+        }
+        if (removed > 0) {
+          console.log(`[clerk-webhook] purged ${removed} stored file(s) for ${clerkUserId}`)
+        }
+
         const { error } = await supabase
           .from('profiles')
           .delete()

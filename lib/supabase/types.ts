@@ -166,6 +166,7 @@ export type Database = {
           city: string | null
           clerk_user_id: string | null
           coach_credentials_url: string | null
+          coach_credentials_purged_at: string | null
           coach_verified: boolean
           coppa_acknowledged: boolean
           created_at: string
@@ -191,6 +192,7 @@ export type Database = {
           city?: string | null
           clerk_user_id?: string | null
           coach_credentials_url?: string | null
+          coach_credentials_purged_at?: string | null
           coach_verified?: boolean
           coppa_acknowledged?: boolean
           created_at?: string
@@ -216,6 +218,7 @@ export type Database = {
           city?: string | null
           clerk_user_id?: string | null
           coach_credentials_url?: string | null
+          coach_credentials_purged_at?: string | null
           coach_verified?: boolean
           coppa_acknowledged?: boolean
           created_at?: string
@@ -950,6 +953,10 @@ export type Database = {
       check_throttle: {
         Args: { p_key: string; p_limit: number; p_window: string }
         Returns: boolean
+      }
+      distinct_audit_actions: {
+        Args: Record<PropertyKey, never>
+        Returns: { action: string }[]
       }
       // Hand-added for migration 0070_remint_submission_access_token.sql. Regenerate
       // with `supabase gen types` once the migrations are applied.

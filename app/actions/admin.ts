@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import * as Sentry from '@sentry/nextjs'
 import { createInAppNotification, sendCoachVerificationEmail, sendCoachDenialEmail } from '@/lib/notify'
 import { requireAdmin } from '@/lib/actions-utils'
+import { purgeCoachCredentials } from '@/lib/credentials-retention'
 import { mapDbError } from '@/lib/errors'
 import { deriveTeamSlug, uniquifyTeamSlug } from '@/lib/team-slug'
 import type { Database } from '@/lib/supabase/types'
@@ -34,10 +35,11 @@ export async function verifyCoach(coachId: string, verified: boolean) {
     return { error: e.message }
   }
 
-  // Fetch coach profile to get pending data and name
+  // Fetch coach profile to get pending data, name, and the credential path we are
+  // about to destroy (see the purge below — the path is unrecoverable once cleared).
   const { data: coachProfile } = await adminClient
     .from('profiles')
-    .select('full_name, pending_team_data')
+    .select('full_name, pending_team_data, coach_credentials_url')
     .eq('id', coachId)
     .single()
 
@@ -137,6 +139,41 @@ export async function verifyCoach(coachId: string, verified: boolean) {
       }),
       sendCoachVerificationEmail(coachId, coachName),
     ])
+
+    // The photo ID has now served its only purpose. Destroy it.
+    //
+    // Runs LAST on purpose: the coach is already verified and notified, so a storage
+    // failure here costs nothing and tonight's sweep retries it. Running it earlier
+    // would risk deleting the evidence for a verification that then failed to land.
+    const purge = await purgeCoachCredentials(
+      adminClient,
+      coachId,
+      coachProfile?.coach_credentials_url
+    )
+
+    if (purge.purged && coachProfile?.coach_credentials_url) {
+      await adminClient.from('audit_log').insert({
+        actor_id: user.id,
+        action: 'purge_coach_credentials',
+        entity_type: 'profiles',
+        entity_id: coachId,
+        metadata: { reason: 'verified', file_path: coachProfile.coach_credentials_url },
+      })
+    }
+  } else {
+    // Revoking used to be silent. It now also means the coach must re-upload, because
+    // approval destroyed their ID — so a coach who was never told would sit on a
+    // dashboard that had quietly stopped letting them submit, with no way to guess why.
+    await createInAppNotification({
+      recipientId: coachId,
+      type: 'general',
+      title: 'Your coach verification was removed',
+      body:
+        'An administrator has removed the verified status from your account, so you cannot ' +
+        'submit new pitches for now. Your team portfolio and existing pitches are untouched. ' +
+        'To get verified again, upload your photo ID once more from your account page — ' +
+        'your previous one was deleted after your original review.',
+    })
   }
 
   revalidatePath('/coaches')
@@ -186,6 +223,11 @@ export async function denyCoach(coachId: string, reason: string) {
     .update({
       coach_verified: false,
       coach_credentials_url: null,
+      // Stamped only when a document actually existed to destroy — otherwise this
+      // would claim a review happened for a coach who never uploaded anything.
+      ...(coachProfile.coach_credentials_url
+        ? { coach_credentials_purged_at: new Date().toISOString() }
+        : {}),
       pending_team_data: null,
       denial_reason: reason.trim(),
       denied_at: new Date().toISOString(),

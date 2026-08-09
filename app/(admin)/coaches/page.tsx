@@ -12,6 +12,7 @@ export default async function CoachesPage() {
     .from('profiles')
     .select(`
       id, full_name, email, created_at, coach_verified, coach_credentials_url,
+      coach_credentials_purged_at,
       date_of_birth, phone_number, address_line1, city, state, zip_code, referral_source,
       coppa_acknowledged, tos_accepted, denial_reason, denied_at, pending_team_data,
       teams:teams(team_name, ftc_team_number, city, state)
@@ -19,16 +20,24 @@ export default async function CoachesPage() {
     .eq('role', 'coach')
     .order('created_at', { ascending: false })
 
-  // Generate signed URLs for credentials (30-min expiry) server-side
+  // A coach is reviewable only while unverified WITH a document on file — that is the
+  // exact condition under which the card renders the ID viewer.
+  const needsReview = (c: { coach_verified: boolean; coach_credentials_url: string | null }) =>
+    !c.coach_verified && !!c.coach_credentials_url
+
+  // Signed URLs (30-min expiry) are minted ONLY for that queue. This used to run for
+  // every coach on the page — one storage round-trip each — to build URLs that were
+  // never placed in the DOM, because verified coaches have no viewer to put them in.
+  // At 200 coaches that was 200 wasted API calls on every single page load.
   const adminClient = createAdminClient()
 
   const coachesWithSignedUrls = await Promise.all(
     (coaches ?? []).map(async (coach) => {
       let signedUrl: string | null = null
-      if (coach.coach_credentials_url) {
+      if (needsReview(coach)) {
         const { data } = await adminClient.storage
           .from('coach-credentials')
-          .createSignedUrl(coach.coach_credentials_url, 1800)
+          .createSignedUrl(coach.coach_credentials_url!, 1800)
         signedUrl = data?.signedUrl ?? null
       }
       // teams is returned as an array from the join; grab first
@@ -38,7 +47,7 @@ export default async function CoachesPage() {
     })
   )
 
-  const pending  = coachesWithSignedUrls.filter(c => !c.coach_verified && c.coach_credentials_url)
+  const pending  = coachesWithSignedUrls.filter(needsReview)
   const verified = coachesWithSignedUrls.filter(c =>  c.coach_verified)
   const waiting  = coachesWithSignedUrls.filter(c => !c.coach_verified && !c.coach_credentials_url)
 

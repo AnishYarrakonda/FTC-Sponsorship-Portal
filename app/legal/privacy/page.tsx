@@ -1,13 +1,16 @@
 import type { Metadata } from 'next'
+import { BackButton } from '@/components/ui/back-button'
 
 export const metadata: Metadata = {
   title: 'Privacy Policy',
-  description: 'How FTC Matchmaker collects, uses and safeguards your information.',
+  description: 'How FTC Pitfund collects, uses and safeguards your information.',
 }
 
 export default function PrivacyPolicyPage() {
   return (
     <div className="container mx-auto max-w-3xl py-12 space-y-8">
+      <BackButton />
+
       <div>
         <h1 className="text-3xl font-bold">Privacy Policy</h1>
         <p className="text-muted-foreground mt-2" suppressHydrationWarning>Last updated: {new Date().toLocaleDateString()}</p>
@@ -16,7 +19,7 @@ export default function PrivacyPolicyPage() {
       <div className="prose prose-invert">
         <h2>1. Introduction</h2>
         <p>
-          The FTC Matchmaker ("we," "our," or "us") is committed to protecting the privacy of its users. This policy outlines how we collect, use, and safeguard information.
+          FTC Pitfund ("we," "our," or "us") is committed to protecting the privacy of its users. This policy outlines how we collect, use, and safeguard information.
         </p>
 
         <h2>2. COPPA Compliance & Student Data</h2>
@@ -38,7 +41,20 @@ export default function PrivacyPolicyPage() {
           Information is used solely to facilitate the matching of robotics teams with corporate sponsors. We do not sell data to third parties.
         </p>
 
-        <h2>5. Data Security</h2>
+        <h2>5. Data Retention</h2>
+        <p>
+          <strong>Identity documents are deleted as soon as they have been reviewed.</strong> A coach&apos;s photo ID
+          exists for one purpose — confirming that an adult is behind the account — and once an administrator
+          approves or denies that account, the file is permanently erased from our storage. We keep only a
+          timestamp recording that the check took place. We never retain a copy, and there is no way for us to
+          recover one.
+        </p>
+        <p>
+          Deleting your account removes your profile and every file you have uploaded, including your team logo
+          and any pitch images.
+        </p>
+
+        <h2>6. Data Security</h2>
         <p>
           We employ industry-standard security measures, including Row-Level Security (RLS) in our database, to ensure that team and sponsor data is isolated and protected.
         </p>

@@ -294,6 +294,9 @@ export function createMockSupabaseClient(): SupabaseClient<Database> {
         createSignedUrl: async () => ({ data: { signedUrl: '#dev-mock' }, error: null }),
         upload: async () => ({ data: { path: 'dev-mock' }, error: null }),
         remove: async () => ({ data: [], error: null }),
+        // Empty listing, not a missing member: the retention purge lists a prefix
+        // before deleting it, and an absent `list` would crash the preview.
+        list: async () => ({ data: [], error: null }),
       }),
     },
   } as unknown as SupabaseClient<Database>

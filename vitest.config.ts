@@ -14,6 +14,9 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '.'),
+      // See lib/__mocks__/server-only.ts — keeps `import 'server-only'` modules
+      // testable under jsdom without weakening the guard in the real build.
+      'server-only': path.resolve(__dirname, 'lib/__mocks__/server-only.ts'),
     },
   },
 })

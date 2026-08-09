@@ -269,6 +269,8 @@ export function createMockCoachClient(): SupabaseClient<Database> {
         getPublicUrl: () => ({ data: { publicUrl: '#dev-mock' } }),
         createSignedUrl: async () => ({ data: { signedUrl: '#dev-mock' }, error: null }),
         remove: async () => ({ data: [], error: null }),
+        // See dev-bypass: the retention purge lists a prefix before deleting it.
+        list: async () => ({ data: [], error: null }),
       }),
     },
   } as unknown as SupabaseClient<Database>

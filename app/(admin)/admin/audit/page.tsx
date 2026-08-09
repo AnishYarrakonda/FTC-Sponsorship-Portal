@@ -34,13 +34,16 @@ export default async function AuditLogPage({
 
   const { data: logs, count } = await query
 
-  // Distinct action values for the filter dropdown
-  const { data: actions } = await adminClient
-    .from('audit_log')
-    .select('action')
-    .order('action')
+  // Distinct action values for the filter dropdown.
+  //
+  // This used to `.select('action')` with no bound and de-duplicate in JavaScript —
+  // downloading one row per audit event, forever, to render ~15 <option> tags.
+  // audit_log is the fastest-growing table here (every admin action, plus a row per
+  // nightly cron run), so the transfer grew without limit while the output did not.
+  // 0075 moves the DISTINCT into Postgres, behind an index on `action`.
+  const { data: actions } = await adminClient.rpc('distinct_audit_actions')
 
-  const uniqueActions = [...new Set((actions ?? []).map((a) => a.action))].sort()
+  const uniqueActions = (actions ?? []).map((a) => a.action)
 
   return (
     <div className="flex flex-col gap-6">
