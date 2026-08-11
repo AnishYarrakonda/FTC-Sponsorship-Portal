@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { EmptyState } from '@/components/ui/empty-state'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { fulfillmentStatusLabel } from '@/lib/fulfillment-status'
 
 export default async function SponsorFundingPage() {
   const authed = await getAuthedProfile()
@@ -36,7 +37,7 @@ export default async function SponsorFundingPage() {
 
   const { data: transactions } = await supabase
     .from('transactions_ledger')
-    .select('*, teams(team_name)')
+    .select('*, teams(team_name), funding_fulfillments(id, status)')
     .eq('sponsor_id', profile.sponsor_id)
     .order('created_at', { ascending: false })
 
@@ -65,7 +66,7 @@ export default async function SponsorFundingPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-semibold">{transactions?.length || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">Confirmed disbursements</p>
+            <p className="text-xs text-muted-foreground mt-1">Commitments — payment tracked separately</p>
           </CardContent>
         </Card>
       </div>
@@ -73,11 +74,13 @@ export default async function SponsorFundingPage() {
       <Card>
         <CardHeader>
           <CardTitle>Transaction History</CardTitle>
-          <CardDescription>Funding disbursements to teams.</CardDescription>
+          <CardDescription>Sponsorships you have committed to. Payment status is tracked per commitment.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {transactions?.map((t: any) => (
+            {transactions?.map((t: any) => {
+              const status = t.funding_fulfillments?.[0]?.status || 'pledged'
+              return (
               <div key={t.id} className="flex items-center justify-between py-3 border-b border-border last:border-0">
                 <div className="flex items-center gap-3">
                   <div className="h-8 w-8 rounded bg-primary/10 flex items-center justify-center">
@@ -97,10 +100,10 @@ export default async function SponsorFundingPage() {
                 </div>
                 <div className="text-right">
                   <div className="font-bold text-emerald-500">+${(t.amount_cents / 100).toLocaleString()}</div>
-                  <div className="text-xs text-muted-foreground uppercase tracking-wider">Confirmed</div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-wider">{fulfillmentStatusLabel(status)}</div>
                 </div>
               </div>
-            ))}
+            )})}
             {(!transactions || transactions.length === 0) && (
               <EmptyState
                 className="border-0 bg-transparent"

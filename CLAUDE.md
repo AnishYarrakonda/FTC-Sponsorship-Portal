@@ -22,3 +22,16 @@ strict capacity caps. Next.js 16 (App Router) + Clerk (auth) + Supabase (Postgre
 - Project agents: `rls-auditor`, `action-reviewer`, `auth-flow-debugger`.
 - Auth is **Clerk** (`@clerk/nextjs`); Supabase trusts Clerk via native third-party auth, and RLS keys off the Clerk user id in `auth.jwt()->>'sub'` (not `auth.uid()`). See `.claude/rules/auth-supabase.md`.
 - Validate before pushing: `npm run typecheck && npm run lint`. Build uses Turbopack (`next build`); keep the `jsdom`/`cssstyle` `overrides` in `package.json`.
+- Deploys are **manual** — there is no Git integration on the Vercel project. Pushing to `main` does not deploy. Ship with `vercel deploy --prod --yes`.
+
+## Enterprise-readiness roadmap (`/prompts`)
+
+`prompts/` holds 18 sequential, self-contained implementation prompts closing the gaps that
+block corporate adoption (funding fulfillment, W-9s, e-sign, sponsor orgs, SSO, CSR reporting,
+accessibility). Start with `prompts/README.md`; `prompts/_CONTEXT.md` is the verified schema
+and architecture ground truth those prompts share, and `prompts/_RUNNER.md` has the launcher.
+
+Decisions already locked there — do not relitigate: the platform **never touches funds**
+(pledge-and-track only), e-sign is **in-house** (ESIGN/UETA), sponsor multi-user is built on
+**Clerk Organizations**, and FTC verification uses the **official FIRST API** with FTCScout
+as fallback.

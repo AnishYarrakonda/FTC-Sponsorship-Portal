@@ -22,6 +22,8 @@ export const LIMITS = {
   communityEndorsements: 2000,
   pastSponsorName: 120,
   pressLinkLabel: 120,
+  paymentReference: 64,
+  fulfillmentNote: 1000,
 } as const
 
 export type LimitKey = keyof typeof LIMITS
