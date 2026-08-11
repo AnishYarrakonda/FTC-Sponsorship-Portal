@@ -208,6 +208,13 @@ const DATA: Record<string, any[]> = {
     { id: 'sp1', company_name: 'Acme Robotics', utilization_pct: 25, funding_cap_cents: 5_000_000, funding_used_cents: 1_250_000, status: 'active' },
     { id: 'sp4', company_name: 'BrightForge Tools', utilization_pct: 80, funding_cap_cents: 1_500_000, funding_used_cents: 450_000, status: 'active' },
   ],
+
+  funding_fulfillments: [
+    { id: 'f-1', sponsor_id: 'sp1', team_id: 't1', amount_cents: 250_000, status: 'payment_sent', pledged_at: iso(10), payment_sent_at: iso(2), sponsors: { company_name: 'Acme Robotics' }, teams: { team_name: 'Exodius' } },
+    { id: 'f-2', sponsor_id: 'sp2', team_id: 't2', amount_cents: 150_000, status: 'pledged', pledged_at: iso(40), sponsors: { company_name: 'TechNova' }, teams: { team_name: 'Robo Knights' } },
+    { id: 'f-3', sponsor_id: 'sp4', team_id: 't3', amount_cents: 50_000, status: 'payment_sent', pledged_at: iso(100), payment_sent_at: iso(80), sponsors: { company_name: 'BrightForge Tools' }, teams: { team_name: 'Steel Comets' } },
+    { id: 'f-4', sponsor_id: 'sp4', team_id: 't4', amount_cents: 50_000, status: 'payment_received', pledged_at: iso(100), payment_sent_at: iso(80), payment_received_at: iso(70), sponsors: { company_name: 'BrightForge Tools' }, teams: { team_name: 'Circuit Breakers' } }
+  ],
 }
 
 // ── Minimal in-memory query builder mimicking the supabase-js fluent API ──────

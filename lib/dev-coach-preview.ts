@@ -169,6 +169,14 @@ const teamAchievements = [
   { id: 'ach-2', team_id: TEAM_ID, event_name: 'Silicon Valley Qualifier', award: 'Winning Alliance Captain', season: '2024-25', description: null, public: true, created_at: iso(220) },
 ]
 
+const payoutProfiles = [
+  { id: 'pop-1', team_id: TEAM_ID, stripe_account_id: 'acct_devmock', verified_at: iso(100), created_at: iso(100) }
+]
+
+const fulfillments = [
+  { id: 'f-1', sponsor_id: 'sp1', submission_id: 'preview-sub-1', team_id: TEAM_ID, amount_cents: 250_000, status: 'payment_sent', pledged_at: iso(10), payment_sent_at: iso(2), payment_method: 'check', sponsors: { company_name: 'Acme Robotics' } }
+]
+
 const DATA: Record<string, any[]> = {
   profiles: [mockCoachProfile as any],
   teams: [team],
@@ -177,6 +185,8 @@ const DATA: Record<string, any[]> = {
   submissions,
   notifications,
   team_achievements: teamAchievements,
+  team_payout_profiles: payoutProfiles,
+  funding_fulfillments: fulfillments,
   audit_log: [],
 }
 

@@ -53,6 +53,13 @@ export const STATUS_CONFIG: Record<string, { label: string; tone: Tone; icon: Lu
   inactive: { label: 'Inactive', tone: 'neutral', icon: PauseCircle },
   // Sponsor applications
   rejected: { label: 'Rejected', tone: 'rejected', icon: XCircle },
+  // Fulfillments
+  pledged: { label: 'Pledged', tone: 'pending', icon: Clock },
+  agreement_signed: { label: 'Agreement signed', tone: 'pending', icon: Clock },
+  payment_sent: { label: 'Payment sent', tone: 'warning', icon: Send },
+  payment_received: { label: 'Payment received', tone: 'success', icon: CheckCircle2 },
+  receipted: { label: 'Receipted', tone: 'success', icon: CheckCircle2 },
+  cancelled: { label: 'Cancelled', tone: 'neutral', icon: XCircle },
 }
 
 const FALLBACK = { label: '', tone: 'neutral' as Tone, icon: AlertCircle }

@@ -30,6 +30,7 @@ import { StatusBadge } from '@/components/ui/status-badge'
 import { EmptyState } from '@/components/ui/empty-state'
 import { PortfolioTab } from './portfolio-tab'
 import { InboxTab } from './inbox-tab'
+import { FundingTab } from './funding-tab'
 import { AccountSettings } from '@/components/account/account-settings'
 import { updateTeam } from '@/app/actions/team'
 import { toast } from 'sonner'
@@ -41,11 +42,14 @@ const TABS = [
   { id: 'pitches', label: 'Pitches' },
   { id: 'sponsors', label: 'Sponsors' },
   { id: 'inbox', label: 'Inbox' },
+  { id: 'funding', label: 'Funding' },
   { id: 'settings', label: 'Settings' },
 ]
 
 const TAB_ALIASES: Record<string, string> = {
   'find-sponsors': 'sponsors',
+  'finances': 'funding',
+  'money': 'funding',
   'submissions': 'pitches',
   'drafts': 'pitches',
   'ledger': 'portfolio',
@@ -60,6 +64,8 @@ export function DashboardShell({
   unreadCount,
   submissions,
   achievements,
+  fulfillments = [],
+  payoutProfiles = [],
 }: {
   team: Team
   profile: any
@@ -68,6 +74,8 @@ export function DashboardShell({
   unreadCount: number
   submissions: SubmissionSummary[]
   achievements: TeamAchievement[]
+  fulfillments?: any[]
+  payoutProfiles?: any[]
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -134,6 +142,7 @@ export function DashboardShell({
           {tab === 'pitches' && <SubmissionsTab submissions={submissions} onNewPitch={() => setTab('sponsors')} />}
           {tab === 'sponsors' && <FindSponsorsTab sponsors={sponsors} submissions={submissions} />}
           {tab === 'inbox' && <InboxTab notifications={notifications} switchTab={setTab} />}
+          {tab === 'funding' && <FundingTab teams={[team]} fulfillments={fulfillments} payoutProfiles={payoutProfiles} />}
           {tab === 'settings' && (
             <div className="max-w-[600px] mx-auto">
               <AccountSettings currentName={profile?.full_name} email={profile?.email} role={profile?.role} />

@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/expire-submissions",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/nudge-fulfillments",
+      "schedule": "0 14 * * *"
     }
   ]
 }

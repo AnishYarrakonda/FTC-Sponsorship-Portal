@@ -99,7 +99,7 @@ export async function confirmPaymentReceived(data: z.input<typeof confirmPayment
   try {
     ({ user, supabase, clerkUserId } = await requireVerifiedCoach())
   } catch (e: any) {
-    return { error: e.message }
+    return { error: e.message, code: e.code }
   }
   
   // Need admin client for operations across rows (like audit logs and fetching sponsor contacts)

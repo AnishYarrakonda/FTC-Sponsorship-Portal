@@ -6,7 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { EmptyState } from '@/components/ui/empty-state'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { fulfillmentStatusLabel } from '@/lib/fulfillment-status'
+import { fulfillmentStatusLabel, canTransition } from '@/lib/fulfillment-status'
+import { StatusBadge } from '@/components/ui/status-badge'
+import { MarkPaymentSentDialog } from '@/components/sponsor/mark-payment-sent-dialog'
+import { SponsorFulfillmentRow } from '@/components/sponsor/sponsor-fulfillment-row'
+import { ageInDays } from '@/lib/fulfillment-aging'
 
 export default async function SponsorFundingPage() {
   const authed = await getAuthedProfile()
@@ -35,13 +39,37 @@ export default async function SponsorFundingPage() {
     )
   }
 
-  const { data: transactions } = await supabase
-    .from('transactions_ledger')
-    .select('*, teams(team_name), funding_fulfillments(id, status)')
+  const { data: fulfillments } = await supabase
+    .from('funding_fulfillments')
+    .select('*, teams(team_name, ftc_team_number)')
     .eq('sponsor_id', profile.sponsor_id)
-    .order('created_at', { ascending: false })
+    .order('pledged_at', { ascending: false })
 
-  const totalApproved = transactions?.reduce((s, t) => s + t.amount_cents, 0) ?? 0
+  let totalCommitted = 0
+  let awaitingPaymentCount = 0
+  let awaitingPaymentSum = 0
+  let inTransitCount = 0
+  let inTransitSum = 0
+  let confirmedCount = 0
+  let confirmedSum = 0
+
+  fulfillments?.forEach(f => {
+    if (f.status !== 'cancelled') {
+      totalCommitted += f.amount_cents
+    }
+    if (f.status === 'pledged' || f.status === 'agreement_signed') {
+      awaitingPaymentCount++
+      awaitingPaymentSum += f.amount_cents
+    }
+    if (f.status === 'payment_sent') {
+      inTransitCount++
+      inTransitSum += f.amount_cents
+    }
+    if (f.status === 'payment_received' || f.status === 'receipted') {
+      confirmedCount++
+      confirmedSum += f.amount_cents
+    }
+  })
 
   return (
     <div className="space-y-8">
@@ -50,23 +78,41 @@ export default async function SponsorFundingPage() {
         <p className="text-muted-foreground mt-1">Track your approved sponsorships and disbursements.</p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest">Total Approved</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest">Total Committed</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-semibold">${(totalApproved / 100).toLocaleString()}</div>
+            <div className="text-3xl font-semibold">${(totalCommitted / 100).toLocaleString()}</div>
             <p className="text-xs text-muted-foreground mt-1">Across all teams, all time</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest">Transactions</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest">Awaiting Your Payment</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-semibold">{transactions?.length || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">Commitments — payment tracked separately</p>
+            <div className="text-3xl font-semibold">${(awaitingPaymentSum / 100).toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground mt-1">{awaitingPaymentCount} commitment{awaitingPaymentCount !== 1 ? 's' : ''}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest">In Transit</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-semibold">${(inTransitSum / 100).toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground mt-1">{inTransitCount} commitment{inTransitCount !== 1 ? 's' : ''}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest">Confirmed Received</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-semibold">${(confirmedSum / 100).toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground mt-1">{confirmedCount} commitment{confirmedCount !== 1 ? 's' : ''}</p>
           </CardContent>
         </Card>
       </div>
@@ -78,38 +124,15 @@ export default async function SponsorFundingPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {transactions?.map((t: any) => {
-              const status = t.funding_fulfillments?.[0]?.status || 'pledged'
-              return (
-              <div key={t.id} className="flex items-center justify-between py-3 border-b border-border last:border-0">
-                <div className="flex items-center gap-3">
-                  <div className="h-8 w-8 rounded bg-primary/10 flex items-center justify-center">
-                    <TrendingUp className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    {/*
-                      transactions_ledger.team_id has been nullable ON DELETE SET NULL
-                      since 0061, so `t.teams` is null for any ledger row whose team was
-                      deleted — exactly the state 0061 exists to create. Without the
-                      optional chain this threw and took down the entire Funding page,
-                      hiding every other transaction with it.
-                    */}
-                    <div className="font-medium">{(t.teams as any)?.team_name ?? 'Team no longer on the platform'}</div>
-                    <div className="text-xs text-muted-foreground">{new Date(t.created_at).toLocaleDateString()}</div>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="font-bold text-emerald-500">+${(t.amount_cents / 100).toLocaleString()}</div>
-                  <div className="text-xs text-muted-foreground uppercase tracking-wider">{fulfillmentStatusLabel(status)}</div>
-                </div>
-              </div>
-            )})}
-            {(!transactions || transactions.length === 0) && (
+            {fulfillments?.map((f: any) => (
+              <SponsorFulfillmentRow key={f.id} fulfillment={f} />
+            ))}
+            {(!fulfillments || fulfillments.length === 0) && (
               <EmptyState
                 className="border-0 bg-transparent"
                 icon={Wallet}
-                title="No transactions yet"
-                description="When you approve a team's pitch, the disbursement is recorded here against your funding cap."
+                title="No commitments yet"
+                description="When you fund a team's pitch it appears here and you can track the payment through to confirmation."
                 action={
                   <Link href="/sponsor/submissions" className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}>
                     Review pending pitches

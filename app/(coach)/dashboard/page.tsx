@@ -23,7 +23,9 @@ export default async function DashboardPage() {
     { data: sponsors },
     { count: unreadCount },
     { data: notifications },
-    { data: submissions }
+    { data: submissions },
+    { data: fulfillments },
+    { data: payoutProfile }
   ] = await Promise.all([
     supabase.from('teams').select('*').eq('owner_id', user.id).order('updated_at', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('profiles').select('*').eq('id', user.id).single(),
@@ -32,25 +34,17 @@ export default async function DashboardPage() {
     supabase.from('notifications').select('*').eq('recipient_id', user.id).order('created_at', { ascending: false }).limit(50),
     supabase
       .from('submissions')
-      // NOTE: no `sponsors:sponsor_id(company_name)` embed. A PostgREST embed resolves
-      // against the BASE TABLE, and 0063 makes `sponsors_select` admin-only to close
-      // P0-4 — so for a coach the embed silently returns null and every sponsor name on
-      // this page renders blank. Names are resolved below from v_sponsors_public, which
-      // is SECURITY DEFINER and includes any sponsor this coach has already pitched.
       .select('id, status, admin_feedback, updated_at, created_at, team_id, sponsor_id, teams:team_id(team_name)')
       .then((res: any) => {
         if (res.error) {
           console.error('[Dashboard] Failed to fetch submissions:', res.error)
           return { data: [] }
         }
-        // Normalize the data to match SubmissionSummary type
-        // Manual filter because inner join filters don't always work as expected with Supabase relations
         const data = res.data?.filter((s: any) => s.teams !== null).map((s: any) => ({
           id: s.id,
           team_name: s.teams?.team_name,
           owner_id: user.id,
           sponsor_id: s.sponsor_id,
-          // filled in from v_sponsors_public after both queries resolve
           company_name: undefined as string | undefined,
           status: s.status,
           admin_feedback: s.admin_feedback,
@@ -62,6 +56,8 @@ export default async function DashboardPage() {
         }))
         return { data: data || [] }
       }),
+    supabase.from('funding_fulfillments').select('*, sponsors(company_name)').order('pledged_at', { ascending: false }),
+    supabase.from('team_payout_profiles').select('team_id, w9_uploaded_at, w9_verified_at, w9_rejected_at, w9_rejected_reason, w9_expires_at').maybeSingle(),
   ])
 
   // Resolve sponsor company names for this coach's own submissions. Kept out of the
@@ -252,6 +248,8 @@ export default async function DashboardPage() {
       unreadCount={unreadCount ?? 0}
       submissions={submissions as any ?? []}
       achievements={(achievements || []) as any}
+      fulfillments={(fulfillments || []) as any}
+      payoutProfiles={payoutProfile ? [payoutProfile] : []}
     /></>
   )
 }

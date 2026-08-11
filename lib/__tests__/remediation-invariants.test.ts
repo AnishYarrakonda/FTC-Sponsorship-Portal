@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import fs from 'fs'
+import path from 'path'
 import { teamOnboardingBaseSchema } from '@/lib/schemas/team'
 import { sponsorApplicationSchema, sponsorSchema } from '@/lib/schemas/sponsor'
 import { sponsorSignupSchema } from '@/lib/schemas/sponsor-signup'
@@ -168,3 +170,62 @@ describe('submission status groupings', () => {
     expect(isTerminal(null)).toBe(false)
   })
 })
+
+/**
+ * Prompt 03 — Fulfillment UI Invariants
+ */
+describe('fulfillment UI invariants', () => {
+  it('payment_reference / paymentReference string does NOT appear in email template, nudge cron, or sendFulfillmentNudgeEmail body', () => {
+    const root = process.cwd()
+    const emailFile = fs.readFileSync(path.join(root, 'emails/fulfillment-nudge-email.tsx'), 'utf-8')
+    const cronFile = fs.readFileSync(path.join(root, 'app/api/cron/nudge-fulfillments/route.ts'), 'utf-8')
+    const notifyFile = fs.readFileSync(path.join(root, 'lib/notify.ts'), 'utf-8')
+
+    // Extract body of sendFulfillmentNudgeEmail from notify.ts
+    const notifyMatch = notifyFile.match(/export async function sendFulfillmentNudgeEmail[\s\S]*?^}/m)
+    const sendFulfillmentNudgeEmailBody = notifyMatch ? notifyMatch[0] : ''
+
+    expect(emailFile).not.toContain('payment_reference')
+    expect(emailFile).not.toContain('paymentReference')
+
+    expect(cronFile).not.toContain('payment_reference')
+    expect(cronFile).not.toContain('paymentReference')
+
+    expect(sendFulfillmentNudgeEmailBody).not.toContain('payment_reference')
+    expect(sendFulfillmentNudgeEmailBody).not.toContain('paymentReference')
+  })
+
+  it('no component under components/{coach,sponsor,admin} re-declares a fulfillment status array literal', () => {
+    const root = process.cwd()
+
+    function getFiles(dir: string): string[] {
+      let results: string[] = []
+      const list = fs.readdirSync(dir)
+      list.forEach((file: string) => {
+        const filePath = path.join(dir, file)
+        const stat = fs.statSync(filePath)
+        if (stat && stat.isDirectory()) {
+          results = results.concat(getFiles(filePath))
+        } else if (filePath.endsWith('.tsx') || filePath.endsWith('.ts')) {
+          results.push(filePath)
+        }
+      })
+      return results
+    }
+
+    const componentDirs = ['components/coach', 'components/sponsor', 'components/admin']
+    const arrayRegex = /\[\s*(['"])pledged\1/
+
+    for (const dirName of componentDirs) {
+      const fullDir = path.join(root, dirName)
+      if (fs.existsSync(fullDir)) {
+        const files = getFiles(fullDir)
+        for (const file of files) {
+          const content = fs.readFileSync(file, 'utf-8')
+          expect(arrayRegex.test(content)).toBe(false)
+        }
+      }
+    }
+  })
+})
+

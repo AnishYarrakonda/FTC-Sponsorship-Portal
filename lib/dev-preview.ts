@@ -319,6 +319,10 @@ const transactions = [
   { id: 'txn-1', sponsor_id: SPONSOR_ID, submission_id: 'preview-sub-4', team_id: TEAM_ID_A, amount_cents: 500_000, actor_type: 'sponsor', decision_type: 'approve', created_at: '2026-04-15T11:00:00.000Z', teams: { team_name: 'Quantum Foxes' } },
 ]
 
+const fulfillments = [
+  { id: 'f-1', sponsor_id: SPONSOR_ID, submission_id: 'preview-sub-4', team_id: TEAM_ID_A, amount_cents: 500_000, status: 'payment_received', pledged_at: '2026-04-15T11:00:00.000Z', payment_sent_at: '2026-04-17T11:00:00.000Z', payment_received_at: '2026-04-20T11:00:00.000Z', teams: { team_name: 'Quantum Foxes' } },
+]
+
 const FIXTURES: Record<string, unknown[]> = {
   profiles: [profile],
   sponsors: [sponsor],
@@ -326,6 +330,7 @@ const FIXTURES: Record<string, unknown[]> = {
   submissions,
   notifications,
   transactions_ledger: transactions,
+  funding_fulfillments: fulfillments,
   team_achievements: [
     ...teamA.team_achievements,
     ...teamB.team_achievements as any[],
