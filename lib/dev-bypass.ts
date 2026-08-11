@@ -213,7 +213,34 @@ const DATA: Record<string, any[]> = {
     { id: 'f-1', sponsor_id: 'sp1', team_id: 't1', amount_cents: 250_000, status: 'payment_sent', pledged_at: iso(10), payment_sent_at: iso(2), sponsors: { company_name: 'Acme Robotics' }, teams: { team_name: 'Exodius' } },
     { id: 'f-2', sponsor_id: 'sp2', team_id: 't2', amount_cents: 150_000, status: 'pledged', pledged_at: iso(40), sponsors: { company_name: 'TechNova' }, teams: { team_name: 'Robo Knights' } },
     { id: 'f-3', sponsor_id: 'sp4', team_id: 't3', amount_cents: 50_000, status: 'payment_sent', pledged_at: iso(100), payment_sent_at: iso(80), sponsors: { company_name: 'BrightForge Tools' }, teams: { team_name: 'Steel Comets' } },
-    { id: 'f-4', sponsor_id: 'sp4', team_id: 't4', amount_cents: 50_000, status: 'payment_received', pledged_at: iso(100), payment_sent_at: iso(80), payment_received_at: iso(70), sponsors: { company_name: 'BrightForge Tools' }, teams: { team_name: 'Circuit Breakers' } }
+    { id: 'f-4', sponsor_id: 'sp4', team_id: 't4', amount_cents: 50_000, status: 'receipted', receipt_number: 'PF-2026-000003', pledged_at: iso(100), payment_sent_at: iso(80), payment_received_at: iso(70), sponsors: { company_name: 'BrightForge Tools' }, teams: { team_name: 'Circuit Breakers' } }
+  ],
+
+  funding_receipts: [
+    {
+      id: 'rec-3',
+      receipt_number: 'PF-2026-000003',
+      fulfillment_id: 'f-4',
+      transaction_id: 'txn-4',
+      sponsor_id: 'sp4',
+      team_id: 't4',
+      amount_cents: 50_000,
+      contribution_date: iso(70).split('T')[0],
+      variant: 'charitable_501c3',
+      payee_legal_name: 'Circuit Breakers Booster Club',
+      payee_ein_last4: '4321',
+      payee_tax_classification: '501c3_org',
+      sponsor_legal_name: 'BrightForge Tools',
+      sponsor_contact_email: 'grants@brightforge.example',
+      document_html: '<div style="padding: 24px;"><h1>Contribution acknowledgment</h1><p>Circuit Breakers Booster Club (EIN 11-2233445) acknowledges receipt of $500.00 from BrightForge Tools on 2026-06-01.</p><p><strong>No goods or services were provided by Circuit Breakers Booster Club in exchange for this contribution.</strong></p></div>',
+      document_sha256: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+      copy_version: '2026-08-v1',
+      copy_reviewed_at: null,
+      status: 'issued',
+      issued_at: iso(70),
+      emailed_at: iso(70),
+      teams: { team_name: 'Circuit Breakers' }
+    }
   ],
 }
 

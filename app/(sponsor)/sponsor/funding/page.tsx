@@ -1,7 +1,7 @@
 import { getAuthedProfile } from '@/lib/actions-utils'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { TrendingUp, Wallet, Building2 } from 'lucide-react'
+import { TrendingUp, Wallet, Building2, FileText } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { buttonVariants } from '@/components/ui/button'
@@ -41,9 +41,15 @@ export default async function SponsorFundingPage() {
 
   const { data: fulfillments } = await supabase
     .from('funding_fulfillments')
-    .select('*, teams(team_name, ftc_team_number)')
+    .select('*, teams(team_name, ftc_team_number), funding_receipts(receipt_number)')
     .eq('sponsor_id', profile.sponsor_id)
     .order('pledged_at', { ascending: false })
+
+  const { data: receipts } = await supabase
+    .from('funding_receipts')
+    .select('*, teams(team_name)')
+    .eq('sponsor_id', profile.sponsor_id)
+    .order('issued_at', { ascending: false })
 
   let totalCommitted = 0
   let awaitingPaymentCount = 0
@@ -141,6 +147,73 @@ export default async function SponsorFundingPage() {
               />
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Tax Receipts & Acknowledgments</CardTitle>
+          <CardDescription>Official written contribution receipts for your completed sponsorships.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {receipts && receipts.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-muted-foreground uppercase bg-muted/50 border-b">
+                  <tr>
+                    <th className="px-4 py-3">Receipt Number</th>
+                    <th className="px-4 py-3">Issued Date</th>
+                    <th className="px-4 py-3">Contribution Date</th>
+                    <th className="px-4 py-3">Team</th>
+                    <th className="px-4 py-3">Amount</th>
+                    <th className="px-4 py-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {receipts.map((r: any) => (
+                    <tr key={r.id} className="hover:bg-muted/30">
+                      <td className="px-4 py-3 font-mono font-medium">
+                        <Link href={`/receipts/${r.receipt_number}`} className="text-primary hover:underline">
+                          {r.receipt_number}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {new Date(r.issued_at).toLocaleDateString()}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {r.contribution_date}
+                      </td>
+                      <td className="px-4 py-3 font-medium">
+                        {r.payee_legal_name || r.teams?.team_name || 'Team'}
+                      </td>
+                      <td className="px-4 py-3 font-semibold">
+                        ${(r.amount_cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={cn(
+                            'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize',
+                            r.status === 'issued'
+                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                              : 'bg-destructive/10 text-destructive'
+                          )}
+                        >
+                          {r.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <EmptyState
+              className="border-0 bg-transparent"
+              icon={FileText}
+              title="No receipts yet"
+              description="One is issued automatically when a team confirms it received your payment."
+            />
+          )}
         </CardContent>
       </Card>
     </div>

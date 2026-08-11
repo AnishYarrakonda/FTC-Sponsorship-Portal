@@ -7,6 +7,8 @@ import CoachSignupWelcomeEmail from '@/emails/coach-signup-welcome'
 import CoachDenialEmail from '@/emails/coach-denial-email'
 import NotificationEmail from '@/emails/notification-email'
 import FulfillmentNudgeEmail from '@/emails/fulfillment-nudge-email'
+import FundingReceiptEmail from '@/emails/funding-receipt-email'
+import type { ReceiptDocumentContext } from '@/lib/receipt-document'
 import { Resend } from 'resend'
 import { createHash } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -521,4 +523,37 @@ export async function sendFulfillmentNudgeEmail(args: {
     { idempotencyKey }
   )
 }
+
+export async function sendFundingReceiptEmail(args: {
+  receiptId: string
+  receiptNumber: string
+  to: string
+  replyTo?: string
+  ctx?: ReceiptDocumentContext
+  /** Pass stored document_html to re-send immutably without re-rendering. */
+  rawHtml?: string
+  isResend?: boolean
+}): Promise<NotifyResult> {
+  const idempotencyKey = args.isResend
+    ? createHash('sha256').update(args.receiptId + 'receipt-resend' + Date.now()).digest('hex')
+    : createHash('sha256').update(args.receiptId + 'receipt').digest('hex')
+
+  // Prefer stored HTML (resend path) to avoid silently picking up template changes.
+  // Fall back to rendering from ctx when rawHtml is not supplied (first-issue path).
+  const reactElement = (!args.rawHtml && args.ctx) ? FundingReceiptEmail(args.ctx) : undefined
+  const payeeName = args.ctx?.payeeLegalName ?? 'the payee'
+
+  return sendViaResend(
+    'sendFundingReceiptEmail',
+    {
+      from: env.RESEND_FROM_EMAIL,
+      to: args.to,
+      replyTo: args.replyTo || SUPPORT_EMAIL,
+      subject: `[Receipt ${args.receiptNumber}] Contribution Acknowledgment — ${payeeName}`,
+      ...(args.rawHtml ? { html: args.rawHtml } : { react: reactElement }),
+    },
+    { idempotencyKey }
+  )
+}
+
 

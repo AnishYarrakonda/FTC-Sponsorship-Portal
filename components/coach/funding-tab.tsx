@@ -269,6 +269,14 @@ function FulfillmentCard({ fulfillment: f, isVerified }: { fulfillment: any, isV
 
           <div className="flex sm:flex-col items-end justify-between sm:justify-center gap-3 shrink-0">
             <StatusBadge status={f.status} />
+            {(f.receipt_number || f.funding_receipts?.[0]?.receipt_number) && (
+              <Link
+                href={`/receipts/${f.receipt_number || f.funding_receipts?.[0]?.receipt_number}`}
+                className="text-xs text-primary font-mono hover:underline"
+              >
+                {f.receipt_number || f.funding_receipts?.[0]?.receipt_number}
+              </Link>
+            )}
             {canTransition(f.status, 'payment_received', 'coach') && (
               <ConfirmReceiptDialog fulfillmentId={f.id} isVerified={isVerified} />
             )}

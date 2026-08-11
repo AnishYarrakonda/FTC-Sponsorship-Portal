@@ -320,7 +320,58 @@ const transactions = [
 ]
 
 const fulfillments = [
-  { id: 'f-1', sponsor_id: SPONSOR_ID, submission_id: 'preview-sub-4', team_id: TEAM_ID_A, amount_cents: 500_000, status: 'payment_received', pledged_at: '2026-04-15T11:00:00.000Z', payment_sent_at: '2026-04-17T11:00:00.000Z', payment_received_at: '2026-04-20T11:00:00.000Z', teams: { team_name: 'Quantum Foxes' } },
+  { id: 'f-1', sponsor_id: SPONSOR_ID, submission_id: 'preview-sub-4', team_id: TEAM_ID_A, amount_cents: 500_000, status: 'receipted', receipt_number: 'PF-2026-000001', pledged_at: '2026-04-15T11:00:00.000Z', payment_sent_at: '2026-04-17T11:00:00.000Z', payment_received_at: '2026-04-20T11:00:00.000Z', teams: { team_name: 'Quantum Foxes' } },
+]
+
+const receipts = [
+  {
+    id: 'rec-1',
+    receipt_number: 'PF-2026-000001',
+    fulfillment_id: 'f-1',
+    transaction_id: 'txn-1',
+    sponsor_id: SPONSOR_ID,
+    team_id: TEAM_ID_A,
+    amount_cents: 500_000,
+    contribution_date: '2026-04-20',
+    variant: 'charitable_501c3',
+    payee_legal_name: 'Quantum Foxes Robotics Booster Club Inc.',
+    payee_ein_last4: '1234',
+    payee_tax_classification: '501c3_org',
+    sponsor_legal_name: 'Helix Robotics Foundation',
+    sponsor_contact_email: 'partnerships@helix.example',
+    document_html: '<div style="padding: 24px;"><h1>Contribution acknowledgment</h1><p>Quantum Foxes Robotics Booster Club Inc. (EIN 12-3456789) acknowledges receipt of $5,000.00 from Helix Robotics Foundation on 2026-04-20.</p><p><strong>No goods or services were provided by Quantum Foxes Robotics Booster Club Inc. in exchange for this contribution.</strong></p></div>',
+    document_sha256: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+    copy_version: '2026-08-v1',
+    copy_reviewed_at: null,
+    status: 'issued',
+    issued_at: '2026-04-20T12:00:00.000Z',
+    emailed_at: '2026-04-20T12:01:00.000Z',
+    teams: { team_name: 'Quantum Foxes' }
+  },
+  {
+    id: 'rec-voided',
+    receipt_number: 'PF-2026-000000',
+    fulfillment_id: 'f-1',
+    transaction_id: 'txn-1',
+    sponsor_id: SPONSOR_ID,
+    team_id: TEAM_ID_A,
+    amount_cents: 500_000,
+    contribution_date: '2026-04-20',
+    variant: 'charitable_501c3',
+    payee_legal_name: 'Quantum Foxes Robotics Team',
+    payee_ein_last4: '1234',
+    sponsor_legal_name: 'Helix Robotics Foundation',
+    document_html: '<div style="padding: 24px;"><h1>Contribution acknowledgment</h1><p>Draft receipt superseded by PF-2026-000001.</p></div>',
+    document_sha256: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+    copy_version: '2026-08-v1',
+    copy_reviewed_at: null,
+    status: 'voided',
+    issued_at: '2026-04-19T12:00:00.000Z',
+    voided_at: '2026-04-20T11:59:00.000Z',
+    voided_reason: 'Payee legal name updated from team name to booster club legal entity name.',
+    superseded_by_receipt_id: 'rec-1',
+    teams: { team_name: 'Quantum Foxes' }
+  }
 ]
 
 const FIXTURES: Record<string, unknown[]> = {
@@ -331,6 +382,7 @@ const FIXTURES: Record<string, unknown[]> = {
   notifications,
   transactions_ledger: transactions,
   funding_fulfillments: fulfillments,
+  funding_receipts: receipts,
   team_achievements: [
     ...teamA.team_achievements,
     ...teamB.team_achievements as any[],

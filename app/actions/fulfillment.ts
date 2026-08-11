@@ -2,7 +2,9 @@
 
 import { z } from 'zod'
 import { requireAdmin, requireSponsor, requireVerifiedCoach } from '@/lib/actions-utils'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createInAppNotification } from '@/lib/notify'
+import { generateAndStoreReceipt } from '@/lib/receipts'
 import { revalidatePath } from 'next/cache'
 import {
   markPaymentSentSchema,
@@ -101,17 +103,11 @@ export async function confirmPaymentReceived(data: z.input<typeof confirmPayment
   } catch (e: any) {
     return { error: e.message, code: e.code }
   }
-  
-  // Need admin client for operations across rows (like audit logs and fetching sponsor contacts)
-  const { adminClient } = await requireAdmin().catch(() => ({ adminClient: null }))
-  let localAdminClient
-  if (!adminClient) {
-    // If we can't get admin client (which we can't natively in requireVerifiedCoach), we'll create it
-    const { createAdminClient } = await import('@/lib/supabase/admin')
-    localAdminClient = createAdminClient()
-  } else {
-    localAdminClient = adminClient
-  }
+
+  // Admin client needed for cross-row operations (audit log, fetching sponsor contacts).
+  // requireVerifiedCoach intentionally does not return one; createAdminClient() is the
+  // correct server-side path for a verified-coach action that needs service-role access.
+  const localAdminClient = createAdminClient()
 
   const { data: fulfillment, error: fetchErr } = await localAdminClient
     .from('funding_fulfillments')
@@ -170,9 +166,16 @@ export async function confirmPaymentReceived(data: z.input<typeof confirmPayment
 
   revalidatePath('/dashboard')
   revalidatePath('/sponsor/funding')
-  
-  // prompt 04 hooks receipt issuance in here
-  
+  revalidatePath('/reconciliation')
+
+  const receiptRes = await generateAndStoreReceipt(localAdminClient, parsed.data.fulfillmentId, user.id)
+  if (!receiptRes.ok) {
+    return {
+      success: true,
+      warning: `Payment confirmation recorded, but automatic receipt issuance failed: ${receiptRes.error}. An administrator can manually issue the receipt.`,
+    }
+  }
+
   return { success: true }
 }
 

@@ -174,7 +174,33 @@ const payoutProfiles = [
 ]
 
 const fulfillments = [
-  { id: 'f-1', sponsor_id: 'sp1', submission_id: 'preview-sub-1', team_id: TEAM_ID, amount_cents: 250_000, status: 'payment_sent', pledged_at: iso(10), payment_sent_at: iso(2), payment_method: 'check', sponsors: { company_name: 'Acme Robotics' } }
+  { id: 'f-1', sponsor_id: 'sp1', submission_id: 'preview-sub-1', team_id: TEAM_ID, amount_cents: 250_000, status: 'payment_sent', pledged_at: iso(10), payment_sent_at: iso(2), payment_method: 'check', sponsors: { company_name: 'Acme Robotics' } },
+  { id: 'f-2', sponsor_id: 'sp2', submission_id: 'preview-sub-2', team_id: TEAM_ID, amount_cents: 180_000, status: 'receipted', receipt_number: 'PF-2026-000002', pledged_at: iso(30), payment_sent_at: iso(20), payment_received_at: iso(15), sponsors: { company_name: 'TechNova' } },
+]
+
+const receipts = [
+  {
+    id: 'rec-2',
+    receipt_number: 'PF-2026-000002',
+    fulfillment_id: 'f-2',
+    transaction_id: 'txn-2',
+    sponsor_id: 'sp2',
+    team_id: TEAM_ID,
+    amount_cents: 180_000,
+    contribution_date: iso(15).split('T')[0],
+    variant: 'charitable_501c3',
+    payee_legal_name: 'Exodius Robotics Inc.',
+    payee_ein_last4: '5678',
+    payee_tax_classification: '501c3_org',
+    sponsor_legal_name: 'TechNova',
+    document_html: '<div style="padding: 24px;"><h1>Contribution acknowledgment</h1><p>Exodius Robotics Inc. (EIN 98-7654321) acknowledges receipt of $1,800.00 from TechNova.</p><p><strong>No goods or services were provided by Exodius Robotics Inc. in exchange for this contribution.</strong></p></div>',
+    document_sha256: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+    copy_version: '2026-08-v1',
+    copy_reviewed_at: null,
+    status: 'issued',
+    issued_at: iso(15),
+    teams: { team_name: 'Exodius' }
+  }
 ]
 
 const DATA: Record<string, any[]> = {
@@ -187,6 +213,7 @@ const DATA: Record<string, any[]> = {
   team_achievements: teamAchievements,
   team_payout_profiles: payoutProfiles,
   funding_fulfillments: fulfillments,
+  funding_receipts: receipts,
   audit_log: [],
 }
 

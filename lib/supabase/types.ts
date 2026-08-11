@@ -1061,6 +1061,177 @@ export type Database = {
                         }
                       ]
                     };
+      funding_receipt_counters: {
+        Row: {
+          last_value: number
+          year: number
+        }
+        Insert: {
+          last_value?: number
+          year: number
+        }
+        Update: {
+          last_value?: number
+          year?: number
+        }
+        Relationships: []
+      }
+      funding_receipts: {
+        Row: {
+          amount_cents: number
+          contribution_date: string
+          copy_reviewed_at: string | null
+          copy_version: string
+          created_at: string
+          document_html: string
+          document_sha256: string
+          emailed_at: string | null
+          fulfillment_id: string
+          goods_or_services_description: string | null
+          goods_or_services_fmv_cents: number | null
+          id: string
+          issued_at: string
+          issued_by: string | null
+          payee_ein_last4: string | null
+          payee_legal_name: string
+          payee_tax_classification: string | null
+          receipt_number: string
+          sponsor_contact_email: string | null
+          sponsor_id: string
+          sponsor_legal_name: string
+          status: Database["public"]["Enums"]["receipt_status"]
+          superseded_by_receipt_id: string | null
+          supersedes_receipt_id: string | null
+          team_id: string | null
+          transaction_id: string
+          variant: Database["public"]["Enums"]["receipt_variant"]
+          voided_at: string | null
+          voided_by: string | null
+          voided_reason: string | null
+        }
+        Insert: {
+          amount_cents: number
+          contribution_date: string
+          copy_reviewed_at?: string | null
+          copy_version: string
+          created_at?: string
+          document_html: string
+          document_sha256: string
+          emailed_at?: string | null
+          fulfillment_id: string
+          goods_or_services_description?: string | null
+          goods_or_services_fmv_cents?: number | null
+          id?: string
+          issued_at?: string
+          issued_by?: string | null
+          payee_ein_last4?: string | null
+          payee_legal_name: string
+          payee_tax_classification?: string | null
+          receipt_number: string
+          sponsor_contact_email?: string | null
+          sponsor_id: string
+          sponsor_legal_name: string
+          status?: Database["public"]["Enums"]["receipt_status"]
+          superseded_by_receipt_id?: string | null
+          supersedes_receipt_id?: string | null
+          team_id?: string | null
+          transaction_id: string
+          variant: Database["public"]["Enums"]["receipt_variant"]
+          voided_at?: string | null
+          voided_by?: string | null
+          voided_reason?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          contribution_date?: string
+          copy_reviewed_at?: string | null
+          copy_version?: string
+          created_at?: string
+          document_html?: string
+          document_sha256?: string
+          emailed_at?: string | null
+          fulfillment_id?: string
+          goods_or_services_description?: string | null
+          goods_or_services_fmv_cents?: number | null
+          id?: string
+          issued_at?: string
+          issued_by?: string | null
+          payee_ein_last4?: string | null
+          payee_legal_name?: string
+          payee_tax_classification?: string | null
+          receipt_number?: string
+          sponsor_contact_email?: string | null
+          sponsor_id?: string
+          sponsor_legal_name?: string
+          status?: Database["public"]["Enums"]["receipt_status"]
+          superseded_by_receipt_id?: string | null
+          supersedes_receipt_id?: string | null
+          team_id?: string | null
+          transaction_id?: string
+          variant?: Database["public"]["Enums"]["receipt_variant"]
+          voided_at?: string | null
+          voided_by?: string | null
+          voided_reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funding_receipts_fulfillment_id_fkey"
+            columns: ["fulfillment_id"]
+            isOneToOne: false
+            referencedRelation: "funding_fulfillments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funding_receipts_issued_by_fkey"
+            columns: ["issued_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funding_receipts_sponsor_id_fkey"
+            columns: ["sponsor_id"]
+            isOneToOne: false
+            referencedRelation: "sponsors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funding_receipts_superseded_by_receipt_id_fkey"
+            columns: ["superseded_by_receipt_id"]
+            isOneToOne: false
+            referencedRelation: "funding_receipts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funding_receipts_supersedes_receipt_id_fkey"
+            columns: ["supersedes_receipt_id"]
+            isOneToOne: false
+            referencedRelation: "funding_receipts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funding_receipts_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funding_receipts_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions_ledger"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funding_receipts_voided_by_fkey"
+            columns: ["voided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       v_sponsor_capacity: {
@@ -1262,6 +1433,33 @@ export type Database = {
                       status?: Database["public"]["Enums"]["fulfillment_status"]
                     }
                   };
+      issue_funding_receipt: {
+        Args: {
+          p_fulfillment_id: string
+          p_actor_profile_id: string | null
+          p_variant: Database["public"]["Enums"]["receipt_variant"]
+          p_payee_legal_name: string
+          p_payee_ein_last4: string | null
+          p_payee_tax_classification: string | null
+          p_sponsor_legal_name: string
+          p_sponsor_contact_email: string | null
+          p_goods_or_services: string | null
+          p_goods_or_services_fmv_cents: number | null
+          p_document_html: string
+          p_document_sha256: string
+          p_copy_version: string
+          p_copy_reviewed_at: string | null
+        }
+        Returns: Json
+      }
+      void_funding_receipt: {
+        Args: {
+          p_receipt_id: string
+          p_actor_profile_id: string | null
+          p_reason: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
       application_status: "pending" | "approved" | "rejected"
@@ -1283,6 +1481,8 @@ export type Database = {
       user_role: "coach" | "admin" | "sponsor"
         fulfillment_payment_method: "check" | "ach" | "wire" | "other";
         fulfillment_status: "pledged" | "agreement_signed" | "payment_sent" | "payment_received" | "receipted" | "cancelled";
+        receipt_status: "issued" | "voided";
+        receipt_variant: "charitable_501c3" | "governmental_school" | "non_charitable";
     }
     CompositeTypes: {
       [_ in never]: never
