@@ -71,10 +71,8 @@ export async function markPaymentSent(data: z.input<typeof markPaymentSentSchema
     }
   })
 
-  // @ts-ignore
-  const ownerId = fulfillment.teams?.owner_id
-  // @ts-ignore
-  const companyName = fulfillment.sponsors?.company_name || 'A sponsor'
+  const ownerId = (fulfillment.teams as any)?.owner_id
+  const companyName = (fulfillment.sponsors as any)?.company_name || 'A sponsor'
 
   if (ownerId) {
     const methodStr = parsed.data.paymentMethod ? ` by ${parsed.data.paymentMethod}` : ''
@@ -106,12 +104,13 @@ export async function confirmPaymentReceived(data: z.input<typeof confirmPayment
   
   // Need admin client for operations across rows (like audit logs and fetching sponsor contacts)
   const { adminClient } = await requireAdmin().catch(() => ({ adminClient: null }))
+  let localAdminClient
   if (!adminClient) {
     // If we can't get admin client (which we can't natively in requireVerifiedCoach), we'll create it
     const { createAdminClient } = await import('@/lib/supabase/admin')
-    var localAdminClient = createAdminClient()
+    localAdminClient = createAdminClient()
   } else {
-    var localAdminClient = adminClient
+    localAdminClient = adminClient
   }
 
   const { data: fulfillment, error: fetchErr } = await localAdminClient
@@ -124,8 +123,7 @@ export async function confirmPaymentReceived(data: z.input<typeof confirmPayment
     return { error: 'Fulfillment not found.' }
   }
   
-  // @ts-ignore
-  if (fulfillment.teams?.owner_id !== user.id) {
+  if ((fulfillment.teams as any)?.owner_id !== user.id) {
     return { error: 'Fulfillment not found.' }
   }
 
@@ -157,8 +155,7 @@ export async function confirmPaymentReceived(data: z.input<typeof confirmPayment
     .eq('role', 'sponsor')
     .eq('sponsor_id', fulfillment.sponsor_id)
 
-  // @ts-ignore
-  const teamName = fulfillment.teams?.team_name || 'A team'
+  const teamName = (fulfillment.teams as any)?.team_name || 'A team'
 
   if (sponsorsToNotify) {
     for (const sponsorUser of sponsorsToNotify) {
@@ -224,8 +221,7 @@ export async function adminOverrideFulfillmentStatus(data: z.input<typeof adminO
 
   if (fulfillment) {
     // Notify coach
-    // @ts-ignore
-    const ownerId = fulfillment.teams?.owner_id
+    const ownerId = (fulfillment.teams as any)?.owner_id
     if (ownerId) {
       await createInAppNotification({
         recipientId: ownerId,

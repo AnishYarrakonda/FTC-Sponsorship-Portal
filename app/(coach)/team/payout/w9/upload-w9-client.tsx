@@ -97,11 +97,11 @@ export function UploadW9Client({ teamId, hasExistingW9, isVerified, rejectedReas
         )}
 
         <div className="space-y-2">
-          <Label htmlFor="w9-upload">Signed W-9 Document (PDF, PNG, JPG)</Label>
+          <Label htmlFor="w9-upload">Signed W-9 Document (PDF only)</Label>
           <Input
             id="w9-upload"
             type="file"
-            accept="application/pdf,image/png,image/jpeg"
+            accept=".pdf,application/pdf"
             onChange={(e) => {
               setFile(e.target.files?.[0] || null)
               setError(null)
@@ -109,7 +109,7 @@ export function UploadW9Client({ teamId, hasExistingW9, isVerified, rejectedReas
             disabled={isPending}
           />
           <p className="text-xs text-muted-foreground">
-            Max file size: 5MB. Must be legible and signed.
+            Max file size: 5MB. Must be a signed PDF form.
           </p>
         </div>
 

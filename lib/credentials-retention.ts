@@ -191,28 +191,38 @@ export async function sweepUnpurgedCredentials(
  * This is only called when an admin explicitly deletes it or during account deletion,
  * because W-9s are kept as business records otherwise.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function purgeTeamW9(admin: any, teamId: string, path: string) {
-  // 1. Delete from storage
-  const { error: storageErr } = await admin.storage.from('tax-documents').remove([path])
-  if (storageErr) {
-    console.error(`[purge] Failed to remove ${path} from storage`, storageErr)
-    Sentry.captureException(storageErr)
-    // We continue. Sometimes the file is already gone, but we still need to clear the DB pointer.
+export async function purgeTeamW9(
+  admin: AdminClient,
+  teamId: string,
+  path: string | null | undefined
+): Promise<{ purged: boolean; error?: string }> {
+  if (path) {
+    const { error } = await admin.storage.from('tax-documents').remove([path])
+    if (error) {
+      console.error(`[retention] W-9 file delete failed for team ${teamId}`, error)
+      Sentry.captureException(
+        new Error(`[retention] W-9 file delete failed for team ${teamId}: ${error.message}`)
+      )
+      // Leave the pointer intact so tonight's sweep or retry can find this row again.
+      return { purged: false, error: error.message }
+    }
   }
 
-  // 2. Clear pointer in DB
-  const { error: dbErr } = await admin
+  const { error: updateError } = await admin
     .from('team_payout_profiles')
-    .update({ 
-      w9_document_path: null, 
-      w9_purged_at: new Date().toISOString() 
+    .update({
+      w9_document_path: null,
+      w9_purged_at: new Date().toISOString(),
     })
     .eq('team_id', teamId)
-    
-  if (dbErr) {
-    console.error(`[purge] Failed to clear DB pointer for team ${teamId}`, dbErr)
-    Sentry.captureException(dbErr)
-    throw dbErr
+
+  if (updateError) {
+    console.error(`[retention] W-9 pointer clear failed for team ${teamId}`, updateError)
+    Sentry.captureException(
+      new Error(`[retention] W-9 pointer clear failed for team ${teamId}: ${updateError.message}`)
+    )
+    return { purged: false, error: updateError.message }
   }
+
+  return { purged: true }
 }

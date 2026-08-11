@@ -11,6 +11,7 @@ export default async function PayoutsPage() {
   const { data: payouts } = await (adminClient as any)
     .from('team_payout_profiles')
     .select(`
+      id,
       team_id,
       legal_payee_name,
       tax_classification,

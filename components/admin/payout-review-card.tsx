@@ -260,7 +260,7 @@ export function PayoutReviewCard({ payout }: { payout: PayoutData }) {
                 <div className="text-sm text-muted-foreground hidden sm:block">
                   Review the W-9 against the provided details.
                   <span className="block text-xs mt-0.5">
-                    Approval allows sponsors to see that a W-9 is on file and payable. Rejection removes the W-9 and notifies the coach.
+                    Approval allows sponsors to see that a W-9 is on file and payable. Rejection notifies the coach to re-upload.
                   </span>
                 </div>
                 <div className="flex gap-3">
@@ -274,7 +274,7 @@ export function PayoutReviewCard({ payout }: { payout: PayoutData }) {
                       </DialogHeader>
                       <div className="space-y-4 py-4">
                         <p className="text-sm text-muted-foreground">
-                          This will delete the document. An email will be sent to the coach with your reason, allowing them to correct the issue and re-upload.
+                          An in-app notification will be sent to the coach with your reason, allowing them to correct the issue and re-upload.
                         </p>
                         <div className="space-y-2">
                           <Label htmlFor="denyReason" className="text-foreground">

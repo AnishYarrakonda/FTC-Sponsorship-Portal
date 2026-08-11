@@ -28,7 +28,7 @@ export const payoutProfileSchema = z.object({
   mailingAddressLine1: z.string().max(LIMITS.mailingLine, "Address line 1 is too long").optional(),
   mailingAddressLine2: z.string().max(LIMITS.mailingLine, "Address line 2 is too long").optional(),
   mailingCity: z.string().max(LIMITS.mailingCity, "City is too long").optional(),
-  mailingState: z.string().length(2, "State must be a 2-letter code").optional(),
+  mailingState: z.string().length(2, "State must be a 2-letter code").optional().or(z.literal('')),
   mailingPostalCode: z.string().refine(val => !val || postalCodeRegex.test(val), {
     message: "Invalid ZIP code format",
   }).optional(),

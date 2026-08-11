@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
   purgeCoachCredentials,
+  purgeTeamW9,
   purgeUserStorage,
   CREDENTIALS_BUCKET,
   USER_PARTITIONED_BUCKETS,
@@ -181,5 +182,35 @@ describe('purgeUserStorage', () => {
     // The webhook turns a non-empty list into a 500 so Svix redelivers — a swallowed
     // failure here would mean "account deleted" while the ID stayed on disk.
     expect(failedBuckets).toContain(CREDENTIALS_BUCKET)
+  })
+
+  it('includes tax-documents in USER_PARTITIONED_BUCKETS', () => {
+    expect(USER_PARTITIONED_BUCKETS).toContain('tax-documents')
+  })
+})
+
+describe('purgeTeamW9', () => {
+  it('deletes the stored object BEFORE clearing the pointer in DB', async () => {
+    const { client, calls } = makeClient({})
+
+    await purgeTeamW9(client, 'team-1', 'clerk_user_1/w9_123.pdf')
+
+    const removeAt = calls.findIndex((c) => c.op === 'remove')
+    const updateAt = calls.findIndex((c) => c.op === 'update')
+
+    expect(removeAt).toBeGreaterThanOrEqual(0)
+    expect(updateAt).toBeGreaterThanOrEqual(0)
+    expect(removeAt).toBeLessThan(updateAt)
+    expect(calls[removeAt].bucket).toBe('tax-documents')
+  })
+
+  it('leaves the pointer intact when storage deletion fails', async () => {
+    const { client, calls } = makeClient({ removeError: 'storage error' })
+
+    const result = await purgeTeamW9(client, 'team-1', 'clerk_user_1/w9_123.pdf')
+
+    expect(result.purged).toBe(false)
+    expect(result.error).toBe('storage error')
+    expect(calls.some((c) => c.op === 'update')).toBe(false)
   })
 })

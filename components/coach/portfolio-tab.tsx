@@ -322,6 +322,30 @@ export function PortfolioTab({ team, achievements }: { team: Team, achievements:
 
   const errorCount = Object.keys(form.formState.errors).length
 
+  const [payoutStatus, setPayoutStatus] = useState<'not_started' | 'awaiting_w9' | 'in_review' | 'verified' | 'rejected'>('not_started')
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase
+      .from('team_payout_profiles')
+      .select('legal_payee_name, w9_document_path, w9_uploaded_at, w9_verified_at, w9_rejected_at')
+      .eq('team_id', team.id)
+      .single()
+      .then(({ data }) => {
+        if (!data || !data.legal_payee_name) {
+          setPayoutStatus('not_started')
+        } else if (!data.w9_document_path) {
+          setPayoutStatus('awaiting_w9')
+        } else if (data.w9_verified_at) {
+          setPayoutStatus('verified')
+        } else if (data.w9_rejected_at) {
+          setPayoutStatus('rejected')
+        } else if (data.w9_uploaded_at) {
+          setPayoutStatus('in_review')
+        }
+      })
+  }, [team.id])
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-4xl">
@@ -338,9 +362,6 @@ export function PortfolioTab({ team, achievements }: { team: Team, achievements:
           </div>
           <div className="flex flex-col items-end gap-2">
             <div className="flex items-center gap-2">
-              <Button asChild variant="outline" type="button">
-                <Link href="/team/payout">Payout Profile</Link>
-              </Button>
               <Button type="submit" disabled={isPending}>
                 {isPending ? 'Saving…' : 'Save Changes'}
               </Button>
@@ -351,6 +372,36 @@ export function PortfolioTab({ team, achievements }: { team: Team, achievements:
               </p>
             )}
           </div>
+        </div>
+
+        {/* Payout & Tax Details Status Card */}
+        <div className="rounded-xl border border-border bg-card p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Payout &amp; tax details</h3>
+              {payoutStatus === 'not_started' && (
+                <span className="rounded-full bg-muted border border-border px-2.5 py-0.5 text-xs font-medium text-muted-foreground">Not started</span>
+              )}
+              {payoutStatus === 'awaiting_w9' && (
+                <span className="rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 text-xs font-medium text-amber-600">Awaiting W-9</span>
+              )}
+              {payoutStatus === 'in_review' && (
+                <span className="rounded-full bg-blue-500/10 border border-blue-500/20 px-2.5 py-0.5 text-xs font-medium text-blue-600">In review</span>
+              )}
+              {payoutStatus === 'verified' && (
+                <span className="rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 text-xs font-medium text-emerald-600">Verified</span>
+              )}
+              {payoutStatus === 'rejected' && (
+                <span className="rounded-full bg-red-500/10 border border-red-500/20 px-2.5 py-0.5 text-xs font-medium text-red-600">Needs attention (rejected)</span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Sponsors release funds to a verified legal payee and W-9. Keep your payee identity and W-9 up to date.
+            </p>
+          </div>
+          <Button asChild variant="outline" size="sm" className="shrink-0">
+            <Link href="/team/payout">Manage Payout Details</Link>
+          </Button>
         </div>
 
         {/* Section navigation */}

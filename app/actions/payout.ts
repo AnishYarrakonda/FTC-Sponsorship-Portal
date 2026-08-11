@@ -22,8 +22,7 @@ async function requireCoachOwner(teamId: string) {
   return { profile: user, team, supabase }
 }
 import { validateTaxDocumentFile } from '@/app/actions/auth'
-import { purgeTeamW9 } from '@/lib/payout-retention'
-import { sendW9UploadAlert } from '@/lib/notify'
+import { sendW9UploadAlert, createInAppNotification } from '@/lib/notify'
 import * as Sentry from '@sentry/nextjs'
 import { auth } from '@clerk/nextjs/server'
 import { clerkClient } from '@clerk/nextjs/server'
@@ -46,8 +45,6 @@ export async function savePayoutProfile(
   const { profile } = await requireCoachOwner(teamId)
   if (!profile) return actionError('Unauthorized')
 
-  // 3. Mutate (upsert profile via RPC for encryption, but wait, RPC only sets EIN.
-  // We need to upsert the row first, then call the RPC.)
   const supabase = await createClient()
   
   // Fetch existing to see if critical fields changed
@@ -106,9 +103,6 @@ export async function savePayoutProfile(
       .eq('team_id', teamId)
   }
 
-
-
-  
   if (data.ein) {
     const { error: einError } = await admin.rpc('set_payout_ein' as any, {
       p_team_id: teamId,
@@ -142,13 +136,14 @@ export async function savePayoutProfile(
   // 5. Audit
   const { error: auditError } = await (admin as any).from('audit_log').insert({
     actor_id: profile.id,
-    action: 'save_payout_profile',
+    action: 'save_team_payout_profile',
     entity_type: 'teams',
     entity_id: teamId,
     metadata: {
-      is_fiscally_sponsored: data.isFiscallySponsored,
+      team_id: teamId,
+      tax_classification: data.taxClassification,
       has_ein: !!data.ein,
-      has_fiscal_ein: !!data.fiscalSponsorEin
+      has_address: !!(data.mailingAddressLine1 || data.mailingCity)
     }
   })
   if (auditError) {
@@ -194,7 +189,7 @@ export async function uploadW9(
   }
 
   // 3. Mutate (Storage)
-  const path = `${clerkUserId}/${teamId}/w9_${Date.now()}.${validateResult.ext}`
+  const path = `${clerkUserId}/w9_${Date.now()}.${validateResult.ext}`
   const { error: uploadErr } = await (supabase as any).storage
     .from('tax-documents')
     .upload(path, file)
@@ -205,24 +200,20 @@ export async function uploadW9(
     return actionError('Failed to upload W-9.')
   }
 
-  // Mutate (Database) - we must use admin client to write protected columns!
-  // Wait, no, coach CANNOT set w9_uploaded_at on insert, but CAN on update if it's allowlisted?
-  // Our trigger allows coaches to update w9_document_path, w9_uploaded_at.
-  // Wait, the trigger clears w9_verified_by, w9_verified_at, w9_rejected_reason, w9_rejected_at.
-  // Actually, a coach CANNOT write to w9_verified_at. So they can't reset it directly.
-  // We MUST use admin client to reset the verification state upon new upload.
   const admin = await createAdminClient()
+  const threeYearsFromNow = new Date()
+  threeYearsFromNow.setFullYear(threeYearsFromNow.getFullYear() + 3)
   
   const { error: dbErr } = await (admin as any)
     .from('team_payout_profiles')
     .update({
       w9_document_path: path,
       w9_uploaded_at: new Date().toISOString(),
+      w9_expires_at: threeYearsFromNow.toISOString(),
       w9_verified_by: null,
       w9_verified_at: null,
       w9_rejected_reason: null,
       w9_rejected_at: null,
-      w9_expires_at: null, // Reset expiry
       w9_renewal_notified_at: null,
       w9_purged_at: null
     })
@@ -231,14 +222,13 @@ export async function uploadW9(
   if (dbErr) {
     console.error('[payout] W-9 pointer update failed', dbErr)
     Sentry.captureException(dbErr)
-    // Attempt cleanup
+    // Cleanup storage on error
     await (supabase as any).storage.from('tax-documents').remove([path])
     return actionError('Failed to save W-9 record.')
   }
 
-  // Cleanup old file if it existed
+  // Best-effort cleanup of old file
   if (currentProfile.w9_document_path) {
-    // Fire and forget old file cleanup
     admin.storage.from('tax-documents').remove([currentProfile.w9_document_path])
       .catch((e: any) => console.error('Failed to cleanup old W9', e))
   }
@@ -249,7 +239,7 @@ export async function uploadW9(
     action: 'upload_w9',
     entity_type: 'teams',
     entity_id: teamId,
-    metadata: { path }
+    metadata: { team_id: teamId, file_path: path, replaced: !!currentProfile.w9_document_path }
   })
   if (auditError) {
     console.error('[payout] audit log failed', auditError)
@@ -259,7 +249,7 @@ export async function uploadW9(
   // 5. Notify
   await sendW9UploadAlert(
     team.team_name,
-    `${clerkUser.firstName} ${clerkUser.lastName}`,
+    `${clerkUser.firstName ?? ''} ${clerkUser.lastName ?? ''}`.trim() || 'Coach',
     clerkUser.emailAddresses[0]?.emailAddress ?? 'unknown'
   )
 
@@ -275,16 +265,22 @@ export async function adminVerifyW9(teamId: string): Promise<ActionResponse<void
 
   const admin = await createAdminClient()
 
-  // 2. Mutate
-  const nextYear = new Date()
-  nextYear.setFullYear(nextYear.getFullYear() + 1)
+  // 2. Fetch team details for notification
+  const { data: teamProfile } = await (admin as any)
+    .from('teams')
+    .select('owner_id, team_name')
+    .eq('id', teamId)
+    .single()
+
+  const threeYearsFromNow = new Date()
+  threeYearsFromNow.setFullYear(threeYearsFromNow.getFullYear() + 3)
   
   const { error } = await (admin as any)
     .from('team_payout_profiles')
     .update({
       w9_verified_by: profile.id,
       w9_verified_at: new Date().toISOString(),
-      w9_expires_at: nextYear.toISOString(),
+      w9_expires_at: threeYearsFromNow.toISOString(),
       w9_rejected_reason: null,
       w9_rejected_at: null,
     })
@@ -299,10 +295,20 @@ export async function adminVerifyW9(teamId: string): Promise<ActionResponse<void
   // 3. Audit
   await (admin as any).from('audit_log').insert({
     actor_id: profile.id,
-    action: 'verify_w9',
+    action: 'verify_team_payout_profile',
     entity_type: 'teams',
     entity_id: teamId,
   })
+
+  // 4. Notify team owner in-app
+  if (teamProfile?.owner_id) {
+    await createInAppNotification({
+      recipientId: teamProfile.owner_id,
+      type: 'general',
+      title: 'Payout details verified',
+      body: 'Your payout details are verified — sponsors can now see that your W-9 is on file.',
+    }).catch(e => console.error('[payout] notify verification failed', e))
+  }
 
   revalidatePath('/admin/payouts')
   revalidatePath('/dashboard')
@@ -314,8 +320,9 @@ export async function adminRejectW9(
   teamId: string, 
   reason: string
 ): Promise<ActionResponse<void>> {
-  if (!reason || reason.trim().length === 0) {
-    return actionError('Rejection reason is required.')
+  const trimmedReason = reason?.trim() ?? ''
+  if (trimmedReason.length < 10) {
+    return actionError('Rejection reason must be at least 10 characters.')
   }
 
   // 1. Auth
@@ -324,18 +331,17 @@ export async function adminRejectW9(
 
   const admin = await createAdminClient()
 
-  // Get current path to delete it
-  const { data: current } = await (admin as any)
-    .from('team_payout_profiles')
-    .select('w9_document_path')
-    .eq('team_id', teamId)
+  const { data: teamProfile } = await (admin as any)
+    .from('teams')
+    .select('owner_id, team_name')
+    .eq('id', teamId)
     .single()
 
-  // 2. Mutate (Database & Storage)
+  // 2. Mutate (Database ONLY — rejection MUST NOT delete the document from storage)
   const { error } = await (admin as any)
     .from('team_payout_profiles')
     .update({
-      w9_rejected_reason: reason.trim(),
+      w9_rejected_reason: trimmedReason,
       w9_rejected_at: new Date().toISOString(),
       w9_verified_by: null,
       w9_verified_at: null,
@@ -348,19 +354,24 @@ export async function adminRejectW9(
     return actionError('Failed to reject W-9.')
   }
 
-  // Purge the file since it's rejected
-  if (current?.w9_document_path) {
-    await purgeTeamW9(admin, teamId, current.w9_document_path)
-  }
-
   // 3. Audit
   await (admin as any).from('audit_log').insert({
     actor_id: profile.id,
-    action: 'reject_w9',
+    action: 'reject_team_payout_profile',
     entity_type: 'teams',
     entity_id: teamId,
-    metadata: { reason: reason.trim() }
+    metadata: { reason: trimmedReason }
   })
+
+  // 4. Notify coach in-app
+  if (teamProfile?.owner_id) {
+    await createInAppNotification({
+      recipientId: teamProfile.owner_id,
+      type: 'general',
+      title: 'W-9 document needs attention',
+      body: `Your W-9 was not approved for the following reason: ${trimmedReason}`,
+    }).catch(e => console.error('[payout] notify rejection failed', e))
+  }
 
   revalidatePath('/admin/payouts')
   revalidatePath('/dashboard')
