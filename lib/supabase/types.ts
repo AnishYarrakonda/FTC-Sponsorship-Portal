@@ -597,6 +597,102 @@ export type Database = {
           },
         ]
       }
+      team_payout_profiles: {
+        Row: {
+          team_id: string
+          legal_payee_name: string
+          tax_classification: string
+          ein_last4: string | null
+          is_fiscally_sponsored: boolean
+          fiscal_sponsor_name: string | null
+          fiscal_sponsor_ein_last4: string | null
+          mailing_address_line1: string | null
+          mailing_address_line2: string | null
+          mailing_city: string | null
+          mailing_state: string | null
+          mailing_postal_code: string | null
+          remittance_email: string | null
+          w9_document_path: string | null
+          w9_uploaded_at: string | null
+          w9_verified_by: string | null
+          w9_verified_at: string | null
+          w9_rejected_reason: string | null
+          w9_rejected_at: string | null
+          w9_expires_at: string | null
+          w9_renewal_notified_at: string | null
+          w9_purged_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          team_id: string
+          legal_payee_name: string
+          tax_classification: string
+          ein_last4?: string | null
+          is_fiscally_sponsored?: boolean
+          fiscal_sponsor_name?: string | null
+          fiscal_sponsor_ein_last4?: string | null
+          mailing_address_line1?: string | null
+          mailing_address_line2?: string | null
+          mailing_city?: string | null
+          mailing_state?: string | null
+          mailing_postal_code?: string | null
+          remittance_email?: string | null
+          w9_document_path?: string | null
+          w9_uploaded_at?: string | null
+          w9_verified_by?: string | null
+          w9_verified_at?: string | null
+          w9_rejected_reason?: string | null
+          w9_rejected_at?: string | null
+          w9_expires_at?: string | null
+          w9_renewal_notified_at?: string | null
+          w9_purged_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          team_id?: string
+          legal_payee_name?: string
+          tax_classification?: string
+          ein_last4?: string | null
+          is_fiscally_sponsored?: boolean
+          fiscal_sponsor_name?: string | null
+          fiscal_sponsor_ein_last4?: string | null
+          mailing_address_line1?: string | null
+          mailing_address_line2?: string | null
+          mailing_city?: string | null
+          mailing_state?: string | null
+          mailing_postal_code?: string | null
+          remittance_email?: string | null
+          w9_document_path?: string | null
+          w9_uploaded_at?: string | null
+          w9_verified_by?: string | null
+          w9_verified_at?: string | null
+          w9_rejected_reason?: string | null
+          w9_rejected_at?: string | null
+          w9_expires_at?: string | null
+          w9_renewal_notified_at?: string | null
+          w9_purged_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_payout_profiles_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: true
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_payout_profiles_w9_verified_by_fkey"
+            columns: ["w9_verified_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       teams: {
         Row: {
           budget_items: Json

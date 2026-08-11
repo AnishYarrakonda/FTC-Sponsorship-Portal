@@ -46,6 +46,25 @@ export async function validateCredentialFile(
   return { ext: result.ext }
 }
 
+const MAX_TAX_DOC_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+const ALLOWED_TAX_DOC_MIMES = ['application/pdf'] as const
+
+/**
+ * Validates size, MIME allowlist, and magic bytes for W-9s.
+ * Returns the canonical extension (pdf).
+ */
+export async function validateTaxDocumentFile(
+  file: File
+): Promise<{ ext: string; error?: never } | { ext?: never; error: string }> {
+  const result = await validateUploadedFile(file, {
+    allowedMimes: ALLOWED_TAX_DOC_MIMES,
+    maxBytes: MAX_TAX_DOC_FILE_SIZE,
+    label: 'Tax document',
+  })
+  if (result.error !== undefined) return { error: result.error }
+  return { ext: result.ext }
+}
+
 // ---------------------------------------------------------------------------
 // Coach profile provisioning (shared by signup wizard + /complete-profile)
 // ---------------------------------------------------------------------------

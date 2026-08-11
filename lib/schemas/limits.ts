@@ -24,6 +24,12 @@ export const LIMITS = {
   pressLinkLabel: 120,
   paymentReference: 64,
   fulfillmentNote: 1000,
+  legalPayeeName: 200,
+  fiscalSponsorName: 200,
+  mailingLine: 200,
+  mailingCity: 120,
+  remittanceEmail: 254,
+  payoutRejectionReason: 1000,
 } as const
 
 export type LimitKey = keyof typeof LIMITS

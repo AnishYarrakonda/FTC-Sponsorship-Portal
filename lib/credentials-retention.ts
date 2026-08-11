@@ -43,6 +43,7 @@ export const USER_PARTITIONED_BUCKETS = [
   'pitch-storage',
   'visual-pitch-items',
   'pitch-media',
+  'tax-documents',
 ] as const
 
 /** Supabase Storage caps `list()` at 100 objects per call. */
@@ -181,4 +182,37 @@ export async function sweepUnpurgedCredentials(
   }
 
   return { scanned: rows?.length ?? 0, purged, failed }
+}
+
+/**
+ * Destroy a team's W-9 and record that it happened.
+ * 
+ * Like purgeCoachCredentials, this does storage first, then updates the pointer.
+ * This is only called when an admin explicitly deletes it or during account deletion,
+ * because W-9s are kept as business records otherwise.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function purgeTeamW9(admin: any, teamId: string, path: string) {
+  // 1. Delete from storage
+  const { error: storageErr } = await admin.storage.from('tax-documents').remove([path])
+  if (storageErr) {
+    console.error(`[purge] Failed to remove ${path} from storage`, storageErr)
+    Sentry.captureException(storageErr)
+    // We continue. Sometimes the file is already gone, but we still need to clear the DB pointer.
+  }
+
+  // 2. Clear pointer in DB
+  const { error: dbErr } = await admin
+    .from('team_payout_profiles')
+    .update({ 
+      w9_document_path: null, 
+      w9_purged_at: new Date().toISOString() 
+    })
+    .eq('team_id', teamId)
+    
+  if (dbErr) {
+    console.error(`[purge] Failed to clear DB pointer for team ${teamId}`, dbErr)
+    Sentry.captureException(dbErr)
+    throw dbErr
+  }
 }

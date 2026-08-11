@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createInAppNotification } from '@/lib/notify'
 import { sweepUnpurgedCredentials } from '@/lib/credentials-retention'
+import { sweepExpiringW9s } from '@/lib/payout-retention'
 import crypto from 'crypto'
 import { env } from '@/lib/env'
 import * as Sentry from '@sentry/nextjs'
@@ -80,6 +81,13 @@ export async function GET(req: Request) {
       )
     }
 
+    const w9Retention = await sweepExpiringW9s(supabase)
+    if (w9Retention.notified > 0 || w9Retention.failed > 0) {
+      console.log(
+        `[cron] w9 expiration: notified ${w9Retention.notified}, failed ${w9Retention.failed}`
+      )
+    }
+
     // Tell the humans. Coach first — they are the one waiting on an answer.
     for (const row of expiring ?? []) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -119,6 +127,8 @@ export async function GET(req: Request) {
         ids: (expiring ?? []).map((r) => r.id),
         credentials_purged: retention.purged,
         credentials_purge_failed: retention.failed,
+        w9_renewal_notices: w9Retention.notified,
+        w9_renewal_notices_failed: w9Retention.failed,
       },
     })
     if (auditError) {

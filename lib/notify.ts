@@ -154,6 +154,35 @@ export async function sendCredentialUploadAlert(
   }
 }
 
+/** Alert admins when a coach uploads a W-9. */
+export async function sendW9UploadAlert(
+  teamName: string,
+  coachName: string,
+  coachEmail: string
+): Promise<NotifyResult> {
+  try {
+    const recipients = await getAdminNotificationRecipients()
+    if (recipients.length === 0) {
+      return notifyFailure('sendW9UploadAlert', new Error('No admin notification recipients configured'))
+    }
+
+    return await sendViaResend('sendW9UploadAlert', {
+      from: env.RESEND_FROM_EMAIL,
+      to: recipients,
+      subject: `Action Required: New W-9 Upload (${teamName})`,
+      react: CredentialUploadAlert({
+        coachName,
+        coachEmail,
+        heading: 'New W-9 uploaded',
+        description: `uploaded a new W-9 for team ${teamName}.`,
+        reviewUrl: `${env.NEXT_PUBLIC_APP_URL}/admin/payouts`,
+      }),
+    })
+  } catch (err) {
+    return notifyFailure('sendW9UploadAlert', err)
+  }
+}
+
 /** Send "Match Made" emails to both sponsor and coach after an acceptance. */
 export async function sendHandshakeEmail(
   submissionId: string,

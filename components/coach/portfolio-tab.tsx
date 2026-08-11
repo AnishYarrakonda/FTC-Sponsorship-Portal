@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Trash, Image as ImageIcon, Upload, Plus, Sparkles, Trophy, X, ChevronDown, Wrench } from 'lucide-react'
 import { toast } from 'sonner'
 import Image from 'next/image'
+import Link from 'next/link'
 import type { Team, TeamAchievement } from '@/lib/supabase/types'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@clerk/nextjs'
@@ -336,9 +337,14 @@ export function PortfolioTab({ team, achievements }: { team: Team, achievements:
             </p>
           </div>
           <div className="flex flex-col items-end gap-2">
-            <Button type="submit" disabled={isPending}>
-              {isPending ? 'Saving…' : 'Save Changes'}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button asChild variant="outline" type="button">
+                <Link href="/team/payout">Payout Profile</Link>
+              </Button>
+              <Button type="submit" disabled={isPending}>
+                {isPending ? 'Saving…' : 'Save Changes'}
+              </Button>
+            </div>
             {errorCount > 0 && (
               <p className="text-[10px] text-destructive font-medium animate-pulse">
                 Please fix {errorCount} error{errorCount > 1 ? 's' : ''} above

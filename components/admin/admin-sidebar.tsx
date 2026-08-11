@@ -11,6 +11,7 @@ import {
   BarChart2,
   Shield,
   Settings,
+  Receipt,
 } from 'lucide-react'
 import {
   PortalBrand,
@@ -31,6 +32,7 @@ const NAV_ITEMS = [
   { label: 'Applications', href: '/applications', icon: Shield,          exact: false, badge: false },
   { label: 'Sponsors',     href: '/sponsors',     icon: Building2,       exact: false, badge: false },
   { label: 'Teams',        href: '/coaches',      icon: Users,           exact: false, badge: false },
+  { label: 'Payouts',      href: '/payouts',      icon: Receipt,         exact: false, badge: false },
   { label: 'Analytics',    href: '/analytics',    icon: BarChart2,       exact: false, badge: false },
 ] as const
 
