@@ -70,6 +70,20 @@ const ACCOUNTS = {
     fullName: 'Dev Sponsor',
     role: 'sponsor',
   },
+  // Second member of the "dev testing" org (0082 sponsor_members security-boundary
+  // tests need two org members with equal access, plus a second, wholly separate org).
+  sponsorMember: {
+    email: 'sponsor-member+clerk_test@example.com',
+    password: 'SponsorMemberTest123!',
+    fullName: 'Dev Sponsor Teammate',
+    role: 'sponsor',
+  },
+  sponsor2: {
+    email: 'sponsor2+clerk_test@example.com',
+    password: 'Sponsor2Test123!',
+    fullName: 'Dev Sponsor Two',
+    role: 'sponsor',
+  },
 }
 
 const ALL_EMAILS = Object.values(ACCOUNTS).map(a => a.email)
@@ -95,6 +109,7 @@ async function wipeUsers() {
     'pitches',
     'team_achievements',
     'teams',
+    'sponsor_members',
     'profiles',
   ]
   for (const table of tablesToClear) {
@@ -228,6 +243,74 @@ async function main() {
     else log('Created sponsor_applications record (approved)')
   })
 
+  // 6b. Sponsor Organizations (0082) fixtures — a second member of "dev testing" plus a
+  // wholly separate second sponsor company, both needed by the cross-org RLS
+  // security-boundary tests (tests/e2e/sponsor-organizations.spec.ts). clerk_org_id /
+  // clerk_membership_id here are seeder-only placeholders — this script writes DB state
+  // directly rather than driving the real Clerk Organizations API, since the tests only
+  // need two distinct orgs with real RLS-scoped rows, not a live invite flow.
+  section('Creating sponsor organization fixtures (0082)')
+  const sponsorMemberClerkId = await createUser(
+    ACCOUNTS.sponsorMember.email, ACCOUNTS.sponsorMember.password, ACCOUNTS.sponsorMember.fullName
+  )
+  const sponsor2ClerkId = await createUser(
+    ACCOUNTS.sponsor2.email, ACCOUNTS.sponsor2.password, ACCOUNTS.sponsor2.fullName
+  )
+
+  const ORG_A_CLERK_ID = 'org_seed_dev_testing_a'
+
+  await admin.from('sponsors').update({ clerk_org_id: ORG_A_CLERK_ID }).eq('id', sponsorRow.id)
+
+  const sponsorMemberProfileId = await upsertProfile(
+    sponsorMemberClerkId, ACCOUNTS.sponsorMember.email, ACCOUNTS.sponsorMember.fullName,
+    { role: 'sponsor', sponsor_id: sponsorRow.id, coppa_acknowledged: true, tos_accepted: true }
+  )
+
+  const { data: sponsorProfile } = await admin
+    .from('profiles').select('id').eq('email', ACCOUNTS.sponsor.email).single()
+
+  await admin.from('sponsor_members').insert([
+    {
+      sponsor_id: sponsorRow.id, profile_id: sponsorProfile.id, clerk_org_id: ORG_A_CLERK_ID,
+      clerk_membership_id: 'orgmem_seed_a_admin', role: 'org_admin', joined_at: new Date().toISOString(),
+    },
+    {
+      sponsor_id: sponsorRow.id, profile_id: sponsorMemberProfileId, clerk_org_id: ORG_A_CLERK_ID,
+      clerk_membership_id: 'orgmem_seed_a_member', role: 'member', invited_by: sponsorProfile.id,
+      invited_at: new Date().toISOString(), joined_at: new Date().toISOString(),
+    },
+  ])
+  log(`Linked second member of "dev testing"  [profile id: ${sponsorMemberProfileId}]`)
+
+  await admin.from('sponsor_applications').delete().eq('company_name', 'dev testing 2')
+  await admin.from('sponsors').delete().eq('company_name', 'dev testing 2')
+
+  const { data: sponsor2Row, error: sponsor2Err } = await admin
+    .from('sponsors')
+    .insert({
+      company_name: 'dev testing 2',
+      contact_name: ACCOUNTS.sponsor2.fullName,
+      contact_email: ACCOUNTS.sponsor2.email,
+      funding_cap_cents: 500000,
+      status: 'active',
+      source: 'admin_added',
+      clerk_org_id: 'org_seed_dev_testing_b',
+    })
+    .select('id')
+    .single()
+  if (sponsor2Err) throw new Error(`sponsors (dev testing 2) insert failed: ${sponsor2Err.message}`)
+
+  const sponsor2ProfileId = await upsertProfile(
+    sponsor2ClerkId, ACCOUNTS.sponsor2.email, ACCOUNTS.sponsor2.fullName,
+    { role: 'sponsor', sponsor_id: sponsor2Row.id, coppa_acknowledged: true, tos_accepted: true }
+  )
+
+  await admin.from('sponsor_members').insert({
+    sponsor_id: sponsor2Row.id, profile_id: sponsor2ProfileId, clerk_org_id: 'org_seed_dev_testing_b',
+    clerk_membership_id: 'orgmem_seed_b_admin', role: 'org_admin', joined_at: new Date().toISOString(),
+  })
+  log(`Created second sponsor company "dev testing 2"  [id: ${sponsor2Row.id}]`)
+
   // 7. Create a starter team for the coach so they can immediately build a portfolio
   section('Creating starter team for coach')
   const { data: team, error: teamErr } = await admin
@@ -281,10 +364,18 @@ async function main() {
 ║    Email:    admin+clerk_test@example.com                    ║
 ║    Password: AdminTest123!                                    ║
 ╠══════════════════════════════════════════════════════════════╣
-║  SPONSOR                                                      ║
+║  SPONSOR (org_admin of "dev testing")                         ║
 ║    Email:    sponsor+clerk_test@example.com                  ║
 ║    Password: SponsorTest123!                                  ║
 ║    Company:  dev testing  ($5,000 cap, active)               ║
+╠══════════════════════════════════════════════════════════════╣
+║  SPONSOR MEMBER (member of "dev testing")                     ║
+║    Email:    sponsor-member+clerk_test@example.com            ║
+║    Password: SponsorMemberTest123!                             ║
+╠══════════════════════════════════════════════════════════════╣
+║  SPONSOR 2 (org_admin of "dev testing 2" — separate org)      ║
+║    Email:    sponsor2+clerk_test@example.com                  ║
+║    Password: Sponsor2Test123!                                  ║
 ╚══════════════════════════════════════════════════════════════╝
 
 Email verification (if prompted): use the Clerk test code 424242.

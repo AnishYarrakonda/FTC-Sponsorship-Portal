@@ -531,8 +531,87 @@ export type Database = {
           },
         ]
       }
+      sponsor_members: {
+        Row: {
+          clerk_membership_id: string | null
+          clerk_org_id: string
+          created_at: string
+          id: string
+          invited_at: string | null
+          invited_by: string | null
+          joined_at: string | null
+          profile_id: string
+          role: string
+          sponsor_id: string
+          updated_at: string
+        }
+        Insert: {
+          clerk_membership_id?: string | null
+          clerk_org_id: string
+          created_at?: string
+          id?: string
+          invited_at?: string | null
+          invited_by?: string | null
+          joined_at?: string | null
+          profile_id: string
+          role?: string
+          sponsor_id: string
+          updated_at?: string
+        }
+        Update: {
+          clerk_membership_id?: string | null
+          clerk_org_id?: string
+          created_at?: string
+          id?: string
+          invited_at?: string | null
+          invited_by?: string | null
+          joined_at?: string | null
+          profile_id?: string
+          role?: string
+          sponsor_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sponsor_members_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsor_members_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsor_members_sponsor_id_fkey"
+            columns: ["sponsor_id"]
+            isOneToOne: false
+            referencedRelation: "sponsors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsor_members_sponsor_id_fkey"
+            columns: ["sponsor_id"]
+            isOneToOne: false
+            referencedRelation: "v_sponsor_capacity"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsor_members_sponsor_id_fkey"
+            columns: ["sponsor_id"]
+            isOneToOne: false
+            referencedRelation: "v_sponsors_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sponsors: {
         Row: {
+          clerk_org_id: string | null
           company_name: string
           contact_email: string
           contact_name: string
@@ -552,6 +631,7 @@ export type Database = {
           website: string | null
         }
         Insert: {
+          clerk_org_id?: string | null
           company_name: string
           contact_email: string
           contact_name: string
@@ -571,6 +651,7 @@ export type Database = {
           website?: string | null
         }
         Update: {
+          clerk_org_id?: string | null
           company_name?: string
           contact_email?: string
           contact_name?: string
@@ -1654,6 +1735,9 @@ export type Database = {
         Returns: Json
       }
       current_profile_id: { Args: never; Returns: string }
+      // Hand-added for migration 0082_sponsor_organizations.sql.
+      current_sponsor_ids: { Args: never; Returns: string[] }
+      is_sponsor_org_member: { Args: { p_sponsor_id: string }; Returns: boolean }
       expire_overdue_submissions: { Args: never; Returns: Json }
       increment_sponsor_funding: {
         Args: { amount: number; sponsor_uuid: string }

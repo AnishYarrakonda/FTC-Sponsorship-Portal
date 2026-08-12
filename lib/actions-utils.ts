@@ -111,16 +111,52 @@ export async function requireAdmin() {
   return { supabase, user, clerkUserId, adminClient: createAdminClient() }
 }
 
-export async function requireSponsor() {
+// A sponsor org member, resolved from `sponsor_members` via the RLS-respecting server
+// client (its `sponsor_members_select_own_org` policy always admits the caller's own
+// `profile_id = current_profile_id()` rows regardless of sponsor_id). Unioned with
+// `user.sponsor_id` so an invited teammate whose profiles.sponsor_id has not yet been
+// stamped (a brief window between accepting the Clerk invite and the webhook landing)
+// still resolves — without this they would hit "Awaiting verification" forever.
+export async function requireSponsor(): Promise<{
+  supabase: Awaited<ReturnType<typeof createClient>>
+  user: Profile
+  clerkUserId: string
+  sponsorId: string
+  sponsorIds: string[]
+  membership: { id: string; role: 'member' | 'org_admin' } | null
+  adminClient: ReturnType<typeof createAdminClient>
+}> {
   const { supabase, user, clerkUserId } = await requireAuth()
-  if (user.role !== 'sponsor' || !user.sponsor_id) {
+  if (user.role !== 'sponsor') {
     throw new Error('Forbidden')
   }
+
+  const { data: memberships } = await supabase
+    .from('sponsor_members')
+    .select('id, sponsor_id, role')
+    .eq('profile_id', user.id)
+
+  const rows = (memberships ?? []) as { id: string; sponsor_id: string; role: string }[]
+  const ownMembership = rows.find((m) => m.sponsor_id === user.sponsor_id) ?? rows[0] ?? null
+
+  const sponsorIds = Array.from(
+    new Set([...(user.sponsor_id ? [user.sponsor_id] : []), ...rows.map((m) => m.sponsor_id)])
+  )
+  const sponsorId = user.sponsor_id ?? sponsorIds[0]
+
+  if (!sponsorId) {
+    throw new Error('Forbidden')
+  }
+
   return {
     supabase,
     user,
     clerkUserId,
-    sponsorId: user.sponsor_id,
+    sponsorId,
+    sponsorIds,
+    membership: ownMembership
+      ? { id: ownMembership.id, role: ownMembership.role === 'org_admin' ? 'org_admin' : 'member' }
+      : null,
     adminClient: createAdminClient(),
   }
 }

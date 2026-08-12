@@ -28,6 +28,7 @@ const TEAM_ID_C = 'preview-team-c'
 
 const sponsor = {
   id: SPONSOR_ID,
+  clerk_org_id: 'org_preview',
   company_name: 'Helix Robotics Foundation',
   contact_email: 'partnerships@helix.example',
   contact_name: 'Jordan Avery',
@@ -374,6 +375,39 @@ const receipts = [
   }
 ]
 
+const MEMBER_PROFILE_ID = 'preview-member-profile'
+
+const sponsorMembers = [
+  {
+    id: 'preview-sm-1',
+    sponsor_id: SPONSOR_ID,
+    profile_id: PROFILE_ID,
+    clerk_org_id: 'org_preview',
+    clerk_membership_id: 'orgmem_preview_1',
+    role: 'org_admin',
+    invited_by: null,
+    invited_at: '2026-01-12T15:00:00.000Z',
+    joined_at: '2026-01-12T15:00:00.000Z',
+    created_at: '2026-01-12T15:00:00.000Z',
+    updated_at: '2026-01-12T15:00:00.000Z',
+    profiles: { id: PROFILE_ID, full_name: profile.full_name, email: profile.email },
+  },
+  {
+    id: 'preview-sm-2',
+    sponsor_id: SPONSOR_ID,
+    profile_id: MEMBER_PROFILE_ID,
+    clerk_org_id: 'org_preview',
+    clerk_membership_id: 'orgmem_preview_2',
+    role: 'member',
+    invited_by: PROFILE_ID,
+    invited_at: '2026-02-01T15:00:00.000Z',
+    joined_at: '2026-02-02T15:00:00.000Z',
+    created_at: '2026-02-01T15:00:00.000Z',
+    updated_at: '2026-02-02T15:00:00.000Z',
+    profiles: { id: MEMBER_PROFILE_ID, full_name: 'Sam Rivera', email: 'sam@preview.local' },
+  },
+]
+
 const agreementSignatures = [
   {
     id: '00000000-0000-4000-8000-000000000101',
@@ -433,6 +467,7 @@ const FIXTURES: Record<string, unknown[]> = {
   funding_fulfillments: fulfillments,
   funding_receipts: receipts,
   agreement_signatures: agreementSignatures,
+  sponsor_members: sponsorMembers,
   team_achievements: [
     ...teamA.team_achievements,
     ...teamB.team_achievements as any[],

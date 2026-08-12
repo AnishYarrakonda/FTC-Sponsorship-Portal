@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import * as Sentry from '@sentry/nextjs'
+import { clerkClient } from '@clerk/nextjs/server'
 import { createInAppNotification, sendCoachVerificationEmail, sendCoachDenialEmail } from '@/lib/notify'
 import { requireAdmin } from '@/lib/actions-utils'
 import { purgeCoachCredentials } from '@/lib/credentials-retention'
@@ -10,6 +11,7 @@ import { deriveTeamSlug, uniquifyTeamSlug } from '@/lib/team-slug'
 import { verifyFTCTeamIdentity } from '@/lib/ftc-roster'
 import { teamVerificationOverrideSchema } from '@/lib/schemas/team'
 import type { Database } from '@/lib/supabase/types'
+import type { createAdminClient } from '@/lib/supabase/admin'
 import { z } from 'zod'
 
 type TeamStatus = Database['public']['Enums']['team_status']
@@ -23,6 +25,76 @@ const verifyCoachSchema = z.object({
 const applicationActionSchema = z.object({
   applicationId: z.string().uuid(),
 })
+
+const sponsorIdSchema = z.object({
+  sponsorId: z.string().uuid(),
+})
+
+// Shared by approveSponsorApplication and retryCreateSponsorOrganization (the admin
+// recovery path for a sponsor whose org creation failed at approval time). Creates the
+// Clerk Organization, stamps sponsors.clerk_org_id, and seeds the applicant's own
+// sponsor_members row as org_admin. A Clerk failure is reported to the caller as a
+// warning, never a hard error — the sponsor still works via the legacy
+// profiles.sponsor_id branch of current_sponsor_ids() until this is retried.
+async function createClerkOrgForSponsor(
+  adminClient: ReturnType<typeof createAdminClient>,
+  sponsor: { id: string; company_name: string },
+  applicant: { id: string; clerk_user_id: string | null }
+): Promise<{ ok: true } | { ok: false; warning: string }> {
+  if (!applicant.clerk_user_id) {
+    return { ok: false, warning: 'The applicant has no linked Clerk account yet, so no organization was created.' }
+  }
+  try {
+    const clerk = await clerkClient()
+    const org = await clerk.organizations.createOrganization({
+      name: sponsor.company_name,
+      createdBy: applicant.clerk_user_id,
+    })
+
+    const { error: stampError } = await adminClient
+      .from('sponsors')
+      .update({ clerk_org_id: org.id })
+      .eq('id', sponsor.id)
+    if (stampError) {
+      Sentry.captureException(new Error(`[createClerkOrgForSponsor] failed to stamp clerk_org_id: ${stampError.message}`))
+      return { ok: false, warning: 'Clerk organization was created but could not be linked. Contact engineering.' }
+    }
+
+    // The creator is automatically an org:admin member in Clerk; look their membership
+    // up rather than assuming an id so clerk_membership_id is accurate.
+    let clerkMembershipId: string | null = null
+    try {
+      const memberships = await clerk.organizations.getOrganizationMembershipList({ organizationId: org.id })
+      clerkMembershipId = memberships.data.find((m) => m.publicUserData?.userId === applicant.clerk_user_id)?.id ?? null
+    } catch {
+      // Non-fatal — the sponsor_members row below still grants access via the app.
+    }
+
+    const { error: memberError } = await adminClient.from('sponsor_members').upsert(
+      {
+        sponsor_id: sponsor.id,
+        profile_id: applicant.id,
+        clerk_org_id: org.id,
+        clerk_membership_id: clerkMembershipId,
+        role: 'org_admin',
+        joined_at: new Date().toISOString(),
+      },
+      { onConflict: 'sponsor_id,profile_id' }
+    )
+    if (memberError) {
+      Sentry.captureException(new Error(`[createClerkOrgForSponsor] failed to insert sponsor_members: ${memberError.message}`))
+      return { ok: false, warning: 'Clerk organization was created but the membership row could not be saved. Contact engineering.' }
+    }
+
+    return { ok: true }
+  } catch (err) {
+    Sentry.captureException(err instanceof Error ? err : new Error(String(err)))
+    return {
+      ok: false,
+      warning: 'Could not create a Clerk organization for this sponsor. The account still works for one user; retry from this page.',
+    }
+  }
+}
 
 export async function verifyCoach(coachId: string, verified: boolean) {
   const parsed = verifyCoachSchema.safeParse({ coachId, verified })
@@ -397,10 +469,11 @@ export async function approveSponsorApplication(applicationId: string) {
   //    company — N users with full access to one sponsor's inbox, funding page and
   //    decision actions, behind a green success toast.
   let linkedProfileId: string | null = null
+  let linkedProfileClerkId: string | null = null
   if (contactEmail) {
     const { data: applicantProfile, error: findError } = await adminClient
       .from('profiles')
-      .select('id')
+      .select('id, clerk_user_id')
       .eq('email', contactEmail)
       .eq('role', 'sponsor')
       .is('sponsor_id', null)
@@ -420,6 +493,7 @@ export async function approveSponsorApplication(applicationId: string) {
         console.error('[approveSponsorApplication] failed to link profile to sponsor:', linkError)
       } else {
         linkedProfileId = applicantProfile.id
+        linkedProfileClerkId = applicantProfile.clerk_user_id
       }
     }
   }
@@ -431,6 +505,21 @@ export async function approveSponsorApplication(applicationId: string) {
     entity_id: applicationId,
     metadata: { sponsor_id: newSponsor.id, linked_profile_id: linkedProfileId },
   })
+
+  // Create the Clerk Organization and seed the applicant as its org_admin, so a
+  // teammate can be invited later. A failure here does NOT un-approve the sponsor — the
+  // claim-first idempotency above already committed the approval, and current_sponsor_ids()
+  // falls back to profiles.sponsor_id, so the applicant still has a working single-seat
+  // account. It is surfaced as a warning with a retry path (retryCreateSponsorOrganization).
+  let orgWarning: string | undefined
+  if (linkedProfileId) {
+    const orgResult = await createClerkOrgForSponsor(
+      adminClient,
+      { id: newSponsor.id, company_name: app.company_name },
+      { id: linkedProfileId, clerk_user_id: linkedProfileClerkId }
+    )
+    if (!orgResult.ok) orgWarning = orgResult.warning
+  }
 
   // The applicant was told "you will receive an email" and previously never got one.
   if (linkedProfileId) {
@@ -456,6 +545,56 @@ export async function approveSponsorApplication(applicationId: string) {
     }
   }
 
+  return orgWarning ? { success: true, warning: orgWarning } : { success: true }
+}
+
+// Admin-only recovery path when org creation failed at approval time (Clerk outage,
+// missing clerk_user_id at that moment, etc.). The sponsor already works via the legacy
+// profiles.sponsor_id branch of current_sponsor_ids(); this just gives them a second seat.
+export async function retryCreateSponsorOrganization(sponsorId: string) {
+  const parsed = sponsorIdSchema.safeParse({ sponsorId })
+  if (!parsed.success) return { error: 'Invalid sponsor ID' }
+
+  let user, adminClient
+  try {
+    const auth = await requireAdmin()
+    user = auth.user
+    adminClient = auth.adminClient
+  } catch (e: any) {
+    return { error: e.message }
+  }
+
+  const { data: sponsor, error: sponsorError } = await adminClient
+    .from('sponsors')
+    .select('id, company_name, clerk_org_id')
+    .eq('id', sponsorId)
+    .single()
+  if (sponsorError || !sponsor) return { error: 'Sponsor not found' }
+  if (sponsor.clerk_org_id) return { error: 'This sponsor already has a Clerk organization.' }
+
+  const { data: applicant, error: applicantError } = await adminClient
+    .from('profiles')
+    .select('id, clerk_user_id')
+    .eq('sponsor_id', sponsorId)
+    .eq('role', 'sponsor')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (applicantError) return { error: mapDbError(applicantError, 'retryCreateSponsorOrganization.findApplicant') }
+  if (!applicant) return { error: 'No sponsor user is linked to this company yet — link one before creating an organization.' }
+
+  const result = await createClerkOrgForSponsor(adminClient, sponsor, applicant)
+  if (!result.ok) return { error: result.warning }
+
+  await adminClient.from('audit_log').insert({
+    actor_id: user.id,
+    action: 'retry_create_sponsor_organization',
+    entity_type: 'sponsors',
+    entity_id: sponsorId,
+    metadata: { applicant_profile_id: applicant.id },
+  })
+
+  revalidatePath('/sponsors')
   return { success: true }
 }
 

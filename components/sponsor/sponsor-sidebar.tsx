@@ -9,6 +9,7 @@ import {
   Bell,
   Settings,
   Building2,
+  Users,
 } from 'lucide-react'
 import {
   PortalBrand,
@@ -28,6 +29,7 @@ const NAV_ITEMS = [
   { label: 'Pitches', href: '/sponsor/submissions', icon: FileText, exact: false, badge: 'pending' },
   { label: 'Funding', href: '/sponsor/funding', icon: Wallet, exact: false },
   { label: 'Inbox', href: '/sponsor/inbox', icon: Bell, exact: false, badge: 'inbox' },
+  { label: 'Team', href: '/sponsor/members', icon: Users, exact: false },
 ] as const
 
 export function SponsorSidebar({

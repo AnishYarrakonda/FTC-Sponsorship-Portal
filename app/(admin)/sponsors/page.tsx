@@ -6,6 +6,7 @@ import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { EmptyState } from '@/components/ui/empty-state'
 import { SponsorToggleButton } from '@/components/admin/sponsor-toggle-button'
+import { SponsorOrgRetryButton } from '@/components/admin/sponsor-org-retry-button'
 
 export default async function AdminSponsorsPage() {
   const supabase = await createClient()
@@ -74,6 +75,7 @@ export default async function AdminSponsorsPage() {
                 </div>
               </div>
               <SponsorToggleButton sponsorId={sponsor.id} currentStatus={sponsor.status} />
+              {!sponsor.clerk_org_id && <SponsorOrgRetryButton sponsorId={sponsor.id} />}
             </div>
           </div>
         ))}

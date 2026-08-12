@@ -121,7 +121,7 @@ const DATA: Record<string, any[]> = {
   ],
 
   sponsors: [
-    { id: 'sp1', company_name: 'Acme Robotics', industry: 'Manufacturing', contact_name: 'Dana Cole', contact_email: 'dana@acmerobotics.com', status: 'active', funding_cap_cents: 5_000_000, funding_used_cents: 1_250_000, created_at: iso(90) },
+    { id: 'sp1', company_name: 'Acme Robotics', industry: 'Manufacturing', contact_name: 'Dana Cole', contact_email: 'dana@acmerobotics.com', status: 'active', funding_cap_cents: 5_000_000, funding_used_cents: 1_250_000, created_at: iso(90), clerk_org_id: 'org_dev_sp1' },
     { id: 'sp2', company_name: 'TechNova', industry: 'Software', contact_name: 'Wei Chen', contact_email: 'wei@technova.io', status: 'active', funding_cap_cents: 3_000_000, funding_used_cents: 2_700_000, created_at: iso(70) },
     { id: 'sp3', company_name: 'Quantum Dynamics', industry: 'Aerospace', contact_name: 'Lena Vogt', contact_email: 'lena@quantumdyn.com', status: 'pending', funding_cap_cents: 2_000_000, funding_used_cents: 0, created_at: iso(10) },
     { id: 'sp4', company_name: 'BrightForge Tools', industry: 'Hardware', contact_name: 'Omar Said', contact_email: 'omar@brightforge.com', status: 'active', funding_cap_cents: 1_500_000, funding_used_cents: 450_000, created_at: iso(45) },
@@ -174,6 +174,15 @@ const DATA: Record<string, any[]> = {
     { id: 'app1', company_name: 'Northwind Logistics', contact_name: 'Grace Park', contact_email: 'grace@northwind.co', status: 'pending', proposed_cap_cents: 2_500_000, message: 'We’d love to fund teams in the DFW area and offer facility tours.', created_at: iso(2) },
     { id: 'app2', company_name: 'Helios Energy', contact_name: 'Ravi Menon', contact_email: 'ravi@helios.energy', status: 'pending', proposed_cap_cents: 4_000_000, message: 'Interested in sponsoring 3–5 teams this season.', created_at: iso(5) },
     { id: 'app3', company_name: 'Cobalt Labs', contact_name: 'Mia Brandt', contact_email: 'mia@cobaltlabs.dev', status: 'approved', proposed_cap_cents: 1_000_000, message: 'Long-time FIRST supporter.', created_at: iso(20) },
+  ],
+
+  sponsor_members: [
+    {
+      id: 'sm1', sponsor_id: 'sp1', profile_id: 'c5', clerk_org_id: 'org_dev_sp1',
+      clerk_membership_id: 'orgmem_dev_1', role: 'org_admin', invited_by: null,
+      invited_at: iso(90), joined_at: iso(90), created_at: iso(90), updated_at: iso(90),
+      profiles: { id: 'c5', full_name: 'Dana Cole', email: 'dana@acmerobotics.com' },
+    },
   ],
 
   transactions_ledger: [

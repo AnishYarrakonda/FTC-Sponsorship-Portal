@@ -26,9 +26,27 @@ export default async function SponsorLayout({ children }: { children: React.Reac
   if (profile?.role !== 'sponsor') redirect('/complete-profile')
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sponsor = (profile as any)?.sponsors ?? null
+  let sponsor = (profile as any)?.sponsors ?? null
 
+  // An invited teammate whose profiles.sponsor_id has not yet been stamped (the brief
+  // window between accepting the Clerk invite and the webhook landing) resolves through
+  // their sponsor_members row instead — without this they would see "Awaiting
+  // verification" forever despite already being a member.
   if (!profile.sponsor_id) {
+    const { data: membership } = await supabase
+      .from('sponsor_members')
+      .select('sponsor_id, sponsors:sponsor_id(*)')
+      .eq('profile_id', user.id)
+      .maybeSingle()
+    if (membership) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      sponsor = (membership as any).sponsors ?? null
+    }
+  }
+
+  const resolvedSponsorId = profile.sponsor_id ?? sponsor?.id ?? null
+
+  if (!resolvedSponsorId) {
     return (
       <div className="flex h-screen items-center justify-center bg-background px-4">
         <div className="max-w-md rounded-xl border border-border bg-card p-8 text-center space-y-3">
@@ -55,7 +73,7 @@ export default async function SponsorLayout({ children }: { children: React.Reac
   const { count: pendingCount } = await supabase
     .from('submissions')
     .select('id', { count: 'exact', head: true })
-    .eq('sponsor_id', profile.sponsor_id)
+    .eq('sponsor_id', resolvedSponsorId)
     .in('status', [...AWAITING_SPONSOR_STATUSES])
     .is('deleted_at', null)
 
