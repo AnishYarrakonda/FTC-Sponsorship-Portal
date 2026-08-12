@@ -1,6 +1,7 @@
 import { getAuthedProfile } from '@/lib/actions-utils'
 import { notFound, redirect } from 'next/navigation'
 import { SponsorReviewShell } from '@/components/sponsor/review-shell'
+import { AgreementStatusRow } from '@/components/agreements/agreement-status-row'
 
 export default async function SponsorSubmissionReviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -40,9 +41,14 @@ export default async function SponsorSubmissionReviewPage({ params }: { params: 
   }
 
   return (
-    <SponsorReviewShell 
-      submission={submission}
-      team={submission.teams}
-    />
+    <div className="space-y-4">
+      <div className="container mx-auto max-w-4xl pt-6">
+        {await AgreementStatusRow({ supabase, submissionId: id, viewerRole: 'sponsor' })}
+      </div>
+      <SponsorReviewShell
+        submission={submission}
+        team={submission.teams}
+      />
+    </div>
   )
 }

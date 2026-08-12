@@ -136,6 +136,114 @@ export type Database = {
           },
         ]
       }
+      agreement_signatures: {
+        Row: {
+          id: string
+          template_id: string | null
+          template_key: string
+          template_version: number
+          signer_profile_id: string | null
+          signer_role: string
+          signer_legal_name: string
+          signer_email: string
+          submission_id: string | null
+          sponsor_id: string | null
+          team_id: string | null
+          entity_snapshot: Json
+          typed_name: string
+          signed_at: string
+          ip_address: string
+          user_agent: string
+          document_hash: string
+          document_storage_path: string
+          consent_text_version: number
+          consent_text_hash: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          template_id?: string | null
+          template_key: string
+          template_version: number
+          signer_profile_id?: string | null
+          signer_role: string
+          signer_legal_name: string
+          signer_email: string
+          submission_id?: string | null
+          sponsor_id?: string | null
+          team_id?: string | null
+          entity_snapshot?: Json
+          typed_name: string
+          signed_at?: string
+          ip_address: string
+          user_agent: string
+          document_hash: string
+          document_storage_path: string
+          consent_text_version: number
+          consent_text_hash: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          template_id?: string | null
+          template_key?: string
+          template_version?: number
+          signer_profile_id?: string | null
+          signer_role?: string
+          signer_legal_name?: string
+          signer_email?: string
+          submission_id?: string | null
+          sponsor_id?: string | null
+          team_id?: string | null
+          entity_snapshot?: Json
+          typed_name?: string
+          signed_at?: string
+          ip_address?: string
+          user_agent?: string
+          document_hash?: string
+          document_storage_path?: string
+          consent_text_version?: number
+          consent_text_hash?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agreement_signatures_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "agreement_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agreement_signatures_signer_profile_id_fkey"
+            columns: ["signer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agreement_signatures_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "submissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agreement_signatures_sponsor_id_fkey"
+            columns: ["sponsor_id"]
+            isOneToOne: false
+            referencedRelation: "sponsors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agreement_signatures_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ftc_teams_cache: {
         Row: {
           city: string | null
@@ -1517,6 +1625,26 @@ export type Database = {
           p_actor_profile_id: string
         }
         Returns: Json
+      }
+      sign_agreement_atomic: {
+        Args: {
+          p_template_id: string
+          p_signer_profile_id: string
+          p_signer_role: string
+          p_submission_id: string
+          p_typed_name: string
+          p_ip: string
+          p_user_agent: string
+          p_document_hash: string
+          p_document_storage_path: string
+          p_consent_text_hash: string
+          p_entity_snapshot: Json
+        }
+        Returns: Json
+      }
+      agreement_is_signed: {
+        Args: { p_submission_id: string }
+        Returns: boolean
       }
       void_funding_receipt: {
         Args: {

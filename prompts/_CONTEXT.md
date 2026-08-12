@@ -111,9 +111,24 @@ MFA was **fully removed**. Do not reintroduce it unless a prompt explicitly asks
 
 ---
 
-## 2. Current database schema (final state after `0075`)
+## 2. Current database schema
 
-Migration `0012` does not exist — numbering skips it. **Next free number: `0076`.**
+Migration `0012` does not exist — numbering skips it.
+
+> **⚠️ This section documents the schema as of `0075`, which was the head when this pack was
+> written. Migrations have landed since.** Always run `ls supabase/migrations | tail -3` to
+> find the real head before reserving a number.
+>
+> **Applied since this snapshot:**
+> - `0076_funding_fulfillments.sql` — the funding fulfillment state machine (prompt 01)
+> - `0077_team_payout_profiles.sql` — team payout profiles and W-9 collection (prompt 02)
+> - `0078_funding_receipts.sql` — receipts and acknowledgment letters (prompt 04)
+> - `0079_agreement_templates.sql` — versioned sponsorship agreement templates (prompt 05)
+> - `0080_agreement_signatures.sql` — in-house e-sign capture and the database-enforced
+>   agreement gate on fulfillment transitions (prompt 06)
+>
+> Read those files directly for their tables, columns, RLS policies, and RPCs — they
+> are not described below. Everything below `0075` remains accurate.
 
 ### Enums
 

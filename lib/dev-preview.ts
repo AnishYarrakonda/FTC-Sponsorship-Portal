@@ -374,6 +374,55 @@ const receipts = [
   }
 ]
 
+const agreementSignatures = [
+  {
+    id: '00000000-0000-4000-8000-000000000101',
+    template_id: 'agr-1',
+    template_key: 'sponsorship_agreement',
+    template_version: 1,
+    signer_profile_id: PROFILE_ID,
+    signer_role: 'sponsor',
+    signer_legal_name: profile.full_name,
+    signer_email: profile.email,
+    submission_id: 'preview-sub-4',
+    sponsor_id: SPONSOR_ID,
+    team_id: TEAM_ID_A,
+    entity_snapshot: { team_number: teamA.ftc_team_number, team_name: teamA.team_name, team_organization: teamA.organization, sponsor_company_name: sponsor.company_name, amount_cents: 500_000 },
+    typed_name: profile.full_name,
+    signed_at: '2026-04-15T11:02:00.000Z',
+    ip_address: '203.0.113.10',
+    user_agent: 'Mozilla/5.0 (dev preview)',
+    document_hash: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+    document_storage_path: 'preview/sig-sponsor-1.html',
+    consent_text_version: 1,
+    consent_text_hash: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+    created_at: '2026-04-15T11:02:00.000Z',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000102',
+    template_id: 'agr-1',
+    template_key: 'sponsorship_agreement',
+    template_version: 1,
+    signer_profile_id: 'preview-coach',
+    signer_role: 'coach',
+    signer_legal_name: 'Preview Coach',
+    signer_email: 'coach@preview.local',
+    submission_id: 'preview-sub-4',
+    sponsor_id: SPONSOR_ID,
+    team_id: TEAM_ID_A,
+    entity_snapshot: { team_number: teamA.ftc_team_number, team_name: teamA.team_name, team_organization: teamA.organization, sponsor_company_name: sponsor.company_name, amount_cents: 500_000 },
+    typed_name: 'Preview Coach',
+    signed_at: '2026-04-16T09:30:00.000Z',
+    ip_address: '203.0.113.42',
+    user_agent: 'Mozilla/5.0 (dev preview)',
+    document_hash: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+    document_storage_path: 'preview/sig-coach-1.html',
+    consent_text_version: 1,
+    consent_text_hash: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+    created_at: '2026-04-16T09:30:00.000Z',
+  },
+]
+
 const FIXTURES: Record<string, unknown[]> = {
   profiles: [profile],
   sponsors: [sponsor],
@@ -383,6 +432,7 @@ const FIXTURES: Record<string, unknown[]> = {
   transactions_ledger: transactions,
   funding_fulfillments: fulfillments,
   funding_receipts: receipts,
+  agreement_signatures: agreementSignatures,
   team_achievements: [
     ...teamA.team_achievements,
     ...teamB.team_achievements as any[],

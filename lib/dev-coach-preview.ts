@@ -203,6 +203,36 @@ const receipts = [
   }
 ]
 
+function makeSignature(id: string, submissionId: string, role: 'sponsor' | 'coach', over: Record<string, unknown>) {
+  return {
+    id,
+    template_id: 'agr-1',
+    template_key: 'sponsorship_agreement',
+    template_version: 1,
+    signer_role: role,
+    submission_id: submissionId,
+    team_id: TEAM_ID,
+    entity_snapshot: { team_number: team.ftc_team_number, team_name: team.team_name, team_organization: team.organization, sponsor_company_name: 'Acme Robotics', amount_cents: 250_000 },
+    typed_name: role === 'coach' ? mockCoachProfile.full_name : 'Dana Cole',
+    signed_at: iso(role === 'coach' ? 1 : 2),
+    ip_address: role === 'coach' ? '203.0.113.42' : '203.0.113.10',
+    user_agent: 'Mozilla/5.0 (dev preview)',
+    document_hash: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+    document_storage_path: `preview/${id}.html`,
+    consent_text_version: 1,
+    consent_text_hash: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+    created_at: iso(role === 'coach' ? 1 : 2),
+    ...over,
+  }
+}
+
+const agreementSignatures = [
+  makeSignature('00000000-0000-4000-8000-000000000201', 'preview-sub-1', 'sponsor', { sponsor_id: 'sp1', signer_profile_id: 'preview-sponsor-sp1', signer_legal_name: 'Dana Cole', signer_email: 'dana@acmerobotics.com' }),
+  makeSignature('00000000-0000-4000-8000-000000000202', 'preview-sub-1', 'coach', { sponsor_id: 'sp1', signer_profile_id: COACH_ID, signer_legal_name: mockCoachProfile.full_name, signer_email: mockCoachProfile.email }),
+  makeSignature('00000000-0000-4000-8000-000000000203', 'preview-sub-2', 'sponsor', { sponsor_id: 'sp2', signer_profile_id: 'preview-sponsor-sp2', signer_legal_name: 'Wei Chen', signer_email: 'wei@technova.io' }),
+  makeSignature('00000000-0000-4000-8000-000000000204', 'preview-sub-2', 'coach', { sponsor_id: 'sp2', signer_profile_id: COACH_ID, signer_legal_name: mockCoachProfile.full_name, signer_email: mockCoachProfile.email }),
+]
+
 const DATA: Record<string, any[]> = {
   profiles: [mockCoachProfile as any],
   teams: [team],
@@ -214,6 +244,7 @@ const DATA: Record<string, any[]> = {
   team_payout_profiles: payoutProfiles,
   funding_fulfillments: fulfillments,
   funding_receipts: receipts,
+  agreement_signatures: agreementSignatures,
   audit_log: [],
 }
 
