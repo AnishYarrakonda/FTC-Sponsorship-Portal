@@ -3,6 +3,12 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { headers } from 'next/headers'
 import type { Database } from '@/lib/supabase/types'
+import {
+  type SponsorRole,
+  LEGACY_MEMBER_ROLE,
+  hasSponsorRole,
+  isSponsorRole,
+} from '@/lib/sponsor-roles'
 import { SPONSOR_PREVIEW, mockProfile, createMockSupabaseClient } from '@/lib/dev-preview'
 import { isDevAuthBypass, MOCK_ADMIN_PROFILE, createMockSupabaseClient as createAdminMockClient } from '@/lib/dev-bypass'
 import { COACH_PREVIEW, mockCoachProfile, createMockCoachClient } from '@/lib/dev-coach-preview'
@@ -123,7 +129,7 @@ export async function requireSponsor(): Promise<{
   clerkUserId: string
   sponsorId: string
   sponsorIds: string[]
-  membership: { id: string; role: 'member' | 'org_admin' } | null
+  membership: { id: string; role: SponsorRole } | null
   adminClient: ReturnType<typeof createAdminClient>
 }> {
   const { supabase, user, clerkUserId } = await requireAuth()
@@ -155,10 +161,37 @@ export async function requireSponsor(): Promise<{
     sponsorId,
     sponsorIds,
     membership: ownMembership
-      ? { id: ownMembership.id, role: ownMembership.role === 'org_admin' ? 'org_admin' : 'member' }
+      ? { id: ownMembership.id, role: isSponsorRole(ownMembership.role) ? ownMembership.role : 'viewer' }
       : null,
     adminClient: createAdminClient(),
   }
+}
+
+// Built on requireSponsor() — does not duplicate its resolution logic. The
+// LEGACY_MEMBER_ROLE fallback (memberRole = membership?.role ?? LEGACY_MEMBER_ROLE) MUST
+// agree with the SQL COALESCE fallback in current_sponsor_member_role() (0083); a test
+// in lib/__tests__/sponsor-roles.test.ts pins LEGACY_MEMBER_ROLE === 'org_admin' so the
+// two layers cannot silently drift apart.
+export async function requireSponsorRole(minRole: SponsorRole): Promise<{
+  supabase: Awaited<ReturnType<typeof createClient>>
+  user: Profile
+  clerkUserId: string
+  sponsorId: string
+  sponsorIds: string[]
+  membership: { id: string; role: SponsorRole } | null
+  memberRole: SponsorRole
+  adminClient: ReturnType<typeof createAdminClient>
+}> {
+  const auth = await requireSponsor()
+  const memberRole = auth.membership?.role ?? LEGACY_MEMBER_ROLE
+
+  if (!hasSponsorRole(memberRole, minRole)) {
+    const e: Error & { code?: string } = new Error('You do not have permission to do that.')
+    e.code = 'INSUFFICIENT_ORG_ROLE'
+    throw e
+  }
+
+  return { ...auth, memberRole }
 }
 
 export async function requireVerifiedCoach() {

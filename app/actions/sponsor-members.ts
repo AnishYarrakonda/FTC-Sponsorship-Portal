@@ -2,33 +2,34 @@
 
 import { revalidatePath } from 'next/cache'
 import { clerkClient } from '@clerk/nextjs/server'
-import { requireSponsor } from '@/lib/actions-utils'
+import { requireSponsor, requireSponsorRole } from '@/lib/actions-utils'
 import { createInAppNotification } from '@/lib/notify'
 import { mapDbError } from '@/lib/errors'
+import type { SponsorRole } from '@/lib/sponsor-roles'
 import {
   inviteSponsorMemberSchema,
   updateSponsorMemberRoleSchema,
   removeSponsorMemberSchema,
 } from '@/lib/schemas/sponsor-members'
 
-/** role gate shared by every mutating action in this file. */
-async function requireOrgAdmin() {
-  const auth = await requireSponsor()
-  if (auth.membership?.role !== 'org_admin') {
-    return { error: 'Forbidden' as const, auth: null }
-  }
-  return { error: null, auth }
+/** role gate shared by every mutating action in this file. Throws, like every other
+ *  require* guard in lib/actions-utils.ts — callers catch and return { error }. */
+function requireOrgAdmin() {
+  return requireSponsorRole('org_admin')
 }
 
-function clerkRole(role: 'member' | 'org_admin') {
+// Clerk only recognizes two organization-level roles (org:admin / org:member); the two
+// intermediate ranks (viewer, submitter) exist only in sponsor_members.role and are not
+// mirrored into Clerk.
+function clerkRole(role: SponsorRole) {
   return role === 'org_admin' ? 'org:admin' : 'org:member'
 }
 
-function dbRole(clerkRole: string | null | undefined): 'member' | 'org_admin' {
-  return clerkRole === 'org:admin' ? 'org_admin' : 'member'
+function dbRole(clerkRole: string | null | undefined): SponsorRole {
+  return clerkRole === 'org:admin' ? 'org_admin' : 'submitter'
 }
 
-export async function inviteSponsorMember(data: { email: string; role: 'member' | 'org_admin' }) {
+export async function inviteSponsorMember(data: { email: string; role: SponsorRole }) {
   // 1. VALIDATE
   const parsed = inviteSponsorMemberSchema.safeParse(data)
   if (!parsed.success) {
@@ -37,9 +38,12 @@ export async function inviteSponsorMember(data: { email: string; role: 'member' 
   const { email, role } = parsed.data
 
   // 2. AUTH / ROLE
-  const gate = await requireOrgAdmin()
-  if (gate.error) return { error: gate.error }
-  const { user, sponsorId, adminClient, clerkUserId } = gate.auth
+  let user, sponsorId, adminClient, clerkUserId
+  try {
+    ;({ user, sponsorId, adminClient, clerkUserId } = await requireOrgAdmin())
+  } catch (e: any) {
+    return { error: e.message }
+  }
 
   // 3. MUTATE
   const { data: sponsor, error: sponsorError } = await adminClient
@@ -140,7 +144,7 @@ export async function inviteSponsorMember(data: { email: string; role: 'member' 
   return { success: true }
 }
 
-export async function updateSponsorMemberRole(data: { memberId: string; role: 'member' | 'org_admin' }) {
+export async function updateSponsorMemberRole(data: { memberId: string; role: SponsorRole }) {
   // 1. VALIDATE
   const parsed = updateSponsorMemberRoleSchema.safeParse(data)
   if (!parsed.success) {
@@ -149,9 +153,15 @@ export async function updateSponsorMemberRole(data: { memberId: string; role: 'm
   const { memberId, role } = parsed.data
 
   // 2. AUTH / ROLE
-  const gate = await requireOrgAdmin()
-  if (gate.error) return { error: gate.error }
-  const { sponsorId, adminClient } = gate.auth
+  let callerId, sponsorId, adminClient
+  try {
+    const auth = await requireOrgAdmin()
+    callerId = auth.user.id
+    sponsorId = auth.sponsorId
+    adminClient = auth.adminClient
+  } catch (e: any) {
+    return { error: e.message }
+  }
 
   // 3. MUTATE — re-derive the target row scoped to the caller's own org. A memberId from
   // another organization must not be reachable here.
@@ -172,6 +182,31 @@ export async function updateSponsorMemberRole(data: { memberId: string; role: 'm
       .eq('role', 'org_admin')
     if ((count ?? 0) <= 1) {
       return { error: 'An organization must keep at least one admin.' }
+    }
+  }
+
+  // Approvals are on for this org and this demotion would leave fewer than two members
+  // able to confirm a funding request — refuse, or the org locks itself out of ever
+  // approving anything again until the 14-day reservation lapses.
+  const targetWasEligible = target.role === 'approver' || target.role === 'org_admin'
+  const roleStillEligible = role === 'approver' || role === 'org_admin'
+  if (targetWasEligible && !roleStillEligible) {
+    const { data: sponsorRow } = await adminClient
+      .from('sponsors')
+      .select('approval_required_above_cents')
+      .eq('id', sponsorId)
+      .single()
+    if (sponsorRow?.approval_required_above_cents !== null && sponsorRow?.approval_required_above_cents !== undefined) {
+      const { count } = await adminClient
+        .from('sponsor_members')
+        .select('id', { count: 'exact', head: true })
+        .eq('sponsor_id', sponsorId)
+        .in('role', ['approver', 'org_admin'])
+      if ((count ?? 0) <= 2) {
+        return {
+          error: 'Approvals are on for this organization — keep at least two Approvers, or turn approvals off first.',
+        }
+      }
     }
   }
 
@@ -203,7 +238,7 @@ export async function updateSponsorMemberRole(data: { memberId: string; role: 'm
 
   // 4. AUDIT
   await adminClient.from('audit_log').insert({
-    actor_id: gate.auth.user.id,
+    actor_id: callerId,
     action: 'update_sponsor_member_role',
     entity_type: 'sponsor_members',
     entity_id: memberId,
@@ -231,9 +266,15 @@ export async function removeSponsorMember(data: { memberId: string }) {
   const { memberId } = parsed.data
 
   // 2. AUTH / ROLE
-  const gate = await requireOrgAdmin()
-  if (gate.error) return { error: gate.error }
-  const { sponsorId, adminClient } = gate.auth
+  let callerId, sponsorId, adminClient
+  try {
+    const auth = await requireOrgAdmin()
+    callerId = auth.user.id
+    sponsorId = auth.sponsorId
+    adminClient = auth.adminClient
+  } catch (e: any) {
+    return { error: e.message }
+  }
 
   // 3. MUTATE — re-derive the target row scoped to the caller's own org.
   const { data: target, error: targetError } = await adminClient
@@ -253,6 +294,26 @@ export async function removeSponsorMember(data: { memberId: string }) {
       .eq('role', 'org_admin')
     if ((count ?? 0) <= 1) {
       return { error: 'An organization must keep at least one admin.' }
+    }
+  }
+
+  if (target.role === 'approver' || target.role === 'org_admin') {
+    const { data: sponsorRow } = await adminClient
+      .from('sponsors')
+      .select('approval_required_above_cents')
+      .eq('id', sponsorId)
+      .single()
+    if (sponsorRow?.approval_required_above_cents !== null && sponsorRow?.approval_required_above_cents !== undefined) {
+      const { count } = await adminClient
+        .from('sponsor_members')
+        .select('id', { count: 'exact', head: true })
+        .eq('sponsor_id', sponsorId)
+        .in('role', ['approver', 'org_admin'])
+      if ((count ?? 0) <= 2) {
+        return {
+          error: 'Approvals are on for this organization — keep at least two Approvers, or turn approvals off first.',
+        }
+      }
     }
   }
 
@@ -303,7 +364,7 @@ export async function removeSponsorMember(data: { memberId: string }) {
 
   // 4. AUDIT
   await adminClient.from('audit_log').insert({
-    actor_id: gate.auth.user.id,
+    actor_id: callerId,
     action: 'remove_sponsor_member',
     entity_type: 'sponsor_members',
     entity_id: memberId,
@@ -340,7 +401,7 @@ export async function listSponsorMembers() {
 
   const rows = (members ?? []).map((m) => ({
     id: m.id,
-    role: m.role as 'member' | 'org_admin',
+    role: m.role as SponsorRole,
     joinedAt: m.joined_at,
     invitedAt: m.invited_at,
     pending: !m.clerk_membership_id,
@@ -355,7 +416,7 @@ export async function listSponsorMembers() {
   // profile row yet (profile_id is NOT NULL on sponsor_members, so those invites cannot
   // be represented locally until organizationMembership.created fires).
   const { data: sponsor } = await adminClient.from('sponsors').select('clerk_org_id').eq('id', sponsorId).single()
-  let clerkPending: { id: string; role: 'member' | 'org_admin'; email: string; invitedAt: string }[] = []
+  let clerkPending: { id: string; role: SponsorRole; email: string; invitedAt: string }[] = []
   if (sponsor?.clerk_org_id) {
     try {
       const clerk = await clerkClient()

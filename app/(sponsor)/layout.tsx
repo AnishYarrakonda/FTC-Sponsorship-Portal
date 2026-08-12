@@ -77,6 +77,12 @@ export default async function SponsorLayout({ children }: { children: React.Reac
     .in('status', [...AWAITING_SPONSOR_STATUSES])
     .is('deleted_at', null)
 
+  const { count: pendingApprovalCount } = await supabase
+    .from('sponsor_decision_proposals')
+    .select('id', { count: 'exact', head: true })
+    .eq('sponsor_id', resolvedSponsorId)
+    .eq('status', 'pending')
+
   const companyName = sponsor?.company_name ?? 'Your Company'
   const userName = user.full_name ?? user.email ?? 'Sponsor'
   const userEmail = user.email ?? ''
@@ -88,6 +94,7 @@ export default async function SponsorLayout({ children }: { children: React.Reac
         userName={userName}
         userEmail={userEmail}
         pendingCount={pendingCount ?? 0}
+        pendingApprovalCount={pendingApprovalCount ?? 0}
       />
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[1000px] px-4 py-6 sm:px-8 sm:py-8 lg:px-12">

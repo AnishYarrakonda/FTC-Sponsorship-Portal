@@ -34,6 +34,7 @@ export const LIMITS = {
   agreementBody: 60000,
   agreementConsentText: 4000,
   agreementReviewerNote: 1000,
+  proposalNote: 1000,
 } as const
 
 export type LimitKey = keyof typeof LIMITS

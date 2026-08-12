@@ -6,22 +6,28 @@ import {
   updateSponsorMemberRoleSchema,
   removeSponsorMemberSchema,
 } from '../schemas/sponsor-members'
+import { SPONSOR_ROLES } from '../sponsor-roles'
 
 describe('inviteSponsorMemberSchema', () => {
   it('normalizes email (trim + lowercase)', () => {
-    const result = inviteSponsorMemberSchema.safeParse({ email: '  Jane@Example.COM  ', role: 'member' })
+    const result = inviteSponsorMemberSchema.safeParse({ email: '  Jane@Example.COM  ', role: 'submitter' })
     expect(result.success).toBe(true)
     if (result.success) expect(result.data.email).toBe('jane@example.com')
   })
 
   it('rejects an invalid email', () => {
-    const result = inviteSponsorMemberSchema.safeParse({ email: 'not-an-email', role: 'member' })
+    const result = inviteSponsorMemberSchema.safeParse({ email: 'not-an-email', role: 'submitter' })
     expect(result.success).toBe(false)
   })
 
-  it('accepts member and org_admin roles', () => {
-    expect(inviteSponsorMemberSchema.safeParse({ email: 'a@example.com', role: 'member' }).success).toBe(true)
-    expect(inviteSponsorMemberSchema.safeParse({ email: 'a@example.com', role: 'org_admin' }).success).toBe(true)
+  it('accepts every role on the 0083 ladder (viewer, submitter, approver, org_admin)', () => {
+    for (const role of SPONSOR_ROLES) {
+      expect(inviteSponsorMemberSchema.safeParse({ email: 'a@example.com', role }).success).toBe(true)
+    }
+  })
+
+  it('rejects the pre-0083 "member" role — 0083 remaps it to "submitter"', () => {
+    expect(inviteSponsorMemberSchema.safeParse({ email: 'a@example.com', role: 'member' }).success).toBe(false)
   })
 
   it('rejects a role outside the enum', () => {
@@ -38,12 +44,12 @@ describe('inviteSponsorMemberSchema', () => {
 describe('updateSponsorMemberRoleSchema', () => {
   it('requires a uuid memberId', () => {
     expect(
-      updateSponsorMemberRoleSchema.safeParse({ memberId: 'not-a-uuid', role: 'member' }).success
+      updateSponsorMemberRoleSchema.safeParse({ memberId: 'not-a-uuid', role: 'submitter' }).success
     ).toBe(false)
     expect(
       updateSponsorMemberRoleSchema.safeParse({
         memberId: '11111111-1111-4111-8111-111111111111',
-        role: 'member',
+        role: 'submitter',
       }).success
     ).toBe(true)
   })

@@ -10,6 +10,7 @@ import {
   Settings,
   Building2,
   Users,
+  ShieldCheck,
 } from 'lucide-react'
 import {
   PortalBrand,
@@ -27,6 +28,7 @@ const SPONSOR_PREVIEW =
 const NAV_ITEMS = [
   { label: 'Overview', href: '/sponsor/dashboard', icon: LayoutDashboard, exact: true },
   { label: 'Pitches', href: '/sponsor/submissions', icon: FileText, exact: false, badge: 'pending' },
+  { label: 'Approvals', href: '/sponsor/approvals', icon: ShieldCheck, exact: false, badge: 'approvals' },
   { label: 'Funding', href: '/sponsor/funding', icon: Wallet, exact: false },
   { label: 'Inbox', href: '/sponsor/inbox', icon: Bell, exact: false, badge: 'inbox' },
   { label: 'Team', href: '/sponsor/members', icon: Users, exact: false },
@@ -37,16 +39,18 @@ export function SponsorSidebar({
   userName,
   userEmail,
   pendingCount = 0,
+  pendingApprovalCount = 0,
 }: {
   companyName: string
   userName: string
   userEmail: string
   pendingCount?: number
+  pendingApprovalCount?: number
 }) {
   const pathname = usePathname()
   const { signOut } = useClerk()
 
-  const badges: Record<string, number> = { pending: pendingCount, inbox: 0 }
+  const badges: Record<string, number> = { pending: pendingCount, inbox: 0, approvals: pendingApprovalCount }
 
   return (
     <PortalSidebar mobileTitle={companyName} routeKey={pathname}>

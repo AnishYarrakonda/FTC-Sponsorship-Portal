@@ -1,6 +1,7 @@
 import { z } from '@/lib/zod-config'
+import { SPONSOR_ROLES } from '@/lib/sponsor-roles'
 
-export const sponsorMemberRoleSchema = z.enum(['member', 'org_admin'])
+export const sponsorMemberRoleSchema = z.enum(SPONSOR_ROLES)
 
 export const inviteSponsorMemberSchema = z.object({
   email: z.string().trim().toLowerCase().email('Invalid email address'),

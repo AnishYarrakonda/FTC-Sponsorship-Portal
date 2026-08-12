@@ -11,16 +11,18 @@ interface Props {
   token: string
   totalAskCents: number
   teamName: string
+  approvalThresholdCents?: number | null
+  companyName?: string
 }
 
-type Step = 'choose' | 'partial' | 'confirm_decline' | 'done'
+type Step = 'choose' | 'partial' | 'confirm_decline' | 'done' | 'pending_approval'
 
-export function SponsorDecisionPanel({ token, totalAskCents, teamName }: Props) {
+export function SponsorDecisionPanel({ token, totalAskCents, teamName, approvalThresholdCents = null, companyName = 'This company' }: Props) {
   const [step, setStep] = useState<Step>('choose')
   const [partialAmount, setPartialAmount] = useState('')
   // P0-11: this was typed { ok, error } — discarding `warning` AT THE TYPE LEVEL, so
   // recordSponsorDecision's warning could never be read even by accident.
-  const [result, setResult] = useState<{ ok: boolean; error?: string; warning?: string } | null>(null)
+  const [result, setResult] = useState<{ ok: boolean; error?: string; warning?: string; pendingApproval?: boolean } | null>(null)
   const [isPending, startTransition] = useTransition()
 
   const totalDisplay = `$${(totalAskCents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
@@ -29,8 +31,26 @@ export function SponsorDecisionPanel({ token, totalAskCents, teamName }: Props) 
     startTransition(async () => {
       const res = await recordSponsorDecision(token, decision, amountCents)
       setResult(res)
-      if (res.ok) setStep('done')
+      if (res.ok && res.pendingApproval) setStep('pending_approval')
+      else if (res.ok) setStep('done')
     })
+  }
+
+  if (step === 'pending_approval' || result?.pendingApproval) {
+    const thresholdDisplay = approvalThresholdCents !== null
+      ? `$${(approvalThresholdCents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+      : null
+    return (
+      <Card className="border-primary/20 bg-primary/5">
+        <CardContent className="pt-6 text-center space-y-2">
+          <p className="font-bold text-lg">Sent for approval.</p>
+          <p className="text-sm text-muted-foreground">
+            {companyName} requires a second approver for commitments{thresholdDisplay ? ` above ${thresholdDisplay}` : ''}.
+            We&apos;ve notified them; you&apos;ll get an email when it&apos;s confirmed. This link stays valid until then.
+          </p>
+        </CardContent>
+      </Card>
+    )
   }
 
   if (step === 'done' || result?.ok) {

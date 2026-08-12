@@ -43,10 +43,11 @@ import {
   removeSponsorMember,
 } from '@/app/actions/sponsor-members'
 import { inviteSponsorMemberSchema, type InviteSponsorMemberInput } from '@/lib/schemas/sponsor-members'
+import { SPONSOR_ROLES, SPONSOR_ROLE_LABELS, type SponsorRole } from '@/lib/sponsor-roles'
 
 type Member = {
   id: string
-  role: 'member' | 'org_admin'
+  role: SponsorRole
   joinedAt: string | null
   invitedAt: string | null
   pending: boolean
@@ -60,10 +61,11 @@ export function MembersPanel({
   membership,
 }: {
   members: Member[]
-  membership: { id: string; role: 'member' | 'org_admin' } | null
+  membership: { id: string; role: SponsorRole } | null
 }) {
   const isOrgAdmin = membership?.role === 'org_admin'
   const adminCount = members.filter((m) => m.role === 'org_admin' && !m.pending).length
+  const eligibleApproverCount = members.filter((m) => (m.role === 'approver' || m.role === 'org_admin') && !m.pending).length
 
   return (
     <div className="space-y-4">
@@ -104,8 +106,11 @@ export function MembersPanel({
                   <TableCell>{member.fullName ?? '—'}</TableCell>
                   <TableCell>{member.email ?? '—'}</TableCell>
                   <TableCell>
-                    <Badge variant={member.role === 'org_admin' ? 'default' : 'secondary'}>
-                      {member.role === 'org_admin' ? 'Admin' : 'Member'}
+                    <Badge
+                      variant={member.role === 'org_admin' ? 'default' : member.role === 'approver' ? 'secondary' : 'outline'}
+                      title={SPONSOR_ROLE_LABELS[member.role]?.hint}
+                    >
+                      {SPONSOR_ROLE_LABELS[member.role]?.label ?? member.role}
                     </Badge>
                   </TableCell>
                   <TableCell>
@@ -124,6 +129,9 @@ export function MembersPanel({
                           memberId={member.id}
                           role={member.role}
                           isLastAdmin={member.role === 'org_admin' && adminCount <= 1}
+                          isLastEligibleApprover={
+                            (member.role === 'approver' || member.role === 'org_admin') && eligibleApproverCount <= 2
+                          }
                         />
                       )}
                     </TableCell>
@@ -146,7 +154,7 @@ function InviteDialog() {
 
   const form = useForm<InviteSponsorMemberInput>({
     resolver: zodResolver(inviteSponsorMemberSchema),
-    defaultValues: { email: '', role: 'member' },
+    defaultValues: { email: '', role: 'viewer' },
   })
 
   function onSubmit(values: InviteSponsorMemberInput) {
@@ -212,15 +220,16 @@ function InviteDialog() {
                 <FormItem>
                   <FormLabel>Role</FormLabel>
                   <FormControl>
-                    <RadioGroup value={field.value} onValueChange={field.onChange} className="flex gap-4">
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="member" id="role-member" />
-                        <Label htmlFor="role-member">Member</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="org_admin" id="role-admin" />
-                        <Label htmlFor="role-admin">Admin</Label>
-                      </div>
+                    <RadioGroup value={field.value} onValueChange={field.onChange} className="grid grid-cols-2 gap-3">
+                      {SPONSOR_ROLES.map((role) => (
+                        <div key={role} className="flex items-start space-x-2">
+                          <RadioGroupItem value={role} id={`role-${role}`} className="mt-0.5" />
+                          <div>
+                            <Label htmlFor={`role-${role}`}>{SPONSOR_ROLE_LABELS[role].label}</Label>
+                            <p className="text-xs text-muted-foreground">{SPONSOR_ROLE_LABELS[role].hint}</p>
+                          </div>
+                        </div>
+                      ))}
                     </RadioGroup>
                   </FormControl>
                   <FormMessage />
@@ -247,15 +256,19 @@ function MemberRowActions({
   memberId,
   role,
   isLastAdmin,
+  isLastEligibleApprover,
 }: {
   memberId: string
-  role: 'member' | 'org_admin'
+  role: SponsorRole
   isLastAdmin: boolean
+  isLastEligibleApprover: boolean
 }) {
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
+  const blockedByApprovalFloor = isLastEligibleApprover && role !== 'org_admin'
+  const approvalFloorTitle = 'Approvals are on for this organization — keep at least two Approvers, or turn approvals off first.'
 
-  function handleRoleChange(newRole: 'member' | 'org_admin') {
+  function handleRoleChange(newRole: SponsorRole) {
     startTransition(async () => {
       const res = await updateSponsorMemberRole({ memberId, role: newRole })
       if (res.error) toast.error(res.error)
@@ -285,22 +298,28 @@ function MemberRowActions({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
+        {SPONSOR_ROLES.map((candidateRole) => {
+          const demotingLastAdmin = role === 'org_admin' && candidateRole !== 'org_admin' && isLastAdmin
+          const demotingLastApprover =
+            (role === 'approver' || role === 'org_admin') &&
+            candidateRole !== 'approver' &&
+            candidateRole !== 'org_admin' &&
+            blockedByApprovalFloor
+          const disabled = candidateRole === role || demotingLastAdmin || demotingLastApprover || isPending
+          return (
+            <DropdownMenuItem
+              key={candidateRole}
+              disabled={disabled}
+              title={demotingLastAdmin ? 'An organization must keep at least one admin.' : demotingLastApprover ? approvalFloorTitle : undefined}
+              onClick={() => handleRoleChange(candidateRole)}
+            >
+              Make {SPONSOR_ROLE_LABELS[candidateRole].label.toLowerCase()}
+            </DropdownMenuItem>
+          )
+        })}
         <DropdownMenuItem
-          disabled={role === 'org_admin' || isPending}
-          onClick={() => handleRoleChange('org_admin')}
-        >
-          Make admin
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          disabled={role === 'member' || isLastAdmin || isPending}
-          title={isLastAdmin ? 'An organization must keep at least one admin.' : undefined}
-          onClick={() => handleRoleChange('member')}
-        >
-          Make member
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          disabled={isLastAdmin || isPending}
-          title={isLastAdmin ? 'An organization must keep at least one admin.' : undefined}
+          disabled={isLastAdmin || blockedByApprovalFloor || isPending}
+          title={isLastAdmin ? 'An organization must keep at least one admin.' : blockedByApprovalFloor ? approvalFloorTitle : undefined}
           onClick={handleRemove}
           className="text-destructive focus:text-destructive"
         >

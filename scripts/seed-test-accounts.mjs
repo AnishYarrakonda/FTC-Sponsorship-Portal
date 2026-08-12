@@ -70,12 +70,28 @@ const ACCOUNTS = {
     fullName: 'Dev Sponsor',
     role: 'sponsor',
   },
-  // Second member of the "dev testing" org (0082 sponsor_members security-boundary
-  // tests need two org members with equal access, plus a second, wholly separate org).
+  // Second member of the "dev testing" org (0082/0083 sponsor_members security-boundary
+  // tests need multiple org members at different ladder ranks, plus a second, wholly
+  // separate org). sponsor_members.role for this one is 'submitter'.
   sponsorMember: {
     email: 'sponsor-member+clerk_test@example.com',
     password: 'SponsorMemberTest123!',
     fullName: 'Dev Sponsor Teammate',
+    role: 'sponsor',
+  },
+  // 0083 — a read-only member of "dev testing" (sponsor_members.role = 'viewer').
+  sponsorViewer: {
+    email: 'sponsor-viewer+clerk_test@example.com',
+    password: 'SponsorViewerTest123!',
+    fullName: 'Dev Sponsor Viewer',
+    role: 'sponsor',
+  },
+  // 0083 — a second signature for "dev testing" (sponsor_members.role = 'approver'), so
+  // approvals can be turned on (the two-approver floor: sponsor + this account).
+  sponsorApprover: {
+    email: 'sponsor-approver+clerk_test@example.com',
+    password: 'SponsorApproverTest123!',
+    fullName: 'Dev Sponsor Approver',
     role: 'sponsor',
   },
   sponsor2: {
@@ -249,9 +265,15 @@ async function main() {
   // clerk_membership_id here are seeder-only placeholders — this script writes DB state
   // directly rather than driving the real Clerk Organizations API, since the tests only
   // need two distinct orgs with real RLS-scoped rows, not a live invite flow.
-  section('Creating sponsor organization fixtures (0082)')
+  section('Creating sponsor organization fixtures (0082/0083)')
   const sponsorMemberClerkId = await createUser(
     ACCOUNTS.sponsorMember.email, ACCOUNTS.sponsorMember.password, ACCOUNTS.sponsorMember.fullName
+  )
+  const sponsorViewerClerkId = await createUser(
+    ACCOUNTS.sponsorViewer.email, ACCOUNTS.sponsorViewer.password, ACCOUNTS.sponsorViewer.fullName
+  )
+  const sponsorApproverClerkId = await createUser(
+    ACCOUNTS.sponsorApprover.email, ACCOUNTS.sponsorApprover.password, ACCOUNTS.sponsorApprover.fullName
   )
   const sponsor2ClerkId = await createUser(
     ACCOUNTS.sponsor2.email, ACCOUNTS.sponsor2.password, ACCOUNTS.sponsor2.fullName
@@ -265,10 +287,21 @@ async function main() {
     sponsorMemberClerkId, ACCOUNTS.sponsorMember.email, ACCOUNTS.sponsorMember.fullName,
     { role: 'sponsor', sponsor_id: sponsorRow.id, coppa_acknowledged: true, tos_accepted: true }
   )
+  const sponsorViewerProfileId = await upsertProfile(
+    sponsorViewerClerkId, ACCOUNTS.sponsorViewer.email, ACCOUNTS.sponsorViewer.fullName,
+    { role: 'sponsor', coppa_acknowledged: true, tos_accepted: true }
+  )
+  const sponsorApproverProfileId = await upsertProfile(
+    sponsorApproverClerkId, ACCOUNTS.sponsorApprover.email, ACCOUNTS.sponsorApprover.fullName,
+    { role: 'sponsor', coppa_acknowledged: true, tos_accepted: true }
+  )
 
   const { data: sponsorProfile } = await admin
     .from('profiles').select('id').eq('email', ACCOUNTS.sponsor.email).single()
 
+  // Role ladder for "dev testing": org_admin (owner), submitter, viewer, approver. Two
+  // members at rank >= approver (org_admin + approver) so the two-approver floor lets
+  // updateOrgApprovalSettings turn approvals on for manual QA.
   await admin.from('sponsor_members').insert([
     {
       sponsor_id: sponsorRow.id, profile_id: sponsorProfile.id, clerk_org_id: ORG_A_CLERK_ID,
@@ -276,11 +309,21 @@ async function main() {
     },
     {
       sponsor_id: sponsorRow.id, profile_id: sponsorMemberProfileId, clerk_org_id: ORG_A_CLERK_ID,
-      clerk_membership_id: 'orgmem_seed_a_member', role: 'member', invited_by: sponsorProfile.id,
+      clerk_membership_id: 'orgmem_seed_a_submitter', role: 'submitter', invited_by: sponsorProfile.id,
+      invited_at: new Date().toISOString(), joined_at: new Date().toISOString(),
+    },
+    {
+      sponsor_id: sponsorRow.id, profile_id: sponsorViewerProfileId, clerk_org_id: ORG_A_CLERK_ID,
+      clerk_membership_id: 'orgmem_seed_a_viewer', role: 'viewer', invited_by: sponsorProfile.id,
+      invited_at: new Date().toISOString(), joined_at: new Date().toISOString(),
+    },
+    {
+      sponsor_id: sponsorRow.id, profile_id: sponsorApproverProfileId, clerk_org_id: ORG_A_CLERK_ID,
+      clerk_membership_id: 'orgmem_seed_a_approver', role: 'approver', invited_by: sponsorProfile.id,
       invited_at: new Date().toISOString(), joined_at: new Date().toISOString(),
     },
   ])
-  log(`Linked second member of "dev testing"  [profile id: ${sponsorMemberProfileId}]`)
+  log(`Linked submitter/viewer/approver teammates of "dev testing"  [profile ids: ${sponsorMemberProfileId}, ${sponsorViewerProfileId}, ${sponsorApproverProfileId}]`)
 
   await admin.from('sponsor_applications').delete().eq('company_name', 'dev testing 2')
   await admin.from('sponsors').delete().eq('company_name', 'dev testing 2')
@@ -369,9 +412,17 @@ async function main() {
 ║    Password: SponsorTest123!                                  ║
 ║    Company:  dev testing  ($5,000 cap, active)               ║
 ╠══════════════════════════════════════════════════════════════╣
-║  SPONSOR MEMBER (member of "dev testing")                     ║
+║  SPONSOR SUBMITTER (submitter of "dev testing")                ║
 ║    Email:    sponsor-member+clerk_test@example.com            ║
 ║    Password: SponsorMemberTest123!                             ║
+╠══════════════════════════════════════════════════════════════╣
+║  SPONSOR VIEWER (viewer of "dev testing")                     ║
+║    Email:    sponsor-viewer+clerk_test@example.com             ║
+║    Password: SponsorViewerTest123!                              ║
+╠══════════════════════════════════════════════════════════════╣
+║  SPONSOR APPROVER (approver of "dev testing")                 ║
+║    Email:    sponsor-approver+clerk_test@example.com           ║
+║    Password: SponsorApproverTest123!                             ║
 ╠══════════════════════════════════════════════════════════════╣
 ║  SPONSOR 2 (org_admin of "dev testing 2" — separate org)      ║
 ║    Email:    sponsor2+clerk_test@example.com                  ║

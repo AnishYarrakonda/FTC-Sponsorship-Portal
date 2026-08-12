@@ -217,8 +217,8 @@ test.describe.serial('Sponsor Organizations (0082)', () => {
         sponsor_id: sponsorAId,
         profile_id: throwaway!.id,
         clerk_org_id: 'org_seed_dev_testing_a',
-        clerk_membership_id: 'orgmem_seed_a_member',
-        role: 'member',
+        clerk_membership_id: 'orgmem_seed_a_submitter',
+        role: 'submitter',
         joined_at: new Date().toISOString(),
       })
       await adminClient.from('profiles').update({ sponsor_id: sponsorAId }).eq('id', throwaway!.id)
@@ -295,7 +295,7 @@ test.describe.serial('Sponsor Organizations (0082)', () => {
         sponsor_id: sponsorAId,
         profile_id: coachProfileId,
         clerk_org_id: 'org_seed_dev_testing_a',
-        role: 'member',
+        role: 'viewer',
       })
 
       await signIn(page, COACH_EMAIL, COACH_PASSWORD)

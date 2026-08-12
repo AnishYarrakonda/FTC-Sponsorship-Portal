@@ -611,6 +611,7 @@ export type Database = {
       }
       sponsors: {
         Row: {
+          approval_required_above_cents: number | null
           clerk_org_id: string | null
           company_name: string
           contact_email: string
@@ -631,6 +632,7 @@ export type Database = {
           website: string | null
         }
         Insert: {
+          approval_required_above_cents?: number | null
           clerk_org_id?: string | null
           company_name: string
           contact_email: string
@@ -651,6 +653,7 @@ export type Database = {
           website?: string | null
         }
         Update: {
+          approval_required_above_cents?: number | null
           clerk_org_id?: string | null
           company_name?: string
           contact_email?: string
@@ -671,6 +674,98 @@ export type Database = {
           website?: string | null
         }
         Relationships: []
+      }
+      sponsor_decision_proposals: {
+        Row: {
+          amount_cents: number
+          closed_reason: string | null
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision: string
+          decision_note: string | null
+          expires_at: string
+          feedback: string | null
+          id: string
+          origin: string
+          proposed_at: string
+          proposed_by: string | null
+          settled_amount_cents: number | null
+          sponsor_id: string
+          status: string
+          submission_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          closed_reason?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: string
+          decision_note?: string | null
+          expires_at: string
+          feedback?: string | null
+          id?: string
+          origin?: string
+          proposed_at?: string
+          proposed_by?: string | null
+          settled_amount_cents?: number | null
+          sponsor_id: string
+          status?: string
+          submission_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          closed_reason?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: string
+          decision_note?: string | null
+          expires_at?: string
+          feedback?: string | null
+          id?: string
+          origin?: string
+          proposed_at?: string
+          proposed_by?: string | null
+          settled_amount_cents?: number | null
+          sponsor_id?: string
+          status?: string
+          submission_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sponsor_decision_proposals_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsor_decision_proposals_proposed_by_fkey"
+            columns: ["proposed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsor_decision_proposals_sponsor_id_fkey"
+            columns: ["sponsor_id"]
+            isOneToOne: false
+            referencedRelation: "sponsors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsor_decision_proposals_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "submissions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       submission_access_tokens: {
         Row: {
@@ -1738,6 +1833,28 @@ export type Database = {
       // Hand-added for migration 0082_sponsor_organizations.sql.
       current_sponsor_ids: { Args: never; Returns: string[] }
       is_sponsor_org_member: { Args: { p_sponsor_id: string }; Returns: boolean }
+      // Hand-added for migration 0083_sponsor_roles_and_approvals.sql.
+      sponsor_member_role_rank: { Args: { p_role: string }; Returns: number }
+      current_sponsor_member_role: { Args: { p_sponsor_id: string }; Returns: string }
+      has_sponsor_permission: {
+        Args: { p_min_role: string; p_sponsor_id: string }
+        Returns: boolean
+      }
+      create_sponsor_decision_proposal: {
+        Args: {
+          p_amount_cents: number
+          p_feedback?: string
+          p_origin?: string
+          p_proposed_by: string | null
+          p_submission_id: string
+        }
+        Returns: Json
+      }
+      confirm_sponsor_decision_proposal: {
+        Args: { p_approver_id: string; p_note?: string; p_proposal_id: string }
+        Returns: Json
+      }
+      expire_stale_decision_proposals: { Args: never; Returns: Json }
       expire_overdue_submissions: { Args: never; Returns: Json }
       increment_sponsor_funding: {
         Args: { amount: number; sponsor_uuid: string }

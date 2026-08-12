@@ -310,6 +310,8 @@ export default async function SponsorViewPage({ params }: Props) {
             token={token}
             totalAskCents={totalAsk}
             teamName={String(team.team_name ?? '')}
+            approvalThresholdCents={(submission.sponsors as { approval_required_above_cents?: number | null } | null)?.approval_required_above_cents ?? null}
+            companyName={String((submission.sponsors as { company_name?: string } | null)?.company_name ?? 'This company')}
           />
         )}
 

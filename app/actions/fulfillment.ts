@@ -1,7 +1,7 @@
 'use server'
 
 import { z } from 'zod'
-import { requireAdmin, requireSponsor, requireVerifiedCoach } from '@/lib/actions-utils'
+import { requireAdmin, requireSponsorRole, requireVerifiedCoach } from '@/lib/actions-utils'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createInAppNotification } from '@/lib/notify'
 import { generateAndStoreReceipt } from '@/lib/receipts'
@@ -34,7 +34,7 @@ export async function markPaymentSent(data: z.input<typeof markPaymentSentSchema
 
   let user, supabase, adminClient, sponsorId
   try {
-    ({ user, supabase, adminClient, sponsorId } = await requireSponsor())
+    ({ user, supabase, adminClient, sponsorId } = await requireSponsorRole('approver'))
   } catch (e: any) {
     return { error: e.message }
   }
