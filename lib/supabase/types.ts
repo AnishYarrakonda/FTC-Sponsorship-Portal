@@ -77,6 +77,65 @@ export type Database = {
           },
         ]
       }
+      agreement_templates: {
+        Row: {
+          id: string
+          key: string
+          version: number
+          title: string
+          body: string
+          consent_text: string
+          merge_fields: string[]
+          status: string
+          needs_legal_review: boolean
+          effective_from: string | null
+          retired_at: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          key: string
+          version: number
+          title: string
+          body: string
+          consent_text: string
+          merge_fields?: string[]
+          status?: string
+          needs_legal_review?: boolean
+          effective_from?: string | null
+          retired_at?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          key?: string
+          version?: number
+          title?: string
+          body?: string
+          consent_text?: string
+          merge_fields?: string[]
+          status?: string
+          needs_legal_review?: boolean
+          effective_from?: string | null
+          retired_at?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agreement_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ftc_teams_cache: {
         Row: {
           city: string | null
@@ -1449,6 +1508,13 @@ export type Database = {
           p_document_sha256: string
           p_copy_version: string
           p_copy_reviewed_at: string | null
+        }
+        Returns: Json
+      }
+      publish_agreement_version: {
+        Args: {
+          p_template_id: string
+          p_actor_profile_id: string
         }
         Returns: Json
       }

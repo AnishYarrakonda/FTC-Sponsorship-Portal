@@ -216,6 +216,41 @@ const DATA: Record<string, any[]> = {
     { id: 'f-4', sponsor_id: 'sp4', team_id: 't4', amount_cents: 50_000, status: 'receipted', receipt_number: 'PF-2026-000003', pledged_at: iso(100), payment_sent_at: iso(80), payment_received_at: iso(70), sponsors: { company_name: 'BrightForge Tools' }, teams: { team_name: 'Circuit Breakers' } }
   ],
 
+  agreement_templates: [
+    {
+      id: 'agr-1',
+      key: 'sponsorship_agreement',
+      version: 1,
+      title: 'FTC Team Sponsorship Agreement',
+      body: '<h2>1. Parties</h2><p>{{ sponsor_company_name }} and {{ team_legal_payee_name }} for FTC Team {{ team_number }} ({{ team_name }}) of {{ team_organization }}, {{ team_city }}, {{ team_state }}, effective {{ agreement_date }}.</p><h2>2. Commitment</h2><p>{{ amount_formatted }} for the {{ season }} season, facilitated by {{ platform_name }}.</p>',
+      consent_text: 'By typing your name and clicking "Sign," you consent to transact electronically under ESIGN/UETA.',
+      merge_fields: ['sponsor_company_name', 'team_legal_payee_name', 'team_number', 'team_name', 'team_organization', 'team_city', 'team_state', 'agreement_date', 'amount_formatted', 'season', 'platform_name'],
+      status: 'effective',
+      needs_legal_review: true,
+      effective_from: iso(20),
+      retired_at: null,
+      created_by: null,
+      created_at: iso(20),
+      updated_at: iso(20),
+    },
+    {
+      id: 'agr-2',
+      key: 'sponsorship_agreement',
+      version: 2,
+      title: 'FTC Team Sponsorship Agreement (draft)',
+      body: '<h2>1. Parties</h2><p>{{ sponsor_company_name }} and {{ team_legal_payee_name }} for FTC Team {{ team_number }} ({{ team_name }}) of {{ team_organization }}, {{ team_city }}, {{ team_state }}, effective {{ agreement_date }}.</p><h2>2. Commitment</h2><p>{{ amount_formatted }} for the {{ season }} season, facilitated by {{ platform_name }}. Draft revision adding a recognition clause.</p>',
+      consent_text: 'By typing your name and clicking "Sign," you consent to transact electronically under ESIGN/UETA.',
+      merge_fields: ['sponsor_company_name', 'team_legal_payee_name', 'team_number', 'team_name', 'team_organization', 'team_city', 'team_state', 'agreement_date', 'amount_formatted', 'season', 'platform_name'],
+      status: 'draft',
+      needs_legal_review: true,
+      effective_from: null,
+      retired_at: null,
+      created_by: ADMIN_ID,
+      created_at: iso(1),
+      updated_at: iso(1),
+    },
+  ],
+
   funding_receipts: [
     {
       id: 'rec-3',

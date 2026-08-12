@@ -30,6 +30,10 @@ export const LIMITS = {
   mailingCity: 120,
   remittanceEmail: 254,
   payoutRejectionReason: 1000,
+  agreementTitle: 200,
+  agreementBody: 60000,
+  agreementConsentText: 4000,
+  agreementReviewerNote: 1000,
 } as const
 
 export type LimitKey = keyof typeof LIMITS

@@ -12,6 +12,7 @@ import {
   Shield,
   Settings,
   Receipt,
+  FileSignature,
 } from 'lucide-react'
 import {
   PortalBrand,
@@ -31,6 +32,7 @@ const NAV_ITEMS = [
   { label: 'Review',       href: '/moderation',   icon: Inbox,           exact: false, badge: true  },
   { label: 'Applications', href: '/applications', icon: Shield,          exact: false, badge: false },
   { label: 'Sponsors',     href: '/sponsors',     icon: Building2,       exact: false, badge: false },
+  { label: 'Agreements',   href: '/agreements',   icon: FileSignature,  exact: false, badge: false },
   { label: 'Teams',        href: '/coaches',      icon: Users,           exact: false, badge: false },
   { label: 'Payouts',      href: '/payouts',      icon: Receipt,         exact: false, badge: false },
   { label: 'Reconciliation',href: '/reconciliation',icon: Receipt,         exact: false, badge: false },
