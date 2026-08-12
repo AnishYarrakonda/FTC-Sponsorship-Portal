@@ -49,6 +49,7 @@ export function SignupWizard() {
   const [isPending, setIsPending] = useState(false)
   const [isLookingUp, setIsLookingUp] = useState(false)
   const [lookupSuccess, setLookupSuccess] = useState(false)
+  const [lookupSource, setLookupSource] = useState<'first_api' | 'ftcscout' | 'cache' | 'none' | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Email-code verification sub-step (between Account and Verification steps).
@@ -186,6 +187,7 @@ export function SignupWizard() {
     }
     setIsLookingUp(true)
     setLookupSuccess(false)
+    setLookupSource(null)
     const result = await lookupFTCTeam(teamNumber)
     setIsLookingUp(false)
     if (result.error || !result.team) {
@@ -197,6 +199,22 @@ export function SignupWizard() {
     if (result.team.state) form.setValue('teamData.state', result.team.state, { shouldValidate: true })
     form.clearErrors('teamData.ftcTeamNumber')
     setLookupSuccess(true)
+    setLookupSource(result.source)
+  }
+
+  // No blocking here — the wizard only autofills and writes pending_team_data; the
+  // team row (and any hard enforcement) is created later, after admin verification.
+  function lookupProvenanceCopy(source: typeof lookupSource): string {
+    switch (source) {
+      case 'first_api':
+        return 'Verified against the official FIRST roster.'
+      case 'ftcscout':
+        return 'Matched via FTCScout — pending official confirmation.'
+      case 'cache':
+        return 'Matched against a cached FIRST roster record.'
+      default:
+        return 'The FIRST roster is temporarily unavailable; an admin will confirm your team number after signup.'
+    }
   }
 
   // Tracks a failure of createCoachProfile AFTER the Clerk session is already
@@ -613,6 +631,9 @@ export function SignupWizard() {
                           <FormItem>
                             <FormLabel className="text-foreground/80">Team Name</FormLabel>
                             <FormControl><Input className="bg-background border-input text-foreground placeholder:text-muted-foreground" placeholder="e.g. The RoboKnights" maxLength={LIMITS.teamName} {...field} /></FormControl>
+                            {lookupSuccess && lookupSource && teamStatus === 'existing' && (
+                              <p className="text-xs text-muted-foreground">{lookupProvenanceCopy(lookupSource)}</p>
+                            )}
                             <FormMessage />
                           </FormItem>
                         )} />

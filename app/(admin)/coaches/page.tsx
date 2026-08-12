@@ -20,6 +20,29 @@ export default async function CoachesPage() {
     .eq('role', 'coach')
     .order('created_at', { ascending: false })
 
+  // Latest FTC verification check per coach (prompts/07) — team_verification_records
+  // has no dedicated join point on profiles, so it's fetched separately and matched by
+  // profile_id below. Admins see every row (tvr_select_admin, 0081).
+  const coachIds = (coaches ?? []).map((c) => c.id)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let verificationRows: any[] = []
+  if (coachIds.length) {
+    const { data } = await supabase
+      .from('team_verification_records')
+      .select('*')
+      .in('profile_id', coachIds)
+      .order('checked_at', { ascending: false })
+    verificationRows = data ?? []
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const latestVerificationByCoach = new Map<string, any>()
+  for (const row of verificationRows) {
+    if (row.profile_id && !latestVerificationByCoach.has(row.profile_id)) {
+      latestVerificationByCoach.set(row.profile_id, row)
+    }
+  }
+
   // A coach is reviewable only while unverified WITH a document on file — that is the
   // exact condition under which the card renders the ID viewer.
   const needsReview = (c: { coach_verified: boolean; coach_credentials_url: string | null }) =>
@@ -43,7 +66,8 @@ export default async function CoachesPage() {
       // teams is returned as an array from the join; grab first
       const teamArr = coach.teams as any
       const team = Array.isArray(teamArr) ? teamArr[0] ?? null : teamArr ?? null
-      return { ...coach, email: coach.email ?? null, signedUrl, team }
+      const verification = latestVerificationByCoach.get(coach.id) ?? null
+      return { ...coach, email: coach.email ?? null, signedUrl, team, verification }
     })
   )
 

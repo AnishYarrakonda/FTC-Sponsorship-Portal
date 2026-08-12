@@ -1,6 +1,7 @@
 import { getAuthedProfile } from '@/lib/actions-utils'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { deriveTeamSlug, uniquifyTeamSlug } from '@/lib/team-slug'
+import { verifyFTCTeamIdentity } from '@/lib/ftc-roster'
 import type { Database } from '@/lib/supabase/types'
 import { redirect } from 'next/navigation'
 
@@ -107,11 +108,30 @@ export default async function DashboardPage() {
     // pending_team_data is untyped jsonb, and the `as any` that used to paper over that
     // is exactly what hid the missing NOT NULL `slug` below (P0-14).
     const ftcTeamNumber = payloadData.ftcTeamNumber ?? null
-    const status: TeamStatus =
+    let status: TeamStatus =
       payloadData.status === 'existing' && ftcTeamNumber ? 'existing' : 'incubator'
     const rawTaxStatus = payloadData.taxStatus || 'None'
     const taxStatus: TaxStatus =
       rawTaxStatus === '501c3' || rawTaxStatus === 'School' ? rawTaxStatus : 'None'
+
+    // Second fallback provisioning path from the same untyped pending_team_data — same
+    // enforcement as verifyCoach's provisioning branch: never leave the coach stuck on
+    // this "Setting up your workspace…" screen over a verification failure. A rejected
+    // match downgrades to incubator (the branch two lines above already handles that
+    // status); every other outcome just proceeds and is recorded.
+    let verificationRecordId: string | null = null
+    if (status === 'existing' && ftcTeamNumber) {
+      const verification = await verifyFTCTeamIdentity({
+        teamNumber: ftcTeamNumber,
+        claimedTeamName: (payloadData.teamName || profile.full_name || 'My Team').trim(),
+        claimedOrganization: payloadData.organization ?? null,
+        profileId: user.id,
+      })
+      verificationRecordId = verification.recordId
+      if (verification.outcome === 'rejected') {
+        status = 'incubator'
+      }
+    }
 
     const rawBudgetItems = (payloadData.budgetItems as Array<any> | undefined) || []
     const normalizedBudgetItems = rawBudgetItems.map((item) => ({
@@ -165,6 +185,12 @@ export default async function DashboardPage() {
 
     if (!createError && newTeam) {
       await adminClient.from('profiles').update({ pending_team_data: null }).eq('id', user.id)
+      if (verificationRecordId) {
+        await adminClient
+          .from('team_verification_records')
+          .update({ team_id: newTeam.id })
+          .eq('id', verificationRecordId)
+      }
       redirect('/dashboard')
     } else {
       console.error('[Dashboard] Auto-provisioning critical failure:', createError)

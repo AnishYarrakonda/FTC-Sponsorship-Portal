@@ -248,26 +248,47 @@ export type Database = {
         Row: {
           city: string | null
           country: string | null
+          district_code: string | null
           last_synced: string
+          official_team_name: string | null
+          organization: string | null
+          region_code: string | null
+          rookie_year: number | null
+          source: string
           state: string | null
           team_name: string
           team_number: number
+          verified_at: string | null
         }
         Insert: {
           city?: string | null
           country?: string | null
+          district_code?: string | null
           last_synced?: string
+          official_team_name?: string | null
+          organization?: string | null
+          region_code?: string | null
+          rookie_year?: number | null
+          source?: string
           state?: string | null
           team_name: string
           team_number: number
+          verified_at?: string | null
         }
         Update: {
           city?: string | null
           country?: string | null
+          district_code?: string | null
           last_synced?: string
+          official_team_name?: string | null
+          organization?: string | null
+          region_code?: string | null
+          rookie_year?: number | null
+          source?: string
           state?: string | null
           team_name?: string
           team_number?: number
+          verified_at?: string | null
         }
         Relationships: []
       }
@@ -854,6 +875,88 @@ export type Database = {
           {
             foreignKeyName: "team_payout_profiles_w9_verified_by_fkey"
             columns: ["w9_verified_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      team_verification_records: {
+        Row: {
+          checked_at: string
+          claimed_organization: string | null
+          claimed_team_name: string
+          confidence: number
+          ftc_team_number: number
+          id: string
+          name_score: number
+          official_organization: string | null
+          official_team_name: string | null
+          organization_score: number | null
+          outcome: string
+          override_reason: string | null
+          overridden_at: string | null
+          overridden_by: string | null
+          profile_id: string | null
+          source: string
+          team_id: string | null
+        }
+        Insert: {
+          checked_at?: string
+          claimed_organization?: string | null
+          claimed_team_name: string
+          confidence?: number
+          ftc_team_number: number
+          id?: string
+          name_score?: number
+          official_organization?: string | null
+          official_team_name?: string | null
+          organization_score?: number | null
+          outcome: string
+          override_reason?: string | null
+          overridden_at?: string | null
+          overridden_by?: string | null
+          profile_id?: string | null
+          source: string
+          team_id?: string | null
+        }
+        Update: {
+          checked_at?: string
+          claimed_organization?: string | null
+          claimed_team_name?: string
+          confidence?: number
+          ftc_team_number?: number
+          id?: string
+          name_score?: number
+          official_organization?: string | null
+          official_team_name?: string | null
+          organization_score?: number | null
+          outcome?: string
+          override_reason?: string | null
+          overridden_at?: string | null
+          overridden_by?: string | null
+          profile_id?: string | null
+          source?: string
+          team_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_verification_records_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_verification_records_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_verification_records_overridden_by_fkey"
+            columns: ["overridden_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]

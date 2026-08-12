@@ -183,6 +183,25 @@ const DATA: Record<string, any[]> = {
     { id: 'tx4', amount_cents: 120_000 },
   ],
 
+  team_verification_records: [
+    {
+      id: 'tvr-1', team_id: 't1', profile_id: 'c1', ftc_team_number: 31579,
+      claimed_team_name: 'Exodius', claimed_organization: 'Plano Robotics Collective',
+      official_team_name: 'Exodius', official_organization: 'Plano Robotics Collective',
+      source: 'first_api', name_score: 1, organization_score: 1, confidence: 1,
+      outcome: 'auto_pass', override_reason: null, overridden_by: null, overridden_at: null,
+      checked_at: iso(5),
+    },
+    {
+      id: 'tvr-2', team_id: null, profile_id: 'c2', ftc_team_number: 21044,
+      claimed_team_name: 'Robo Knights', claimed_organization: null,
+      official_team_name: 'RoboKnights FTC', official_organization: 'Frisco ISD',
+      source: 'ftcscout', name_score: 0.72, organization_score: null, confidence: 0.72,
+      outcome: 'needs_review', override_reason: null, overridden_by: null, overridden_at: null,
+      checked_at: iso(3),
+    },
+  ],
+
   audit_log: [
     { id: 'a1', action: 'verify_coach', entity_type: 'profiles', entity_id: 'c1', created_at: iso(5), metadata: {}, actor_id: ADMIN_ID, actor: { full_name: 'Dev Admin', role: 'admin' } },
     { id: 'a2', action: 'approve_submission', entity_type: 'submissions', entity_id: 's3', created_at: iso(4), metadata: { amount_cents: 300_000 }, actor_id: ADMIN_ID, actor: { full_name: 'Dev Admin', role: 'admin' } },

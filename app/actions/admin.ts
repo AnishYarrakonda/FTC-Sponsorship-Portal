@@ -7,6 +7,8 @@ import { requireAdmin } from '@/lib/actions-utils'
 import { purgeCoachCredentials } from '@/lib/credentials-retention'
 import { mapDbError } from '@/lib/errors'
 import { deriveTeamSlug, uniquifyTeamSlug } from '@/lib/team-slug'
+import { verifyFTCTeamIdentity } from '@/lib/ftc-roster'
+import { teamVerificationOverrideSchema } from '@/lib/schemas/team'
 import type { Database } from '@/lib/supabase/types'
 import { z } from 'zod'
 
@@ -83,7 +85,7 @@ export async function verifyCoach(coachId: string, verified: boolean) {
       // used to hide — and hiding it is what let the missing `slug` through (P0-14).
       const ftcTeamNumber = (payloadData.ftcTeamNumber as number | undefined) ?? null
       const rawStatus = (payloadData.status as string) || 'existing'
-      const status: TeamStatus =
+      let status: TeamStatus =
         rawStatus === 'incubator' || (rawStatus === 'existing' && !ftcTeamNumber)
           ? 'incubator'
           : 'existing'
@@ -92,6 +94,34 @@ export async function verifyCoach(coachId: string, verified: boolean) {
         rawTaxStatus === '501c3' || rawTaxStatus === 'School' ? rawTaxStatus : 'None'
 
       const teamName = ((payloadData.teamName as string | undefined) || '').trim()
+
+      // This is the PRIMARY team-creation path (prompts/07) — before this slice it ran
+      // NO roster check at all. Verification must never leave a coach unverified: a
+      // rejected match downgrades to the incubator branch that already exists below
+      // rather than failing provisioning, and every other outcome just proceeds.
+      let verificationWarning: string | undefined
+      let verificationRecordId: string | null = null
+      if (status === 'existing' && ftcTeamNumber) {
+        const verification = await verifyFTCTeamIdentity({
+          teamNumber: ftcTeamNumber,
+          claimedTeamName: teamName,
+          claimedOrganization: (payloadData.organization as string | undefined) ?? null,
+          profileId: coachId,
+        })
+        verificationRecordId = verification.recordId
+
+        if (verification.outcome === 'rejected') {
+          status = 'incubator'
+          verificationWarning =
+            `Team #${ftcTeamNumber} could not be matched to the official FIRST roster by name, ` +
+            'so the team was provisioned as an incubator pending manual review instead of an existing team.'
+        } else if (verification.outcome === 'needs_review') {
+          verificationWarning =
+            `Team #${ftcTeamNumber}'s name didn't closely match the official FIRST roster record ` +
+            '(now flagged for review in the verification queue).'
+        }
+      }
+
       // slug is NOT NULL UNIQUE with no DB default — derive it with the shared helper
       // (P0-14: this was the one site 4ebe492 fixed, inline; three others were missed).
       const baseSlug = deriveTeamSlug(teamName, ftcTeamNumber)
@@ -111,12 +141,14 @@ export async function verifyCoach(coachId: string, verified: boolean) {
         seed_funding_goals_cents: (payloadData.seedFundingGoalsCents as number | undefined) ?? 0,
       }
 
-      let { error: teamError } = await adminClient.from('teams').insert(teamPayload)
+      let { data: insertedTeam, error: teamError } = await adminClient.from('teams').insert(teamPayload).select('id').single()
       if (teamError?.code === '23505') {
         // slug collision — retry once with a random suffix
-        ;({ error: teamError } = await adminClient
+        ;({ data: insertedTeam, error: teamError } = await adminClient
           .from('teams')
-          .insert({ ...teamPayload, slug: uniquifyTeamSlug(baseSlug) }))
+          .insert({ ...teamPayload, slug: uniquifyTeamSlug(baseSlug) })
+          .select('id')
+          .single())
       }
       if (teamError) {
         // The coach IS verified; keep pending data for retry and tell the admin.
@@ -126,6 +158,13 @@ export async function verifyCoach(coachId: string, verified: boolean) {
           'Coach verified, but their team could not be created automatically. Ask them to re-save their portfolio, or contact support.'
       } else {
         await adminClient.from('profiles').update({ pending_team_data: null }).eq('id', coachId)
+        if (verificationRecordId && insertedTeam?.id) {
+          await adminClient
+            .from('team_verification_records')
+            .update({ team_id: insertedTeam.id })
+            .eq('id', verificationRecordId)
+        }
+        provisioningWarning = verificationWarning
       }
     }
 
@@ -504,6 +543,91 @@ export async function rejectSponsorApplication(applicationId: string) {
   }
 
   revalidatePath('/applications')
+  return { success: true }
+}
+
+export async function overrideTeamVerification(input: { recordId: string; reason: string }) {
+  const parsed = teamVerificationOverrideSchema.safeParse(input)
+  if (!parsed.success) {
+    return { error: 'Validation failed: ' + parsed.error.issues.map((i) => i.message).join(', ') }
+  }
+
+  let user, adminClient
+  try {
+    const auth = await requireAdmin()
+    user = auth.user
+    adminClient = auth.adminClient
+  } catch (e: any) {
+    return { error: e.message }
+  }
+
+  const { data: record, error: fetchError } = await adminClient
+    .from('team_verification_records')
+    .select('id, team_id, profile_id, ftc_team_number, outcome')
+    .eq('id', parsed.data.recordId)
+    .single()
+
+  if (fetchError || !record) return { error: 'Verification record not found' }
+
+  const previousOutcome = record.outcome
+
+  // team_verification_records has no UPDATE policy (0081) — this write only succeeds
+  // because requireAdmin() hands back the service-role admin client.
+  const { error: updateError } = await adminClient
+    .from('team_verification_records')
+    .update({
+      outcome: 'overridden',
+      override_reason: parsed.data.reason,
+      overridden_by: user.id,
+      overridden_at: new Date().toISOString(),
+    })
+    .eq('id', record.id)
+
+  if (updateError) return { error: mapDbError(updateError, 'overrideTeamVerification.update') }
+
+  // A rejection provisioned the team as an incubator (verifyCoach's downgrade branch) —
+  // reinstate 'existing' now that an admin has manually confirmed the number.
+  let teamOwnerId: string | null = null
+  if (record.team_id) {
+    const { data: team } = await adminClient
+      .from('teams')
+      .select('id, owner_id, status')
+      .eq('id', record.team_id)
+      .maybeSingle()
+
+    teamOwnerId = team?.owner_id ?? null
+
+    if (team && team.status === 'incubator' && previousOutcome === 'rejected') {
+      await adminClient
+        .from('teams')
+        .update({ status: 'existing', ftc_team_number: record.ftc_team_number })
+        .eq('id', record.team_id)
+    }
+  }
+
+  await adminClient.from('audit_log').insert({
+    actor_id: user.id,
+    action: 'override_team_verification',
+    entity_type: 'team_verification_records',
+    entity_id: record.id,
+    metadata: {
+      ftc_team_number: record.ftc_team_number,
+      previous_outcome: previousOutcome,
+      reason: parsed.data.reason,
+    },
+  })
+
+  const recipientId = teamOwnerId ?? record.profile_id
+  if (recipientId) {
+    await createInAppNotification({
+      recipientId,
+      type: 'general',
+      title: 'Your team number has been manually verified',
+      body: `An administrator manually confirmed FTC Team #${record.ftc_team_number} for your team.`,
+    })
+  }
+
+  revalidatePath('/coaches')
   return { success: true }
 }
 

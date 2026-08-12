@@ -233,6 +233,17 @@ const agreementSignatures = [
   makeSignature('00000000-0000-4000-8000-000000000204', 'preview-sub-2', 'coach', { sponsor_id: 'sp2', signer_profile_id: COACH_ID, signer_legal_name: mockCoachProfile.full_name, signer_email: mockCoachProfile.email }),
 ]
 
+const teamVerificationRecords = [
+  {
+    id: 'tvr-preview-1', team_id: TEAM_ID, profile_id: COACH_ID, ftc_team_number: team.ftc_team_number,
+    claimed_team_name: team.team_name, claimed_organization: team.organization,
+    official_team_name: team.team_name, official_organization: team.organization,
+    source: 'first_api', name_score: 1, organization_score: 1, confidence: 1,
+    outcome: 'auto_pass', override_reason: null, overridden_by: null, overridden_at: null,
+    checked_at: iso(2),
+  },
+]
+
 const DATA: Record<string, any[]> = {
   profiles: [mockCoachProfile as any],
   teams: [team],
@@ -245,6 +256,7 @@ const DATA: Record<string, any[]> = {
   funding_fulfillments: fulfillments,
   funding_receipts: receipts,
   agreement_signatures: agreementSignatures,
+  team_verification_records: teamVerificationRecords,
   audit_log: [],
 }
 

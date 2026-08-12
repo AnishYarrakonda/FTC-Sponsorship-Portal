@@ -32,7 +32,7 @@ import { PortfolioTab } from './portfolio-tab'
 import { InboxTab } from './inbox-tab'
 import { FundingTab } from './funding-tab'
 import { AccountSettings } from '@/components/account/account-settings'
-import { updateTeam } from '@/app/actions/team'
+import { updateTeam, requestTeamVerificationReview } from '@/app/actions/team'
 import { toast } from 'sonner'
 import type { Team, Notification, Submission, Sponsor, TeamAchievement, SubmissionSummary } from '@/lib/supabase/types'
 
@@ -181,6 +181,9 @@ function OverviewTab({
   const [gradNumber, setGradNumber] = useState('')
   const [gradName, setGradName] = useState(team.team_name)
   const [isGraduating, startGraduation] = useTransition()
+  const [rejection, setRejection] = useState<{ claimedTeamName: string; officialTeamName: string | null } | null>(null)
+  const [isRequestingReview, startReviewRequest] = useTransition()
+  const [reviewRequested, setReviewRequested] = useState(false)
 
   const handleGraduate = () => {
     const num = parseInt(gradNumber)
@@ -201,13 +204,34 @@ function OverviewTab({
           ftcTeamNumber: num,
           teamName: gradName.trim() || team.team_name,
         })
-        if (res?.error) toast.error(res.error)
-        else {
+        if (res?.error) {
+          // A verification rejection carries structured fields so this can be shown
+          // inline (official vs. entered name) rather than only as a toast — the coach
+          // needs to actually compare the two, not just be told "something's wrong."
+          if ('verificationRejected' in res && res.verificationRejected) {
+            setRejection({ claimedTeamName: res.claimedTeamName, officialTeamName: res.officialTeamName })
+            setShowGraduation(false)
+          } else {
+            toast.error(res.error)
+          }
+        } else {
+          setRejection(null)
           toast.success('Congratulations! You are now an official Existing Team.')
           window.location.reload()
         }
       } catch (e) {
         toast.error(describeActionError(e, 'updateTeam.graduate'))
+      }
+    })
+  }
+
+  const handleRequestReview = () => {
+    startReviewRequest(async () => {
+      const res = await requestTeamVerificationReview(team.id)
+      if (res?.error) toast.error(res.error)
+      else {
+        setReviewRequested(true)
+        toast.success('An admin has been notified to review your team number.')
       }
     })
   }
@@ -285,6 +309,50 @@ function OverviewTab({
                 </DialogFooter>
               </DialogContent>
             </Dialog>
+          </div>
+        </FadeUp>
+      )}
+
+      {/* Graduation verification rejection — not silently swallowed into a toast */}
+      {rejection && (
+        <FadeUp>
+          <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-5 space-y-3">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 shrink-0 text-status-danger" />
+              <div className="flex-1 space-y-2">
+                <h4 className="text-[15px] font-semibold text-status-danger">Team number could not be verified</h4>
+                <p className="text-sm text-muted-foreground">
+                  The name you entered doesn&apos;t match the official FIRST roster record for that team number.
+                </p>
+                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <dt className="text-muted-foreground uppercase tracking-wide">You entered</dt>
+                    <dd className="mt-0.5 font-medium text-foreground">{rejection.claimedTeamName}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground uppercase tracking-wide">Official record</dt>
+                    <dd className="mt-0.5 font-medium text-foreground">{rejection.officialTeamName ?? 'Unknown'}</dd>
+                  </div>
+                </dl>
+                <div className="flex items-center gap-3 pt-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={isRequestingReview || reviewRequested}
+                    onClick={handleRequestReview}
+                    className="border-rose-500/30 text-status-danger hover:bg-rose-500/10"
+                  >
+                    {reviewRequested ? 'Review requested' : isRequestingReview ? 'Requesting…' : 'Request admin review'}
+                  </Button>
+                  <button
+                    onClick={() => setRejection(null)}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </FadeUp>
       )}

@@ -24,6 +24,12 @@ const envSchema = z.object({
 
   // If unset, notify falls back to a profiles.role='admin' query.
   ADMIN_NOTIFICATION_EMAILS: z.string().optional(),
+  // Official FIRST Events API (prompt 07). Must stay .optional() — lib/env.ts throws in
+  // production on a missing REQUIRED var, and these two cannot be required: a site with
+  // no FIRST credentials must still run, just with fetchTeamFromFirstApi degrading to
+  // { status: 'unavailable' } and lib/ftc-roster.ts falling back to FTCScout.
+  FIRST_API_USERNAME: z.string().min(1).optional(),
+  FIRST_API_TOKEN: z.string().min(1).optional(),
   // Sentry. `.optional()` permits the variable to be ABSENT; it does not permit it to be
   // INVALID — and every request path imports this module, so in production `parseEnv()`
   // throws and 500s the ENTIRE SITE on a malformed value. `.env.local` ships the literal

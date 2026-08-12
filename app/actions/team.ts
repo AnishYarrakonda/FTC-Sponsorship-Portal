@@ -1,14 +1,66 @@
 'use server'
 
+import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { teamOnboardingSchema, teamOnboardingBaseSchema, type TeamOnboardingInput } from '@/lib/schemas/team'
 import { achievementSchema, type AchievementInput } from '@/lib/schemas/achievement'
-import { validateFTCTeam, type FTCTeam } from '@/lib/ftc-roster'
+import { verifyFTCTeamIdentity, lookupFTCTeamWithSource, type FTCTeam } from '@/lib/ftc-roster'
 import { deriveTeamSlug, uniquifyTeamSlug } from '@/lib/team-slug'
 import { redirect } from 'next/navigation'
 import { requireAuth } from '@/lib/actions-utils'
+import { createInAppNotification } from '@/lib/notify'
 import { mapDbError } from '@/lib/errors'
 import { validateUploadedFile, IMAGE_MIMES } from '@/lib/file-validation'
+
+const lookupTeamNumberSchema = z.number().int().min(1).max(999999)
+
+/** Every admin, notified in parallel — same pattern as submission.ts's moderation-queue alert. */
+async function notifyAdminsOfNeedsReview(teamNumber: number, teamName: string) {
+  const admin = createAdminClient()
+  const { data: admins } = await admin.from('profiles').select('id').eq('role', 'admin')
+  if (!admins?.length) return
+  await Promise.all(
+    admins.map((a) =>
+      createInAppNotification({
+        recipientId: a.id,
+        type: 'general',
+        title: 'FTC team verification needs review',
+        body: `Team #${teamNumber} ("${teamName}") didn't closely match the official FIRST roster record. Review it from the coach verification queue.`,
+      })
+    )
+  )
+}
+
+/**
+ * Called from the "Request admin review" button dashboard-shell.tsx shows on a
+ * rejected graduation attempt. Deliberately thin — a coach hitting this has already
+ * been shown the rejection reason; this just makes sure an admin sees it too.
+ */
+export async function requestTeamVerificationReview(teamId: string) {
+  const parsed = z.string().uuid().safeParse(teamId)
+  if (!parsed.success) return { error: 'Invalid team id' }
+
+  let user, supabase
+  try {
+    const auth = await requireAuth()
+    user = auth.user
+    supabase = auth.supabase
+  } catch {
+    return { error: 'Not authenticated' }
+  }
+
+  const { data: team } = await supabase
+    .from('teams')
+    .select('team_name, ftc_team_number')
+    .eq('id', parsed.data)
+    .eq('owner_id', user.id)
+    .maybeSingle()
+
+  if (!team) return { error: 'Team not found' }
+
+  await notifyAdminsOfNeedsReview(team.ftc_team_number ?? 0, team.team_name)
+  return { success: true }
+}
 
 function normalizePressLinks(
   links: TeamOnboardingInput['pressLinks'] | undefined
@@ -29,16 +81,30 @@ function normalizeBudgetItems(
 
 export async function lookupFTCTeam(
   teamNumber: number
-): Promise<{ team: FTCTeam; error?: never } | { team?: never; error: string }> {
-  if (!teamNumber || teamNumber <= 0) {
+): Promise<
+  | { team: FTCTeam; source: 'first_api' | 'ftcscout' | 'cache' | 'none'; error?: never }
+  | { team?: never; source?: never; error: string }
+> {
+  const parsed = lookupTeamNumberSchema.safeParse(teamNumber)
+  if (!parsed.success) {
     return { error: 'Invalid team number' }
   }
 
-  const team = await validateFTCTeam(teamNumber)
-  if (!team) {
-    return { error: `FTC Team #${teamNumber} could not be found in the FIRST registry.` }
+  // This proxies an outbound request (the official FIRST API / FTCScout) on every call —
+  // an unauthenticated server action doing that is an open relay. Signup-wizard callers
+  // already have an active Clerk session by the time they reach the team step (email
+  // verification happens first), so this guard costs the legitimate path nothing.
+  try {
+    await requireAuth()
+  } catch (e: any) {
+    return { error: e.message }
   }
-  return { team }
+
+  const result = await lookupFTCTeamWithSource(parsed.data)
+  if (!result) {
+    return { error: `FTC Team #${parsed.data} could not be found in the FIRST registry.` }
+  }
+  return { team: result.team, source: result.source }
 }
 
 export async function createTeam(data: TeamOnboardingInput) {
@@ -58,10 +124,25 @@ export async function createTeam(data: TeamOnboardingInput) {
 
   const payloadData = result.data
 
+  // Verification replaces the old existence-only check — it resolves the team record
+  // via the same official-first/FTCScout/cache chain validateFTCTeam uses, but also
+  // cross-checks the claimed name/organization against it. A rejected identity match
+  // is a harder stop than the old "not found" error.
+  let verification: Awaited<ReturnType<typeof verifyFTCTeamIdentity>> | null = null
   if (payloadData.status === 'existing' && payloadData.ftcTeamNumber) {
-    const ftcData = await validateFTCTeam(payloadData.ftcTeamNumber)
-    if (!ftcData) {
-      return { error: `FTC Team #${payloadData.ftcTeamNumber} could not be found in the FIRST registry.` }
+    verification = await verifyFTCTeamIdentity({
+      teamNumber: payloadData.ftcTeamNumber,
+      claimedTeamName: payloadData.teamName,
+      claimedOrganization: payloadData.organization,
+      profileId: user.id,
+    })
+
+    if (verification.outcome === 'rejected') {
+      return {
+        error:
+          `${verification.message} If you believe this is a mistake, contact support and an ` +
+          'admin can review your team number manually.',
+      }
     }
   }
 
@@ -166,17 +247,43 @@ export async function createTeam(data: TeamOnboardingInput) {
     teamId = team!.id
   }
 
-  // Audit log — coach create is a material event admins should see
+  // Backfill team_id on the verification record now that the team row exists — the
+  // check ran before insert, so team_verification_records.team_id started NULL.
   const admin = createAdminClient()
+  if (verification?.recordId) {
+    await admin
+      .from('team_verification_records')
+      .update({ team_id: teamId })
+      .eq('id', verification.recordId)
+  }
+
+  // Audit log — coach create is a material event admins should see
   const { error: createAuditError } = await admin.from('audit_log').insert({
     actor_id: user.id,
     action: 'create_team',
     entity_type: 'teams',
     entity_id: teamId,
-    metadata: { team_name: payloadData.teamName, status: payloadData.status },
+    metadata: {
+      team_name: payloadData.teamName,
+      status: payloadData.status,
+      ...(verification
+        ? {
+            verification: {
+              outcome: verification.outcome,
+              confidence: verification.confidence,
+              source: verification.source,
+              record_id: verification.recordId,
+            },
+          }
+        : {}),
+    },
   })
   if (createAuditError) {
     console.error('Failed to write create_team audit log:', createAuditError.message)
+  }
+
+  if (verification?.outcome === 'needs_review') {
+    await notifyAdminsOfNeedsReview(payloadData.ftcTeamNumber!, payloadData.teamName)
   }
 
   redirect('/dashboard')
@@ -267,6 +374,48 @@ export async function updateTeam(id: string, data: Partial<TeamOnboardingInput>)
     supabase = auth.supabase
   } catch {
     return { error: 'Not authenticated' }
+  }
+
+  // Graduation enforcement: status -> 'existing' or a changed ftc_team_number both mean
+  // "this team is now claiming to be a real, numbered FTC team" — the same identity
+  // claim createTeam verifies. Triggered whenever a number is being set/changed in this
+  // patch (the incubator-graduation call from dashboard-shell.tsx always sends
+  // {status, ftcTeamNumber, teamName} together).
+  let updateVerification: Awaited<ReturnType<typeof verifyFTCTeamIdentity>> | null = null
+  if (typeof clean.ftcTeamNumber === 'number') {
+    const claimedTeamName =
+      typeof clean.teamName === 'string' && clean.teamName.trim()
+        ? clean.teamName.trim()
+        : (
+            await supabase.from('teams').select('team_name, organization').eq('id', id).eq('owner_id', user.id).maybeSingle()
+          ).data?.team_name ?? ''
+    const claimedOrganization =
+      clean.organization !== undefined
+        ? clean.organization
+        : (
+            await supabase.from('teams').select('organization').eq('id', id).eq('owner_id', user.id).maybeSingle()
+          ).data?.organization ?? null
+
+    updateVerification = await verifyFTCTeamIdentity({
+      teamNumber: clean.ftcTeamNumber,
+      claimedTeamName,
+      claimedOrganization,
+      profileId: user.id,
+      teamId: id,
+    })
+
+    if (updateVerification.outcome === 'rejected') {
+      return {
+        error:
+          `${updateVerification.message} If you believe this is a mistake, contact support ` +
+          'and an admin can review your team number manually.',
+        // Structured fields so the graduation UI (dashboard-shell.tsx) can render the
+        // official-vs-entered comparison inline instead of just a toast string.
+        verificationRejected: true as const,
+        claimedTeamName,
+        officialTeamName: updateVerification.official?.team_name ?? null,
+      }
+    }
   }
 
   const updatePayload: Record<string, unknown> = {}
@@ -405,10 +554,28 @@ export async function updateTeam(id: string, data: Partial<TeamOnboardingInput>)
     action: 'update_team',
     entity_type: 'teams',
     entity_id: id,
-    metadata: { fields_updated: Object.keys(clean) },
+    metadata: {
+      fields_updated: Object.keys(clean),
+      // Only present when the graduation check actually ran — updateTeam is called for
+      // every ordinary portfolio-section save, most of which never touch ftcTeamNumber.
+      ...(updateVerification
+        ? {
+            verification: {
+              outcome: updateVerification.outcome,
+              confidence: updateVerification.confidence,
+              source: updateVerification.source,
+              record_id: updateVerification.recordId,
+            },
+          }
+        : {}),
+    },
   })
   if (updateAuditError) {
     console.error('Failed to write update_team audit log:', updateAuditError.message)
+  }
+
+  if (updateVerification?.outcome === 'needs_review') {
+    await notifyAdminsOfNeedsReview(clean.ftcTeamNumber!, clean.teamName ?? 'your team')
   }
 
   return { success: true }
