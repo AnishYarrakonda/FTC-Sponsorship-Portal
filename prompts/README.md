@@ -66,13 +66,14 @@ inside a session.
 
 | Status | Prompts |
 |---|---|
-| ✅ Shipped | `01` fulfillment machine · `02` payout profiles + W-9 · `03` fulfillment UI · `04` receipts & acknowledgment letters · `05` sponsorship agreement templates · `06` e-sign capture flow |
-| ⬜ Not started | `07`–`18` |
+| ✅ Shipped | `01` fulfillment machine · `02` payout profiles + W-9 · `03` fulfillment UI · `04` receipts & acknowledgment letters · `05` sponsorship agreement templates · `06` e-sign capture flow · `07` official FIRST team verification |
+| 🚧 Partial | `07` — code/migration/tests shipped and deployed, but `FIRST_API_USERNAME` / `FIRST_API_TOKEN` are **not yet set in Vercel** (nobody has registered at ftc-events.firstinspires.org/services/API). The system runs correctly on the FTCScout fallback in the meantime; set both vars whenever the credentials arrive — no code changes needed. |
+| ⬜ Not started | `08`–`18` |
 
-Migrations applied so far: `0076`, `0077`, `0078`, `0079`, `0080`. Real head is always
+Migrations applied so far: `0076`, `0077`, `0078`, `0079`, `0080`, `0081`. Real head is always
 `ls supabase/migrations | tail -3` — trust that over this table.
 
-**Do not re-run `01`–`06`.** Their "Current state (verified)" sections were regenerated after
+**Do not re-run `01`–`07`.** Their "Current state (verified)" sections were regenerated after
 the implementations landed, so they now describe finished work rather than the gap they were
 written to close.
 

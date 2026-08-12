@@ -126,6 +126,8 @@ Migration `0012` does not exist — numbering skips it.
 > - `0079_agreement_templates.sql` — versioned sponsorship agreement templates (prompt 05)
 > - `0080_agreement_signatures.sql` — in-house e-sign capture and the database-enforced
 >   agreement gate on fulfillment transitions (prompt 06)
+> - `0081_ftc_official_verification.sql` — official-FIRST-roster fields on
+>   `ftc_teams_cache` plus `team_verification_records` (prompt 07)
 >
 > Read those files directly for their tables, columns, RLS policies, and RPCs — they
 > are not described below. Everything below `0075` remains accurate.
