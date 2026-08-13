@@ -350,6 +350,7 @@ export type Database = {
       profiles: {
         Row: {
           address_line1: string | null
+          admin_level: Database["public"]["Enums"]["admin_level"] | null
           age_confirmed_at: string | null
           city: string | null
           clerk_user_id: string | null
@@ -376,6 +377,7 @@ export type Database = {
         }
         Insert: {
           address_line1?: string | null
+          admin_level?: Database["public"]["Enums"]["admin_level"] | null
           age_confirmed_at?: string | null
           city?: string | null
           clerk_user_id?: string | null
@@ -402,6 +404,7 @@ export type Database = {
         }
         Update: {
           address_line1?: string | null
+          admin_level?: Database["public"]["Enums"]["admin_level"] | null
           age_confirmed_at?: string | null
           city?: string | null
           clerk_user_id?: string | null
@@ -1861,6 +1864,21 @@ export type Database = {
         Returns: undefined
       }
       is_admin: { Args: never; Returns: boolean }
+      // Hand-added for migration 0084_admin_levels_and_capacity_audit.sql.
+      is_super_admin: { Args: never; Returns: boolean }
+      detect_capacity_drift: {
+        Args: never
+        Returns: {
+          sponsor_id: string
+          company_name: string
+          funding_cap_cents: number
+          funding_used_cents: number
+          open_reservations_cents: number
+          settled_ledger_cents: number
+          expected_used_cents: number
+          drift_cents: number
+        }[]
+      }
       is_coach_verified: { Args: never; Returns: boolean }
       record_sponsor_decision_atomic: {
         Args: {
@@ -1960,6 +1978,7 @@ export type Database = {
       }
     }
     Enums: {
+      admin_level: "reviewer" | "super_admin"
       application_status: "pending" | "approved" | "rejected"
       sponsor_source: "admin_added" | "public_optin"
       sponsor_status: "active" | "inactive" | "pending_review"
@@ -2111,6 +2130,7 @@ export const Constants = {
   },
   public: {
     Enums: {
+      admin_level: ["reviewer", "super_admin"],
       application_status: ["pending", "approved", "rejected"],
       sponsor_source: ["admin_added", "public_optin"],
       sponsor_status: ["active", "inactive", "pending_review"],

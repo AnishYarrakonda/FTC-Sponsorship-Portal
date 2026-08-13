@@ -4,12 +4,21 @@ import { revalidatePath } from 'next/cache'
 import * as Sentry from '@sentry/nextjs'
 import { clerkClient } from '@clerk/nextjs/server'
 import { createInAppNotification, sendCoachVerificationEmail, sendCoachDenialEmail } from '@/lib/notify'
-import { requireAdmin } from '@/lib/actions-utils'
+import { requireAdmin, requireSuperAdmin } from '@/lib/actions-utils'
 import { purgeCoachCredentials } from '@/lib/credentials-retention'
 import { mapDbError } from '@/lib/errors'
 import { deriveTeamSlug, uniquifyTeamSlug } from '@/lib/team-slug'
 import { verifyFTCTeamIdentity } from '@/lib/ftc-roster'
 import { teamVerificationOverrideSchema } from '@/lib/schemas/team'
+import {
+  ADMIN_LEVEL_LABELS,
+  demoteAdminSchema,
+  provisionAdminSchema,
+  setAdminLevelSchema,
+  type DemoteAdminInput,
+  type ProvisionAdminInput,
+  type SetAdminLevelInput,
+} from '@/lib/schemas/admin'
 import type { Database } from '@/lib/supabase/types'
 import type { createAdminClient } from '@/lib/supabase/admin'
 import { z } from 'zod'
@@ -377,13 +386,15 @@ export async function denyCoach(coachId: string, reason: string) {
   return { success: true }
 }
 
+// Super admin, not reviewer (0084): approving an application mints a sponsor company
+// with a funding cap, which is a capacity-governance act.
 export async function approveSponsorApplication(applicationId: string) {
   const parsed = applicationActionSchema.safeParse({ applicationId })
   if (!parsed.success) return { error: 'Invalid application ID' }
 
   let user, adminClient
   try {
-    const auth = await requireAdmin()
+    const auth = await requireSuperAdmin()
     user = auth.user
     adminClient = auth.adminClient
   } catch (e: any) {
@@ -557,7 +568,7 @@ export async function retryCreateSponsorOrganization(sponsorId: string) {
 
   let user, adminClient
   try {
-    const auth = await requireAdmin()
+    const auth = await requireSuperAdmin()
     user = auth.user
     adminClient = auth.adminClient
   } catch (e: any) {
@@ -598,13 +609,14 @@ export async function retryCreateSponsorOrganization(sponsorId: string) {
   return { success: true }
 }
 
+// Super admin, not reviewer (0084) — the mirror of approveSponsorApplication above.
 export async function rejectSponsorApplication(applicationId: string) {
   const parsed = applicationActionSchema.safeParse({ applicationId })
   if (!parsed.success) return { error: 'Invalid application ID' }
 
   let user, adminClient
   try {
-    const auth = await requireAdmin()
+    const auth = await requireSuperAdmin()
     user = auth.user
     adminClient = auth.adminClient
   } catch (e: any) {
@@ -770,3 +782,252 @@ export async function overrideTeamVerification(input: { recordId: string; reason
   return { success: true }
 }
 
+
+// ── Admin provisioning (0084) ────────────────────────────────────────────────────────
+//
+// Before this slice there was NO admin-provisioning code path at all: admins existed only
+// because scripts/seed-test-accounts.mjs inserted them or because someone edited the row
+// by hand. These three actions are the whole surface, and every one of them is
+// super-admin-only.
+//
+// The database floor (trg_assert_super_admin_floor, deferred to COMMIT) is the real
+// guarantee that the platform never ends up with zero super admins. The self-demotion
+// refusals below are UX on top of it — a clear message instead of a raw 23514 — never
+// instead of it.
+
+const SUPER_ADMIN_FLOOR_MESSAGE = 'There must always be at least one super admin.'
+
+/** The floor trigger raises check_violation; everything else is a real database error. */
+function mapAdminLevelError(error: { code?: string | null; message: string }, context: string) {
+  if (error.code === '23514') return SUPER_ADMIN_FLOOR_MESSAGE
+  return mapDbError({ message: error.message, code: error.code ?? undefined }, context)
+}
+
+/** Mirror role into Clerk publicMetadata for client UX gating (not security). */
+async function mirrorRoleIntoClerk(clerkUserId: string | null, role: 'admin' | 'coach' | 'sponsor') {
+  if (!clerkUserId) return 'This user has no linked Clerk account, so their role was not mirrored into Clerk.'
+  try {
+    const clerk = await clerkClient()
+    await clerk.users.updateUserMetadata(clerkUserId, { publicMetadata: { role } })
+    return undefined
+  } catch (e) {
+    console.error('[admin] failed to mirror role into Clerk metadata:', e)
+    Sentry.captureException(e instanceof Error ? e : new Error(String(e)))
+    return 'The role was saved, but Clerk metadata could not be updated. Their menus may look stale until they sign in again.'
+  }
+}
+
+export async function setAdminLevel(input: SetAdminLevelInput) {
+  const parsed = setAdminLevelSchema.safeParse(input)
+  if (!parsed.success) {
+    return { error: 'Validation failed: ' + parsed.error.issues.map((i) => i.message).join(', ') }
+  }
+
+  let user, adminClient
+  try {
+    const auth = await requireSuperAdmin()
+    user = auth.user
+    adminClient = auth.adminClient
+  } catch (e: any) {
+    return { error: e.message }
+  }
+
+  if (parsed.data.profileId === user.id && parsed.data.level !== 'super_admin') {
+    return { error: 'You cannot demote yourself. Ask another super admin.' }
+  }
+
+  const { data: target } = await adminClient
+    .from('profiles')
+    .select('id, full_name, email, role, admin_level')
+    .eq('id', parsed.data.profileId)
+    .maybeSingle()
+
+  if (!target) return { error: 'Admin not found' }
+  if (target.role !== 'admin') return { error: 'That account is not an admin.' }
+  if (target.admin_level === parsed.data.level) {
+    return { error: `${target.full_name ?? 'That admin'} is already a ${ADMIN_LEVEL_LABELS[parsed.data.level].toLowerCase()}.` }
+  }
+
+  // .eq('role','admin') so a coach or sponsor can never be handed a level, even if the
+  // row changed underneath the read above.
+  const { data: updated, error } = await adminClient
+    .from('profiles')
+    .update({ admin_level: parsed.data.level })
+    .eq('id', parsed.data.profileId)
+    .eq('role', 'admin')
+    .select('id')
+    .maybeSingle()
+
+  if (error) return { error: mapAdminLevelError(error, 'setAdminLevel.update') }
+  if (!updated) return { error: 'That account is no longer an admin. Refresh the page.' }
+
+  await adminClient.from('audit_log').insert({
+    actor_id: user.id,
+    action: 'set_admin_level',
+    entity_type: 'profiles',
+    entity_id: parsed.data.profileId,
+    metadata: { from: target.admin_level, to: parsed.data.level, target_profile_id: parsed.data.profileId },
+  })
+
+  await createInAppNotification({
+    recipientId: parsed.data.profileId,
+    type: 'general',
+    title: `Your admin access is now ${ADMIN_LEVEL_LABELS[parsed.data.level]}`,
+    body:
+      parsed.data.level === 'super_admin'
+        ? 'You can now edit sponsor funding caps, decide sponsor applications, run data exports, and manage the admin team.'
+        : 'You keep the moderation queue and coach verification. Funding caps, sponsor applications, exports, and admin management now need a super admin.',
+  })
+
+  revalidatePath('/admin/team')
+  return { success: true }
+}
+
+export async function provisionAdmin(input: ProvisionAdminInput) {
+  const parsed = provisionAdminSchema.safeParse(input)
+  if (!parsed.success) {
+    return { error: 'Validation failed: ' + parsed.error.issues.map((i) => i.message).join(', ') }
+  }
+
+  let user, adminClient
+  try {
+    const auth = await requireSuperAdmin()
+    user = auth.user
+    adminClient = auth.adminClient
+  } catch (e: any) {
+    return { error: e.message }
+  }
+
+  // profiles.email is Clerk-lowercased and has NO unique constraint (0001:61). Lowercase
+  // both sides and .limit(1) — the exact pair of defects fixed in approveSponsorApplication.
+  const email = parsed.data.email.trim().toLowerCase()
+  const { data: profile, error: findError } = await adminClient
+    .from('profiles')
+    .select('id, full_name, email, role, admin_level, sponsor_id, clerk_user_id')
+    .eq('email', email)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  if (findError) return { error: mapDbError(findError, 'provisionAdmin.find') }
+  if (!profile) {
+    return { error: `No account exists for ${email}. Ask them to sign up first, then promote them here.` }
+  }
+
+  if (profile.role === 'admin') {
+    return {
+      error: `${profile.full_name ?? email} is already an admin. Change their level from the list below instead.`,
+    }
+  }
+
+  // Promoting either of these strands data the promoted account still owns: a linked
+  // sponsor loses their company portal, and a coach's team has no other owner.
+  if (profile.role === 'sponsor' && profile.sponsor_id) {
+    return {
+      error:
+        `${email} is linked to a sponsor company. Promoting them would cut off that company's ` +
+        'only portal access — unlink or transfer the sponsor account first.',
+    }
+  }
+  if (profile.role === 'coach') {
+    const { count: teamCount } = await adminClient
+      .from('teams')
+      .select('id', { count: 'exact', head: true })
+      .eq('owner_id', profile.id)
+      .is('deleted_at', null)
+
+    if ((teamCount ?? 0) > 0) {
+      return {
+        error:
+          `${email} owns a team portfolio. Promoting them would orphan it — transfer or archive ` +
+          'the team first.',
+      }
+    }
+  }
+
+  const { error } = await adminClient
+    .from('profiles')
+    .update({ role: 'admin', admin_level: parsed.data.level, sponsor_id: null })
+    .eq('id', profile.id)
+
+  if (error) return { error: mapAdminLevelError(error, 'provisionAdmin.update') }
+
+  const warning = await mirrorRoleIntoClerk(profile.clerk_user_id, 'admin')
+
+  await adminClient.from('audit_log').insert({
+    actor_id: user.id,
+    action: 'provision_admin',
+    entity_type: 'profiles',
+    entity_id: profile.id,
+    metadata: { email, from_role: profile.role, level: parsed.data.level },
+  })
+
+  await createInAppNotification({
+    recipientId: profile.id,
+    type: 'general',
+    title: 'You now have admin access',
+    body: `An existing super admin gave you ${ADMIN_LEVEL_LABELS[parsed.data.level]} access to the admin portal.`,
+  })
+
+  revalidatePath('/admin/team')
+  return warning ? { success: true as const, warning } : { success: true as const }
+}
+
+export async function demoteAdmin(input: DemoteAdminInput) {
+  const parsed = demoteAdminSchema.safeParse(input)
+  if (!parsed.success) {
+    return { error: 'Validation failed: ' + parsed.error.issues.map((i) => i.message).join(', ') }
+  }
+
+  let user, adminClient
+  try {
+    const auth = await requireSuperAdmin()
+    user = auth.user
+    adminClient = auth.adminClient
+  } catch (e: any) {
+    return { error: e.message }
+  }
+
+  if (parsed.data.profileId === user.id) {
+    return { error: 'You cannot demote yourself. Ask another super admin.' }
+  }
+
+  const { data: target } = await adminClient
+    .from('profiles')
+    .select('id, full_name, role, admin_level, clerk_user_id')
+    .eq('id', parsed.data.profileId)
+    .maybeSingle()
+
+  if (!target) return { error: 'Admin not found' }
+  if (target.role !== 'admin') return { error: 'That account is not an admin.' }
+
+  // admin_level must go to NULL in the same statement: profiles_admin_level_requires_admin
+  // rejects a level on a non-admin row.
+  const { error } = await adminClient
+    .from('profiles')
+    .update({ role: parsed.data.newRole, admin_level: null })
+    .eq('id', parsed.data.profileId)
+    .eq('role', 'admin')
+
+  if (error) return { error: mapAdminLevelError(error, 'demoteAdmin.update') }
+
+  const warning = await mirrorRoleIntoClerk(target.clerk_user_id, parsed.data.newRole)
+
+  await adminClient.from('audit_log').insert({
+    actor_id: user.id,
+    action: 'demote_admin',
+    entity_type: 'profiles',
+    entity_id: parsed.data.profileId,
+    metadata: { from_level: target.admin_level, to_role: parsed.data.newRole },
+  })
+
+  await createInAppNotification({
+    recipientId: parsed.data.profileId,
+    type: 'general',
+    title: 'Your admin access was removed',
+    body: `Your account is now a ${parsed.data.newRole} account. Contact the platform team if this was unexpected.`,
+  })
+
+  revalidatePath('/admin/team')
+  return warning ? { success: true as const, warning } : { success: true as const }
+}

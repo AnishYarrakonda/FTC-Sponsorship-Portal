@@ -23,13 +23,19 @@ import type { Sponsor } from '@/lib/supabase/types'
 import { describeActionError } from '@/lib/client-errors'
 
 type Props = {
+  /**
+   * False for a reviewer (0084). The funding cap is a super-admin write; disabling the
+   * input only saves a pointless round trip — adminUpdateSponsor / adminCreateSponsor are
+   * the real gate and reject a reviewer outright.
+   */
+  canEditFundingCap?: boolean
   initialSponsor?: Pick<
     Sponsor,
     'id' | 'company_name' | 'industry' | 'website' | 'contact_name' | 'contact_email' | 'contact_title' | 'funding_cap_cents' | 'status' | 'notes'
   >
 }
 
-export function SponsorForm({ initialSponsor }: Props) {
+export function SponsorForm({ initialSponsor, canEditFundingCap = true }: Props) {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [isPending, setIsPending] = useState(false)
@@ -193,10 +199,17 @@ export function SponsorForm({ initialSponsor }: Props) {
                       type="number"
                       step="100"
                       placeholder="50000"
+                      disabled={!canEditFundingCap}
+                      aria-describedby={canEditFundingCap ? undefined : 'funding-cap-help'}
                       value={field.value / 100}
                       onChange={(e) => field.onChange(Math.round(parseFloat(e.target.value) * 100))}
                     />
                   </FormControl>
+                  {!canEditFundingCap && (
+                    <p id="funding-cap-help" className="text-sm text-muted-foreground">
+                      Only a super admin can change a funding cap.
+                    </p>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}

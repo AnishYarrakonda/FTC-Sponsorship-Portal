@@ -209,6 +209,7 @@ async function main() {
   })
   await upsertProfile(adminClerkId, ACCOUNTS.admin.email, ACCOUNTS.admin.fullName, {
     role: 'admin',
+    admin_level: 'super_admin',
     coppa_acknowledged: true,
     tos_accepted: true,
   })

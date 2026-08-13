@@ -5,7 +5,7 @@ import { sponsorApplicationSchema, sponsorSchema, type SponsorApplicationInput, 
 import { sendSponsorApplicationConfirmation } from '@/lib/notify'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
-import { getClientIp, requireAdmin } from '@/lib/actions-utils'
+import { getClientIp, requireAdmin, requireSuperAdmin } from '@/lib/actions-utils'
 import { mapDbError } from '@/lib/errors'
 import * as Sentry from '@sentry/nextjs'
 
@@ -96,6 +96,7 @@ export async function submitSponsorApplication(data: SponsorApplicationInput) {
   return { success: true }
 }
 
+// Super admin (0084): creating a sponsor company sets a funding cap.
 export async function adminCreateSponsor(data: SponsorInput) {
   const result = sponsorSchema.safeParse(data)
   if (!result.success) {
@@ -104,7 +105,7 @@ export async function adminCreateSponsor(data: SponsorInput) {
 
   let user, adminClient
   try {
-    const auth = await requireAdmin()
+    const auth = await requireSuperAdmin()
     user = auth.user
     adminClient = auth.adminClient
   } catch (e: any) {
@@ -141,6 +142,7 @@ export async function adminCreateSponsor(data: SponsorInput) {
   return { success: true }
 }
 
+// Super admin (0084): this is THE funding-cap write.
 export async function adminUpdateSponsor(id: string, data: SponsorInput) {
   const result = sponsorSchema.safeParse(data)
   if (!result.success) {
@@ -149,7 +151,7 @@ export async function adminUpdateSponsor(id: string, data: SponsorInput) {
 
   let user, adminClient
   try {
-    const auth = await requireAdmin()
+    const auth = await requireSuperAdmin()
     user = auth.user
     adminClient = auth.adminClient
   } catch (e: any) {
@@ -190,13 +192,14 @@ export async function adminUpdateSponsor(id: string, data: SponsorInput) {
 
 const deleteSponsorSchema = z.object({ id: z.string().uuid() })
 
+// Super admin (0084).
 export async function deleteSponsor(id: string): Promise<{ success?: true; error?: string }> {
   const parsed = deleteSponsorSchema.safeParse({ id })
   if (!parsed.success) return { error: 'Invalid sponsor id' }
 
   let user, adminClient
   try {
-    const auth = await requireAdmin()
+    const auth = await requireSuperAdmin()
     user = auth.user
     adminClient = auth.adminClient
   } catch (e: any) {
@@ -265,10 +268,11 @@ export async function searchSponsors(query?: string) {
 
 
 /** Lightweight toggle — only updates status, no full schema validation required. */
+// Super admin (0084): flipping a capped sponsor back to active is a capacity-governance act.
 export async function adminToggleSponsorStatus(id: string, newStatus: 'active' | 'inactive') {
   let user, adminClient
   try {
-    const auth = await requireAdmin()
+    const auth = await requireSuperAdmin()
     user = auth.user
     adminClient = auth.adminClient
   } catch (e: any) {

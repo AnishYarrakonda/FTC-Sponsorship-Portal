@@ -69,13 +69,15 @@ inside a session.
 | ✅ Shipped | `01` fulfillment machine · `02` payout profiles + W-9 · `03` fulfillment UI · `04` receipts & acknowledgment letters · `05` sponsorship agreement templates · `06` e-sign capture flow · `07` official FIRST team verification · `08` sponsor organizations · `09` org roles & approver workflow · `10` enterprise SSO |
 | 🚧 Partial | `07` — code/migration/tests shipped and deployed, but `FIRST_API_USERNAME` / `FIRST_API_TOKEN` are **not yet set in Vercel** (nobody has registered at ftc-events.firstinspires.org/services/API). The system runs correctly on the FTCScout fallback in the meantime; set both vars whenever the credentials arrive — no code changes needed. |
 | 🚧 Partial | `10` — the code half (least-privilege JIT provisioning, idempotent role reconciliation, the read-only SSO panel, `docs/enterprise-sso-runbook.md`) is shipped. **No enterprise connection has been created in Clerk**, because none has been asked for and the Clerk plan gate (Pro/Business on production) is unconfirmed. Follow the runbook when the first sponsor's IT team asks. |
-| ⬜ Not started | `11`–`18` |
+| 🚧 Partial | `11` — the code half (reviewer/super-admin split, `requireSuperAdmin()`, admin team + capacity pages, drift detector wiring, tests) is written and green. **Migration `0084` has NOT been applied**, so nothing is live yet: apply it with `psql -f`, then run `SUPABASE_LOCAL=1 npm run verify:capacity` against a scratch database and the `rls-auditor` agent over `profiles`/`sponsors`/`sponsor_applications`. Roll the code back BEFORE the migration if you ever revert — dropping `admin_level` while `requireSuperAdmin()` is deployed fails every super-admin action. |
+| ⬜ Not started | `12`–`18` |
 
 Migrations applied so far: `0076`, `0077`, `0078`, `0079`, `0080`, `0081`, `0082`, `0083`.
+`0084` is written but **not yet applied**.
 Prompt `10` added no migration. Real head is always `ls supabase/migrations | tail -3` —
 trust that over this table.
 
-**Do not re-run `01`–`10`.** Their "Current state (verified)" sections were regenerated after
+**Do not re-run `01`–`11`.** Their "Current state (verified)" sections were regenerated after
 the implementations landed, so they now describe finished work rather than the gap they were
 written to close.
 

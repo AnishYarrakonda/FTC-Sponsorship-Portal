@@ -34,6 +34,8 @@ export const MOCK_ADMIN_PROFILE = {
   id: ADMIN_ID,
   clerk_user_id: 'user_dev_admin',
   role: 'admin',
+  // Without this the preview breaks the moment any page calls requireSuperAdmin() (0084).
+  admin_level: 'super_admin',
   full_name: 'Dev Admin',
   email: 'admin+clerk_test@example.com',
   coach_verified: false,

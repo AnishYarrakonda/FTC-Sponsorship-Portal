@@ -117,6 +117,23 @@ export async function requireAdmin() {
   return { supabase, user, clerkUserId, adminClient: createAdminClient() }
 }
 
+// The super-admin rung of profiles.admin_level (0084). Gates the acts that move money or
+// mint privilege: funding caps, sponsor company creation/deletion, sponsor application
+// decisions, the CSV export, and admin provisioning. Everything else an admin does —
+// the moderation queue, coach verification — stays on requireAdmin(), which is UNCHANGED:
+// a reviewer is still an admin.
+//
+// This is the REAL gate. The prevent_role_elevation() trigger early-returns for the
+// service-role client that every server action writes through, so it is defence in depth
+// against direct PostgREST calls, not the primary control.
+export async function requireSuperAdmin() {
+  const { supabase, user, clerkUserId } = await requireAuth()
+  if (user.role !== 'admin' || user.admin_level !== 'super_admin') {
+    throw new Error('Forbidden')
+  }
+  return { supabase, user, clerkUserId, adminClient: createAdminClient() }
+}
+
 // A sponsor org member, resolved from `sponsor_members` via the RLS-respecting server
 // client (its `sponsor_members_select_own_org` policy always admits the caller's own
 // `profile_id = current_profile_id()` rows regardless of sponsor_id). Unioned with

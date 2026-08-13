@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { AdminSidebar } from '@/components/admin/admin-sidebar'
 import { CommandPaletteProvider } from '@/components/command-palette-provider'
+import type { AdminLevel } from '@/lib/schemas/admin'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const authed = await getAuthedProfile()
@@ -16,7 +17,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, admin_level')
     .eq('id', user.id)
     .single()
 
@@ -25,10 +26,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   const userName = user.full_name ?? user.email ?? 'Admin'
   const userEmail = user.email ?? ''
+  // Drives which nav entries the sidebar renders. UX only — every super-admin action
+  // re-checks with requireSuperAdmin() server-side.
+  const adminLevel = (profile?.admin_level ?? null) as AdminLevel | null
 
   return (
     <div className="flex h-screen flex-col overflow-hidden text-foreground lg:flex-row">
-      <AdminSidebar userName={userName} userEmail={userEmail} />
+      <AdminSidebar userName={userName} userEmail={userEmail} adminLevel={adminLevel} />
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[1100px] px-4 py-6 sm:px-8 sm:py-8 lg:px-12">
           {children}

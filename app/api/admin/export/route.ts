@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/actions-utils'
+import { requireSuperAdmin } from '@/lib/actions-utils'
 import { htmlToPlainText } from '@/lib/utils'
 
 const CSV_HEADERS = [
@@ -47,11 +47,13 @@ function rowToCsv(row: unknown[]): string {
 const PAGE_SIZE = 1000
 
 export async function GET() {
-  let adminClient: Awaited<ReturnType<typeof requireAdmin>>['adminClient']
+  let adminClient: Awaited<ReturnType<typeof requireSuperAdmin>>['adminClient']
   let actorId: string
 
+  // Super admin (0084): this file contains every sponsor contact email and the full text
+  // of every pitch. A reviewer gets JSON 403 — API routes are never redirected.
   try {
-    const auth = await requireAdmin()
+    const auth = await requireSuperAdmin()
     adminClient = auth.adminClient
     actorId = auth.user.id
   } catch {

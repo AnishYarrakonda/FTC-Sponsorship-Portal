@@ -13,6 +13,8 @@ import {
   Settings,
   Receipt,
   FileSignature,
+  UserCog,
+  Scale,
 } from 'lucide-react'
 import {
   PortalBrand,
@@ -22,6 +24,7 @@ import {
   PortalSignOut,
   PortalUserChip,
 } from '@/components/ui/portal-shell'
+import type { AdminLevel } from '@/lib/schemas/admin'
 
 const DEV_AUTH_BYPASS =
   process.env.NODE_ENV !== 'production' &&
@@ -37,14 +40,20 @@ const NAV_ITEMS = [
   { label: 'Payouts',      href: '/payouts',      icon: Receipt,         exact: false, badge: false },
   { label: 'Reconciliation',href: '/reconciliation',icon: Receipt,         exact: false, badge: false },
   { label: 'Analytics',    href: '/analytics',    icon: BarChart2,       exact: false, badge: false },
+  { label: 'Capacity',     href: '/admin/capacity',icon: Scale,          exact: false, badge: false },
+  // Super-admin only — filtered out below rather than rendered disabled, because a
+  // reviewer clicking it would only reach the permission-denied card.
+  { label: 'Admin team',   href: '/admin/team',   icon: UserCog,         exact: false, badge: false, superAdminOnly: true },
 ] as const
 
 export function AdminSidebar({
   userName,
   userEmail,
+  adminLevel = null,
 }: {
   userName: string
   userEmail: string
+  adminLevel?: AdminLevel | null
 }) {
   const pathname = usePathname()
   const { signOut } = useClerk()
@@ -56,13 +65,17 @@ export function AdminSidebar({
   )
   const queueCount = queueData?.count ?? 0
 
+  const navItems = NAV_ITEMS.filter(
+    (item) => !('superAdminOnly' in item && item.superAdminOnly) || adminLevel === 'super_admin'
+  )
+
   return (
     <PortalSidebar mobileTitle="Admin" routeKey={pathname}>
       <PortalBrand />
       <PortalLabel icon={Shield} title="Admin" subtitle="Control Panel" />
 
       <nav aria-label="Admin portal" className="flex-1 space-y-0.5 overflow-y-auto px-2 py-3">
-        {NAV_ITEMS.map((item) => (
+        {navItems.map((item) => (
           <PortalNavLink
             key={item.href}
             href={item.href}

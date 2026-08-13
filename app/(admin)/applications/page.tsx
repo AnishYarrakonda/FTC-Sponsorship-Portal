@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getAuthedProfile } from '@/lib/actions-utils'
 import Link from 'next/link'
 import { Inbox } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -10,6 +11,11 @@ import { ApplicationActions } from '@/components/admin/application-actions'
 
 export default async function ApplicationsPage() {
   const supabase = await createClient()
+
+  // Reviewers see the pipeline (the admin SELECT policy is unchanged) but cannot decide
+  // an application — approving one mints a capped sponsor company (0084).
+  const authed = await getAuthedProfile()
+  const isSuperAdmin = authed?.user.admin_level === 'super_admin'
 
   const { data: applications } = await supabase
     .from('sponsor_applications')
@@ -78,7 +84,13 @@ export default async function ApplicationsPage() {
                     </p>
                   )}
                   <div className="flex justify-end pt-1">
-                    <ApplicationActions applicationId={app.id} />
+                    {isSuperAdmin ? (
+                      <ApplicationActions applicationId={app.id} />
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Only a super admin can approve or reject an application.
+                      </p>
+                    )}
                   </div>
                 </CardContent>
               </Card>
