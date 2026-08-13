@@ -2,6 +2,8 @@ import { getAuthedProfile, requireSponsorRole } from '@/lib/actions-utils'
 import { redirect } from 'next/navigation'
 import { AccountSettings } from '@/components/account/account-settings'
 import { ApprovalPolicyCard } from '@/components/sponsor/approval-policy-card'
+import { SsoStatusCard } from '@/components/sponsor/sso-status-card'
+import { getSponsorSsoStatus, type SponsorSsoStatus } from '@/lib/sso'
 
 
 export default async function SponsorSettingsPage() {
@@ -16,11 +18,14 @@ export default async function SponsorSettingsPage() {
     .single()
 
   let approvalPolicy: { approvalRequiredAboveCents: number | null; eligibleApproverCount: number } | null = null
+  // SSO is read-only and org-wide, so it is shown to org admins alongside the approval
+  // policy — both describe how the whole organization behaves, not this one account.
+  let ssoStatus: SponsorSsoStatus | null = null
   try {
     const auth = await requireSponsorRole('org_admin')
     const { data: sponsor } = await auth.adminClient
       .from('sponsors')
-      .select('approval_required_above_cents')
+      .select('approval_required_above_cents, clerk_org_id')
       .eq('id', auth.sponsorId)
       .single()
     const { count } = await auth.adminClient
@@ -32,8 +37,9 @@ export default async function SponsorSettingsPage() {
       approvalRequiredAboveCents: sponsor?.approval_required_above_cents ?? null,
       eligibleApproverCount: count ?? 0,
     }
+    ssoStatus = await getSponsorSsoStatus(sponsor?.clerk_org_id ?? null)
   } catch {
-    // Not an org_admin (or not a sponsor at all) — the card simply does not render.
+    // Not an org_admin (or not a sponsor at all) — the cards simply do not render.
   }
 
   return (
@@ -55,6 +61,8 @@ export default async function SponsorSettingsPage() {
           eligibleApproverCount={approvalPolicy.eligibleApproverCount}
         />
       )}
+
+      {ssoStatus && <SsoStatusCard status={ssoStatus} />}
 
     </div>
   )

@@ -5,7 +5,7 @@ import { clerkClient } from '@clerk/nextjs/server'
 import { requireSponsor, requireSponsorRole } from '@/lib/actions-utils'
 import { createInAppNotification } from '@/lib/notify'
 import { mapDbError } from '@/lib/errors'
-import type { SponsorRole } from '@/lib/sponsor-roles'
+import { jitMemberRole, type SponsorRole } from '@/lib/sponsor-roles'
 import {
   inviteSponsorMemberSchema,
   updateSponsorMemberRoleSchema,
@@ -25,8 +25,11 @@ function clerkRole(role: SponsorRole) {
   return role === 'org_admin' ? 'org:admin' : 'org:member'
 }
 
+// Display-only, for Clerk-side pending invitations to people with no profile row yet.
+// Uses the same rule the webhook applies when that invitation is accepted (jitMemberRole),
+// so the list never promises a rank the member will not actually get.
 function dbRole(clerkRole: string | null | undefined): SponsorRole {
-  return clerkRole === 'org:admin' ? 'org_admin' : 'submitter'
+  return jitMemberRole(clerkRole)
 }
 
 export async function inviteSponsorMember(data: { email: string; role: SponsorRole }) {
