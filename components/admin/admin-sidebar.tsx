@@ -15,6 +15,10 @@ import {
   FileSignature,
   UserCog,
   Scale,
+  Gavel,
+  Award,
+  FileBarChart,
+  AtSign,
 } from 'lucide-react'
 import {
   PortalBrand,
@@ -39,8 +43,12 @@ const NAV_ITEMS = [
   { label: 'Teams',        href: '/coaches',      icon: Users,           exact: false, badge: false },
   { label: 'Payouts',      href: '/payouts',      icon: Receipt,         exact: false, badge: false },
   { label: 'Reconciliation',href: '/reconciliation',icon: Receipt,         exact: false, badge: false },
+  { label: 'Appeals',      href: '/admin/appeals',      icon: Gavel,           exact: false, badge: false },
   { label: 'Analytics',    href: '/analytics',    icon: BarChart2,       exact: false, badge: false },
+  { label: 'Recognition',  href: '/recognition',  icon: Award,           exact: false, badge: false },
+  { label: 'Impact',       href: '/impact',       icon: FileBarChart,    exact: false, badge: false },
   { label: 'Capacity',     href: '/admin/capacity',icon: Scale,          exact: false, badge: false },
+  { label: 'Email domains',href: '/admin/domains', icon: AtSign,          exact: false, badge: false },
   // Super-admin only — filtered out below rather than rendered disabled, because a
   // reviewer clicking it would only reach the permission-denied card.
   { label: 'Admin team',   href: '/admin/team',   icon: UserCog,         exact: false, badge: false, superAdminOnly: true },

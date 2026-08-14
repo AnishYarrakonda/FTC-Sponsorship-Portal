@@ -2,6 +2,9 @@ import { getAuthedProfile, requireSponsorRole } from '@/lib/actions-utils'
 import { notFound, redirect } from 'next/navigation'
 import { SponsorReviewShell } from '@/components/sponsor/review-shell'
 import { AgreementStatusRow } from '@/components/agreements/agreement-status-row'
+import { isAwaitingSponsor } from '@/lib/submission-status'
+import type { ThreadMessage } from '@/components/messages/thread'
+import { SPONSOR_SUBMISSION_SELECT } from '@/lib/sponsor-visibility'
 
 export default async function SponsorSubmissionReviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -23,7 +26,7 @@ export default async function SponsorSubmissionReviewPage({ params }: { params: 
   const { data: submission } = await supabase
     .from('submissions')
     .select(`
-      *,
+      ${SPONSOR_SUBMISSION_SELECT},
       sponsors:sponsor_id (
         company_name,
         approval_required_above_cents
@@ -58,6 +61,19 @@ export default async function SponsorSubmissionReviewPage({ params }: { params: 
 
   const threshold = (submission.sponsors as { approval_required_above_cents?: number | null } | null)?.approval_required_above_cents ?? null
 
+  // Through the RLS-respecting server client, deliberately NOT the admin client: the
+  // sm_select_sponsor policy already hides pending coach drafts and every other sponsor's
+  // thread, so there is nothing to re-filter here and nothing to get wrong.
+  const { data: threadRows } = await supabase
+    .from('submission_messages')
+    .select('id, author_role, author_label, body, status, created_at')
+    .eq('submission_id', id)
+    .order('created_at', { ascending: true })
+
+  const threadCanCompose =
+    isAwaitingSponsor(submission.status as string) &&
+    (!submission.expires_at || new Date(submission.expires_at as string) > new Date())
+
   return (
     <div className="space-y-4">
       <div className="container mx-auto max-w-4xl pt-6">
@@ -69,6 +85,8 @@ export default async function SponsorSubmissionReviewPage({ params }: { params: 
         memberRole={memberRole}
         approvalThresholdCents={threshold}
         pendingProposal={pendingProposal ?? null}
+        threadMessages={(threadRows ?? []) as ThreadMessage[]}
+        threadCanCompose={threadCanCompose}
       />
     </div>
   )

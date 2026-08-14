@@ -108,3 +108,20 @@ export const TEAM_NUMBER = '31579'
 // ─── Hero copy ───────────────────────────────────────────────────────────────
 export const HERO_MORPHING_WORDS = ['sponsorship', 'partnership', 'opportunity', 'investment', 'connection', 'breakthrough', 'endorsement', 'contribution'] as const
 export const HERO_DESCRIPTION = 'The professional sponsorship pipeline for FIRST Tech Challenge coaches. Build a verified portfolio, send moderated pitches, and connect with the industry leaders powering the next generation.'
+
+// ─── Live platform stats (landing page) ──────────────────────────────────────
+/**
+ * Fallback for the landing page's live impact block. Used when public_platform_stats is
+ * unreachable or has never been refreshed. All zeros on purpose: pre-launch the honest
+ * number is zero, and the block hides itself entirely when every figure is zero rather
+ * than advertising "$0 funded".
+ *
+ * This does NOT replace the "100%" / "< 24h" figures further down the page — those are
+ * process claims that a live number cannot express, and they stay.
+ */
+export const PLATFORM_STATS_FALLBACK = {
+  teamsSupported: 0,
+  dollarsReceivedCents: 0,
+  studentsReached: 0,
+  volunteerHours: 0,
+} as const

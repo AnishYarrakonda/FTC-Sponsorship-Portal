@@ -524,6 +524,28 @@ const agreementSignatures = [
   },
 ]
 
+// Q&A thread (0085). Only RELEASED coach messages appear here: a sponsor must never see a
+// reply that is still in review, and the preview should not model a state the real policies
+// forbid. The sponsor's own question is here too, which is what the composer produces.
+const submissionMessages = [
+  {
+    id: 'msg-1', submission_id: 'preview-sub-2', author_role: 'sponsor',
+    author_profile_id: PROFILE_ID, author_token_id: null,
+    author_label: 'Dana Cole', status: 'released',
+    body: 'Is the 501(c)(3) the school district, or a separate booster club? Our grants team needs the payee EIN to match.',
+    released_at: '2026-06-04T10:02:00.000Z', released_by: null, rejected_reason: null,
+    flagged_at: null, flagged_by: null, created_at: '2026-06-04T10:02:00.000Z',
+  },
+  {
+    id: 'msg-2', submission_id: 'preview-sub-2', author_role: 'coach',
+    author_profile_id: 'preview-coach-1', author_token_id: null,
+    author_label: 'Maria Gomez', status: 'released',
+    body: 'A separate booster club — Iron Aviators Booster Club. I can send the determination letter to whichever address your grants team prefers.',
+    released_at: '2026-06-05T15:40:00.000Z', released_by: null, rejected_reason: null,
+    flagged_at: null, flagged_by: null, created_at: '2026-06-05T09:18:00.000Z',
+  },
+]
+
 const FIXTURES: Record<string, unknown[]> = {
   profiles: [profile],
   sponsors: [sponsor],
@@ -536,6 +558,109 @@ const FIXTURES: Record<string, unknown[]> = {
   agreement_signatures: agreementSignatures,
   sponsor_members: sponsorMembers,
   sponsor_decision_proposals: sponsorDecisionProposals,
+  submission_messages: submissionMessages,
+  // Sponsors see no appeals — appeals have no sponsor RLS policy (0086). The key exists so
+  // the mock client returns [] rather than undefined.
+  appeals: [],
+  // One award seen from the sponsor's side: one benefit delivered with proof, one still
+  // outstanding so the "Not needed" waive control is browsable.
+  sponsor_recognition_awards: [
+    {
+      id: 'award-preview-s1',
+      fulfillment_id: 'ff-preview-s1',
+      sponsor_id: sponsor.id,
+      team_id: teamA.id,
+      amount_cents: 300000,
+      tier_id: 'tier-silver',
+      tier_name_snapshot: 'Silver',
+      tier_rank_snapshot: 2,
+      tier_min_amount_cents_snapshot: 250000,
+      benefits_snapshot: ['logo_on_website', 'social_media_mention'],
+      awarded_at: '2026-06-20T15:00:00.000Z',
+      created_at: '2026-06-20T15:00:00.000Z',
+      updated_at: '2026-07-05T15:00:00.000Z',
+      teams: { team_name: teamA.team_name },
+      recognition_benefit_deliveries: [
+        {
+          id: 'del-preview-s1', award_id: 'award-preview-s1', benefit_type: 'logo_on_website',
+          status: 'delivered',
+          proof_url: 'https://example.supabase.co/storage/v1/object/public/pitch-media/user_c1/recognition/del-preview-s1.jpg',
+          proof_uploaded_at: '2026-07-05T15:00:00.000Z',
+          delivered_at: '2026-07-05T15:00:00.000Z',
+        },
+        {
+          id: 'del-preview-s2', award_id: 'award-preview-s1', benefit_type: 'social_media_mention',
+          status: 'promised',
+          proof_url: null, proof_uploaded_at: null, delivered_at: null,
+        },
+      ],
+    },
+  ],
+  recognition_benefit_deliveries: [],
+  // One open and one closed year, so the index's Open/Final chips and the print view are
+  // both browsable without a database.
+  impact_report_snapshots: [
+    {
+      id: 'snap-2026', scope: 'sponsor', sponsor_id: sponsor.id, report_year: 2026,
+      status: 'open', payload_schema_version: 1,
+      generated_at: '2026-08-01T06:00:00.000Z', closed_at: null,
+      payload: {
+        schema_version: 1, year: 2026, generated_at: '2026-08-01T06:00:00.000Z',
+        sponsor: { company_name: sponsor.company_name, logo_url: null },
+        totals: {
+          pledged_cents: 300000, received_cents: 100000, outstanding_cents: 200000,
+          teams_supported: 1, students_reached: 1200, events_hosted: 8,
+          volunteer_hours: 340, benefits_promised: 2, benefits_delivered: 1,
+        },
+        teams: [
+          {
+            team: {
+              ftc_team_number: 31579, team_name: teamA.team_name, organization: 'Plano East Senior High',
+              city: 'Plano', state: 'TX', tax_status: '501c3', founded_year: 2019,
+              seasons_competed: 6, team_size: 22, students_reached: 1200, events_hosted: 8,
+              volunteer_hours: 340, tagline: 'Engineering the next generation.',
+              mission_statement: 'We build robots and community.',
+              outreach_summary: 'Summer camps and library demos.', logo_url: null,
+              media_urls: [],
+            },
+            achievements: [{ season: '2025-26', event_name: 'North Texas Regional', award: 'Inspire Award', description: null }],
+            fulfillments: [{ amount_cents: 300000, status: 'payment_sent', pledged_at: '2026-03-01T00:00:00.000Z', payment_received_at: null, receipted_at: null }],
+            recognition: {
+              tier_name: 'Silver',
+              benefits: [
+                { benefit_type: 'logo_on_website', status: 'delivered', delivered_at: '2026-07-05T00:00:00.000Z', proof_url: null },
+                { benefit_type: 'social_media_mention', status: 'promised', delivered_at: null, proof_url: null },
+              ],
+            },
+          },
+        ],
+        footnotes: ['The platform never handles funds.'],
+      },
+    },
+    {
+      id: 'snap-2025', scope: 'sponsor', sponsor_id: sponsor.id, report_year: 2025,
+      status: 'closed', payload_schema_version: 1,
+      generated_at: '2026-01-02T04:00:00.000Z', closed_at: '2026-01-02T04:00:00.000Z',
+      payload: {
+        schema_version: 1, year: 2025, generated_at: '2026-01-02T04:00:00.000Z',
+        sponsor: { company_name: sponsor.company_name, logo_url: null },
+        totals: {
+          pledged_cents: 150000, received_cents: 150000, outstanding_cents: 0,
+          teams_supported: 1, students_reached: 800, events_hosted: 5,
+          volunteer_hours: 210, benefits_promised: 1, benefits_delivered: 1,
+        },
+        teams: [],
+        footnotes: ['The platform never handles funds.'],
+      },
+    },
+  ],
+  public_platform_stats: [
+    {
+      id: true, teams_supported: 12, sponsors_active: 5, dollars_pledged_cents: 4200000,
+      dollars_received_cents: 2600000, students_reached: 9400, events_hosted: 61,
+      volunteer_hours: 3100, refreshed_at: '2026-08-13T04:00:00.000Z',
+    },
+  ],
   team_achievements: [
     ...teamA.team_achievements,
     ...teamB.team_achievements as any[],

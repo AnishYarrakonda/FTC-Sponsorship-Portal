@@ -66,11 +66,11 @@ inside a session.
 
 | Status | Prompts |
 |---|---|
-| ✅ Shipped | `01` fulfillment machine · `02` payout profiles + W-9 · `03` fulfillment UI · `04` receipts & acknowledgment letters · `05` sponsorship agreement templates · `06` e-sign capture flow · `07` official FIRST team verification · `08` sponsor organizations · `09` org roles & approver workflow · `10` enterprise SSO |
+| ✅ Shipped | `01` fulfillment machine · `02` payout profiles + W-9 · `03` fulfillment UI · `04` receipts & acknowledgment letters · `05` sponsorship agreement templates · `06` e-sign capture flow · `07` official FIRST team verification · `08` sponsor organizations · `09` org roles & approver workflow · `10` enterprise SSO · `11` admin roles & capacity audit · `12` moderated sponsor↔coach Q&A · `13` coach appeals path · `14` sponsor recognition tiers · `15` CSR/ESG impact report export |
 | 🚧 Partial | `07` — code/migration/tests shipped and deployed, but `FIRST_API_USERNAME` / `FIRST_API_TOKEN` are **not yet set in Vercel** (nobody has registered at ftc-events.firstinspires.org/services/API). The system runs correctly on the FTCScout fallback in the meantime; set both vars whenever the credentials arrive — no code changes needed. |
 | 🚧 Partial | `10` — the code half (least-privilege JIT provisioning, idempotent role reconciliation, the read-only SSO panel, `docs/enterprise-sso-runbook.md`) is shipped. **No enterprise connection has been created in Clerk**, because none has been asked for and the Clerk plan gate (Pro/Business on production) is unconfirmed. Follow the runbook when the first sponsor's IT team asks. |
 | 🚧 Partial | `11` — the code half (reviewer/super-admin split, `requireSuperAdmin()`, admin team + capacity pages, drift detector wiring, tests) is written and green. **Migration `0084` has NOT been applied**, so nothing is live yet: apply it with `psql -f`, then run `SUPABASE_LOCAL=1 npm run verify:capacity` against a scratch database and the `rls-auditor` agent over `profiles`/`sponsors`/`sponsor_applications`. Roll the code back BEFORE the migration if you ever revert — dropping `admin_level` while `requireSuperAdmin()` is deployed fails every super-admin action. |
-| ⬜ Not started | `12`–`18` |
+| ⬜ Not started | `16`–`18` |
 
 Migrations applied so far: `0076`, `0077`, `0078`, `0079`, `0080`, `0081`, `0082`, `0083`.
 `0084` is written but **not yet applied**.
@@ -113,15 +113,15 @@ still free before writing.
 ### Governance & engagement
 | # | Prompt | Needs | Migration |
 |---|---|---|---|
-| 11 | [Admin roles + capacity-integrity audit](11-admin-roles-and-capacity-audit.md) | — | `0084` |
-| 12 | [Moderated sponsor↔coach Q&A](12-sponsor-coach-qa-thread.md) | — | `0085` |
-| 13 | [Coach appeals path](13-coach-appeals-path.md) | 11 | `0086` |
+| 11 | [Admin roles + capacity-integrity audit](11-admin-roles-and-capacity-audit.md) ✅ | — | `0084` (applied) |
+| 12 | [Moderated sponsor↔coach Q&A](12-sponsor-coach-qa-thread.md) ✅ | — | `0085` (applied) |
+| 13 | [Coach appeals path](13-coach-appeals-path.md) ✅ | 11 | `0086` (applied) |
 
 ### Value & polish
 | # | Prompt | Needs | Migration |
 |---|---|---|---|
-| 14 | [Sponsor recognition tiers](14-sponsor-recognition-tiers.md) | 01 | `0087` |
-| 15 | [CSR/ESG impact report export](15-csr-impact-report-export.md) | 01, 14 | `0088` |
+| 14 | [Sponsor recognition tiers](14-sponsor-recognition-tiers.md) ✅ | 01 | `0087` (applied) |
+| 15 | [CSR/ESG impact report export](15-csr-impact-report-export.md) ✅ | 01, 14 | `0088` (applied) |
 | 16 | [BotID + corporate email gating](16-botid-and-corporate-email-gating.md) | — | `0089` |
 | 17 | [Email deliverability (SPF/DKIM/DMARC)](17-email-deliverability.md) | — | — |
 | 18 | [Accessibility — WCAG 2.2 AA](18-accessibility-wcag-aa.md) | — | — |

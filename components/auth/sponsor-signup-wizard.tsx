@@ -371,7 +371,21 @@ export function SponsorSignupWizard() {
                           <FormItem><FormLabel>Representative Name</FormLabel><FormControl><Input placeholder="Jane Doe" {...field} /></FormControl><FormMessage /></FormItem>
                         )} />
                         <FormField control={form.control} name="email" render={({ field }) => (
-                          <FormItem><FormLabel>Work Email Address</FormLabel><FormControl><Input type="email" autoComplete="email" placeholder="jane@company.com" {...field} /></FormControl><FormMessage /></FormItem>
+                          <FormItem>
+                            <FormLabel>Work Email Address</FormLabel>
+                            <FormControl><Input type="email" autoComplete="email" placeholder="jane@company.com" {...field} /></FormControl>
+                            {/*
+                              A hint, NOT a client-side gate. The block/allow list lives in the
+                              database (email_domain_rules) so it can change without a deploy —
+                              a copy in a Zod refinement here would drift the moment an admin
+                              allowlists a domain. The authoritative rejection comes from
+                              createSponsorApplication and renders in the Alert above.
+                            */}
+                            <p className="text-xs text-muted-foreground">
+                              Please use your work email — we can&apos;t approve sponsor accounts on personal addresses.
+                            </p>
+                            <FormMessage />
+                          </FormItem>
                         )} />
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                           <FormField control={form.control} name="password" render={({ field }) => (

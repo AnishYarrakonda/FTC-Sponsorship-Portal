@@ -10,6 +10,7 @@ import { mapDbError } from '@/lib/errors'
 import { deriveTeamSlug, uniquifyTeamSlug } from '@/lib/team-slug'
 import { verifyFTCTeamIdentity } from '@/lib/ftc-roster'
 import { teamVerificationOverrideSchema } from '@/lib/schemas/team'
+import { emailDomainRuleSchema, type EmailDomainRuleInput } from '@/lib/schemas/sponsor'
 import {
   ADMIN_LEVEL_LABELS,
   demoteAdminSchema,
@@ -1030,4 +1031,113 @@ export async function demoteAdmin(input: DemoteAdminInput) {
 
   revalidatePath('/admin/team')
   return warning ? { success: true as const, warning } : { success: true as const }
+}
+
+// ---------------------------------------------------------------------------
+// Email domain rules (0090) — the sponsor-path block/allow list
+// ---------------------------------------------------------------------------
+//
+// `email_domain_rules` has an admin-only SELECT policy and NO write policy at all, so
+// every write here goes through the admin client on purpose (same idiom as audit_log).
+// requireAdmin() is the real authorization boundary.
+//
+// Scope: this list is consulted ONLY by createSponsorApplication. The coach signup path
+// never reads it — volunteers legitimately use personal email.
+
+/**
+ * Upsert one domain rule. `domain` is the primary key, so blocking a domain that is
+ * currently allowed (or vice versa) is a plain upsert rather than a delete + insert.
+ * Reads the prior row first so `previous_rule` lands in the audit metadata.
+ */
+export async function adminSetEmailDomainRule(input: EmailDomainRuleInput) {
+  const parsed = emailDomainRuleSchema.safeParse(input)
+  if (!parsed.success) {
+    return { error: 'Validation failed: ' + parsed.error.issues.map((i) => i.message).join(', ') }
+  }
+
+  let user, adminClient
+  try {
+    const auth = await requireAdmin()
+    user = auth.user
+    adminClient = auth.adminClient
+  } catch (e: any) {
+    return { error: e.message as string }
+  }
+
+  const { domain, rule, reason } = parsed.data
+
+  const { data: existing } = await adminClient
+    .from('email_domain_rules')
+    .select('rule')
+    .eq('domain', domain)
+    .maybeSingle()
+
+  const { error } = await adminClient
+    .from('email_domain_rules')
+    .upsert(
+      {
+        domain,
+        rule,
+        // An admin-entered rule is a manual override by definition; the seeded
+        // consumer/disposable categories are only ever written by the migration.
+        category: 'manual',
+        reason: reason || null,
+        created_by: user.id,
+      },
+      { onConflict: 'domain' }
+    )
+
+  if (error) return { error: mapDbError(error, 'adminSetEmailDomainRule.upsert') }
+
+  await adminClient.from('audit_log').insert({
+    actor_id: user.id,
+    action: 'set_email_domain_rule',
+    entity_type: 'email_domain_rules',
+    metadata: { domain, rule, previous_rule: existing?.rule ?? null, reason: reason || null },
+  })
+
+  revalidatePath('/admin/domains')
+  return { success: true as const }
+}
+
+/** Remove a rule entirely. A domain with no row is simply un-listed (i.e. allowed). */
+export async function adminDeleteEmailDomainRule(domain: string) {
+  const parsed = emailDomainRuleSchema.pick({ domain: true }).safeParse({ domain })
+  if (!parsed.success) {
+    return { error: 'Validation failed: ' + parsed.error.issues.map((i) => i.message).join(', ') }
+  }
+
+  let user, adminClient
+  try {
+    const auth = await requireAdmin()
+    user = auth.user
+    adminClient = auth.adminClient
+  } catch (e: any) {
+    return { error: e.message as string }
+  }
+
+  const { data: existing } = await adminClient
+    .from('email_domain_rules')
+    .select('rule')
+    .eq('domain', parsed.data.domain)
+    .maybeSingle()
+
+  if (!existing) return { error: 'That domain is not on either list.' }
+
+  const { error } = await adminClient
+    .from('email_domain_rules')
+    .delete()
+    .eq('domain', parsed.data.domain)
+
+  if (error) return { error: mapDbError(error, 'adminDeleteEmailDomainRule.delete') }
+
+  await adminClient.from('audit_log').insert({
+    actor_id: user.id,
+    action: 'delete_email_domain_rule',
+    entity_type: 'email_domain_rules',
+    metadata: { domain: parsed.data.domain, previous_rule: existing.rule },
+  })
+
+  revalidatePath('/admin/domains')
+  return { success: true as const }
 }

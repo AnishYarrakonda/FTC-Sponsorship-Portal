@@ -17,6 +17,7 @@ import type { Team, TeamAchievement } from '@/lib/supabase/types'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@clerk/nextjs'
 import { cn } from '@/lib/utils'
+import { MediaAffirmation } from './media-affirmation'
 import { RichTextEditor } from '@/components/ui/rich-text-editor'
 import { ImageCropperDialog, getCroppedBlob, computeCenterCrop } from '@/components/ui/image-cropper-dialog'
 
@@ -950,6 +951,12 @@ export function PortfolioTab({ team, achievements }: { team: Team, achievements:
               </div>
             )}
           </div>
+          {/* Gates these photos into sponsor CSR impact reports. Fail closed: without the
+              affirmation they appear in no report. */}
+          <MediaAffirmation
+            teamId={team.id}
+            confirmedAt={(team as { media_no_minors_confirmed_at?: string | null }).media_no_minors_confirmed_at ?? null}
+          />
           <FormField control={form.control} name="youtubeUrl" render={({ field }) => (
             <FormItem>
               <FormLabel>YouTube Video (Optional)</FormLabel>

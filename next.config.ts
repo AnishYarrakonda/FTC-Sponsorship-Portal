@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withBotId } from "botid/next/config";
 
 /**
  * Supabase Storage host for `next/image`.
@@ -134,4 +135,14 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+/**
+ * Vercel BotID (Basic mode) — invisible bot protection on the sponsor application and
+ * both signup paths. `withBotId` only adds the same-origin rewrites that proxy the
+ * challenge script; everything configured above (CSP headers, images, serverActions body
+ * limit, poweredByHeader) is preserved untouched.
+ *
+ * Because the challenge is served same-origin through those rewrites, the existing
+ * `script-src 'self'` already covers it — no CSP change is needed, and a CSP-blocked
+ * challenge script would make checkBotId() classify every real human as a bot.
+ */
+export default withBotId(nextConfig);

@@ -55,8 +55,25 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         aria-busy={loading || undefined}
         {...props}
       >
-        {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-        {children}
+        {/*
+          asChild MUST receive exactly one child. Radix's Slot calls
+          React.Children.only, and `{loading && …}{children}` is two children — an array
+          of [false, <Link/>] when not loading — so every `<Button asChild>` in the app
+          threw "React.Children.only expected to receive a single React element child"
+          and took its whole page down with it (the coach Portfolio, Funding and
+          Recognition tabs all rendered the error boundary instead of the form).
+
+          In asChild mode the caller owns the rendered element, so the spinner is theirs
+          to place; injecting a sibling was never something Slot could honour.
+        */}
+        {asChild ? (
+          children
+        ) : (
+          <>
+            {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {children}
+          </>
+        )}
       </Comp>
     )
   },

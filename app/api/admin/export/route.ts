@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { requireSuperAdmin } from '@/lib/actions-utils'
 import { htmlToPlainText } from '@/lib/utils'
+// Lifted into lib/csv.ts so the impact-report routes share this exact escaping. Pure move.
+import { escapeCell, rowToCsv, CSV_PAGE_SIZE as PAGE_SIZE } from '@/lib/csv'
 
 const CSV_HEADERS = [
   'submission_id',
@@ -23,28 +25,6 @@ const CSV_HEADERS = [
   'funding_used_cents',
 ]
 
-function escapeCell(value: unknown): string {
-  if (value === null || value === undefined) return ''
-  let str = String(value)
-  // CSV formula-injection defense: a cell beginning with = + - @ (or tab/CR) is
-  // interpreted as a formula by Excel/Sheets. Prefix with a tab so the spreadsheet
-  // treats it as literal text. Field values here are attacker-influenced (team /
-  // company names, free-text pitch fields) and admins open this file locally.
-  if (/^[=+\-@\t\r]/.test(str)) {
-    str = `\t${str}`
-  }
-  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
-    return `"${str.replace(/"/g, '""')}"`
-  }
-  return str
-}
-
-function rowToCsv(row: unknown[]): string {
-  return row.map(escapeCell).join(',')
-}
-
-/** PostgREST caps an unbounded select at 1000 rows and says nothing about it. */
-const PAGE_SIZE = 1000
 
 export async function GET() {
   let adminClient: Awaited<ReturnType<typeof requireSuperAdmin>>['adminClient']

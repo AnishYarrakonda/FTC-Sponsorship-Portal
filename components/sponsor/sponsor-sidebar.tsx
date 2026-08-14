@@ -11,6 +11,8 @@ import {
   Building2,
   Users,
   ShieldCheck,
+  Award,
+  FileBarChart,
 } from 'lucide-react'
 import {
   PortalBrand,
@@ -30,6 +32,8 @@ const NAV_ITEMS = [
   { label: 'Pitches', href: '/sponsor/submissions', icon: FileText, exact: false, badge: 'pending' },
   { label: 'Approvals', href: '/sponsor/approvals', icon: ShieldCheck, exact: false, badge: 'approvals' },
   { label: 'Funding', href: '/sponsor/funding', icon: Wallet, exact: false },
+  { label: 'Recognition', href: '/sponsor/recognition', icon: Award, exact: false },
+  { label: 'Impact', href: '/sponsor/impact', icon: FileBarChart, exact: false },
   { label: 'Inbox', href: '/sponsor/inbox', icon: Bell, exact: false, badge: 'inbox' },
   { label: 'Team', href: '/sponsor/members', icon: Users, exact: false },
 ] as const

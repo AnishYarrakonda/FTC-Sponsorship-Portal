@@ -5,7 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { AgreementStatusRow } from '@/components/agreements/agreement-status-row'
-import { COACH_EDITABLE_STATUSES } from '@/lib/submission-status'
+import { COACH_EDITABLE_STATUSES, isAwaitingSponsor } from '@/lib/submission-status'
+import { CoachThreadPanel } from '@/components/messages/thread-panels'
+import type { ThreadMessage } from '@/components/messages/thread'
 import { cn } from '@/lib/utils'
 
 // This route had no bare detail page before this slice — only /edit. It exists now as
@@ -20,7 +22,7 @@ export default async function CoachSubmissionDetailPage({ params }: { params: Pr
 
   const { data: submission } = await supabase
     .from('submissions')
-    .select('id, status, requested_amount_cents, reserved_amount_cents, team_id, sponsor_id')
+    .select('id, status, requested_amount_cents, reserved_amount_cents, team_id, sponsor_id, expires_at')
     .eq('id', id)
     .maybeSingle()
 
@@ -46,6 +48,22 @@ export default async function CoachSubmissionDetailPage({ params }: { params: Pr
   const isEditable = (COACH_EDITABLE_STATUSES as readonly string[]).includes(submission.status)
   const sponsorName = sponsor?.company_name ?? 'Sponsor'
   const amountCents = submission.reserved_amount_cents || submission.requested_amount_cents
+
+  // Read through the RLS-respecting server client: sm_select_coach already hides other
+  // people's pending drafts and other coaches' threads, so there is nothing to re-filter
+  // in TS. The coach DOES see their own pending/rejected rows — that is deliberate, so
+  // "awaiting review" and a rejection reason are both visible to them.
+  const { data: threadRows } = await supabase
+    .from('submission_messages')
+    .select('id, author_role, author_label, body, status, created_at, rejected_reason, flagged_at')
+    .eq('submission_id', id)
+    .order('created_at', { ascending: true })
+
+  const messages = (threadRows ?? []) as ThreadMessage[]
+  const hasSponsorMessage = messages.some((m) => m.author_role === 'sponsor')
+  const threadLive =
+    isAwaitingSponsor(submission.status) &&
+    (!submission.expires_at || new Date(submission.expires_at) > new Date())
 
   return (
     <div className="container mx-auto max-w-3xl space-y-6 py-8">
@@ -77,6 +95,19 @@ export default async function CoachSubmissionDetailPage({ params }: { params: Pr
           )}
         </CardContent>
       </Card>
+
+      <CoachThreadPanel
+        submissionId={id}
+        messages={messages}
+        canCompose={threadLive}
+        hasSponsorMessage={hasSponsorMessage}
+        sponsorName={sponsorName}
+        closedNotice={
+          threadLive
+            ? undefined
+            : 'This pitch is no longer awaiting a sponsor decision, so the thread is read-only.'
+        }
+      />
     </div>
   )
 }

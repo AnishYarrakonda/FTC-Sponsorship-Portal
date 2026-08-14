@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
   Search, Plus, ArrowUpRight, Sparkles, Building2, AlertCircle,
-  ChevronDown, ChevronUp, Bell, CheckCircle2, FileText,
+  ChevronDown, ChevronUp, Bell, CheckCircle2, FileText, MessageSquare, Scale,
 } from 'lucide-react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { FadeUp } from '@/components/motion/fade-up'
@@ -31,16 +31,30 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { PortfolioTab } from './portfolio-tab'
 import { InboxTab } from './inbox-tab'
 import { FundingTab } from './funding-tab'
+import { RecognitionTab, type CoachRecognitionAward } from './recognition-tab'
 import { AccountSettings } from '@/components/account/account-settings'
 import { updateTeam, requestTeamVerificationReview } from '@/app/actions/team'
 import { toast } from 'sonner'
 import type { Team, Notification, Submission, Sponsor, TeamAchievement, SubmissionSummary } from '@/lib/supabase/types'
+
+/**
+ * The dashboard projection (app/(coach)/dashboard/page.tsx) carries one field the
+ * v_submission_summary view does not: how many sponsor questions are on this pitch's
+ * thread, so a coach can see there is something to answer without opening every row.
+ */
+type CoachSubmissionSummary = SubmissionSummary & {
+  question_count?: number
+  /** Set by the dashboard projection when this decline is still inside its 30-day window. */
+  appealable?: boolean
+  appeal_status?: string | null
+}
 
 const TABS = [
   { id: 'overview', label: 'Dashboard' },
   { id: 'portfolio', label: 'Portfolio' },
   { id: 'pitches', label: 'Pitches' },
   { id: 'sponsors', label: 'Sponsors' },
+  { id: 'recognition', label: 'Recognition' },
   { id: 'inbox', label: 'Inbox' },
   { id: 'funding', label: 'Funding' },
   { id: 'settings', label: 'Settings' },
@@ -66,16 +80,18 @@ export function DashboardShell({
   achievements,
   fulfillments = [],
   payoutProfiles = [],
+  recognitionAwards = [],
 }: {
   team: Team
   profile: any
   sponsors: Sponsor[]
   notifications: Notification[]
   unreadCount: number
-  submissions: SubmissionSummary[]
+  submissions: CoachSubmissionSummary[]
   achievements: TeamAchievement[]
   fulfillments?: any[]
   payoutProfiles?: any[]
+  recognitionAwards?: CoachRecognitionAward[]
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -141,6 +157,7 @@ export function DashboardShell({
           {tab === 'portfolio' && <PortfolioTab team={team} achievements={achievements} />}
           {tab === 'pitches' && <SubmissionsTab submissions={submissions} onNewPitch={() => setTab('sponsors')} />}
           {tab === 'sponsors' && <FindSponsorsTab sponsors={sponsors} submissions={submissions} />}
+          {tab === 'recognition' && <RecognitionTab awards={recognitionAwards} />}
           {tab === 'inbox' && <InboxTab notifications={notifications} switchTab={setTab} />}
           {tab === 'funding' && <FundingTab teams={[team]} fulfillments={fulfillments} payoutProfiles={payoutProfiles} />}
           {tab === 'settings' && (
@@ -165,7 +182,7 @@ function OverviewTab({
   submissionsCount: number
   totalFunded: number
   portfolioAsk: number
-  submissions: SubmissionSummary[]
+  submissions: CoachSubmissionSummary[]
   unreadCount: number
 }) {
   const needsAttention = submissions.filter(s => s.status === 'declined' || s.status === 'changes_requested')
@@ -569,7 +586,7 @@ function SponsorInitials({ name, logoUrl }: { name: string; logoUrl?: string | n
   )
 }
 
-function FindSponsorsTab({ sponsors, submissions }: { sponsors: Sponsor[], submissions: SubmissionSummary[] }) {
+function FindSponsorsTab({ sponsors, submissions }: { sponsors: Sponsor[], submissions: CoachSubmissionSummary[] }) {
   const [query, setQuery] = useState('')
   const [industry, setIndustry] = useState('all')
   const [fundingRange, setFundingRange] = useState(0) // index into FUNDING_RANGES
@@ -784,7 +801,7 @@ const SUBMISSION_FILTERS: { id: SubmissionFilter; label: string }[] = [
   { id: 'draft', label: 'Drafts' },
 ]
 
-function SubmissionsTab({ submissions, onNewPitch }: { submissions: SubmissionSummary[], onNewPitch: () => void }) {
+function SubmissionsTab({ submissions, onNewPitch }: { submissions: CoachSubmissionSummary[], onNewPitch: () => void }) {
   const [filter, setFilter] = useState<SubmissionFilter>('all')
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
@@ -863,12 +880,43 @@ function SubmissionsTab({ submissions, onNewPitch }: { submissions: SubmissionSu
                       Edit
                     </Link>
                   ) : (
+                    // A locked pitch has nothing to edit — send them to the detail page,
+                    // which is where the sponsor Q&A thread lives.
                     <Link
-                      href={`/submissions/${s.id}/edit`}
+                      href={`/submissions/${s.id}`}
                       onClick={e => e.stopPropagation()}
                       className="text-xs uppercase tracking-wider px-3 py-1.5 bg-background border border-border rounded-md hover:bg-accent text-foreground font-semibold transition-colors shadow-sm"
                     >
                       View
+                    </Link>
+                  )}
+                  {s.appeal_status ? (
+                    <Link
+                      href="/appeals"
+                      onClick={e => e.stopPropagation()}
+                      className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider px-3 py-1.5 rounded-md border border-border bg-background text-muted-foreground font-semibold transition-colors hover:bg-accent"
+                    >
+                      <Scale className="h-3.5 w-3.5" />
+                      Appeal {s.appeal_status.replace('_', ' ')}
+                    </Link>
+                  ) : s.appealable ? (
+                    <Link
+                      href="/appeals"
+                      onClick={e => e.stopPropagation()}
+                      className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider px-3 py-1.5 rounded-md border border-border bg-background text-foreground font-semibold transition-colors hover:bg-accent shadow-sm"
+                    >
+                      <Scale className="h-3.5 w-3.5" />
+                      Appeal
+                    </Link>
+                  ) : null}
+                  {(s.question_count ?? 0) > 0 && (
+                    <Link
+                      href={`/submissions/${s.id}`}
+                      onClick={e => e.stopPropagation()}
+                      className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider px-3 py-1.5 rounded-md border border-amber-300 bg-amber-50 text-amber-900 font-semibold transition-colors hover:bg-amber-100 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200"
+                    >
+                      <MessageSquare className="h-3.5 w-3.5" />
+                      {s.question_count} question{s.question_count === 1 ? '' : 's'}
                     </Link>
                   )}
                   <span className="text-muted-foreground/50">

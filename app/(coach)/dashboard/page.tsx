@@ -1,4 +1,5 @@
 import { getAuthedProfile } from '@/lib/actions-utils'
+import { listAppealableSubjects } from '@/app/actions/appeals'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { deriveTeamSlug, uniquifyTeamSlug } from '@/lib/team-slug'
 import { verifyFTCTeamIdentity } from '@/lib/ftc-roster'
@@ -26,7 +27,8 @@ export default async function DashboardPage() {
     { data: notifications },
     { data: submissions },
     { data: fulfillments },
-    { data: payoutProfile }
+    { data: payoutProfile },
+    { data: recognitionRows }
   ] = await Promise.all([
     supabase.from('teams').select('*').eq('owner_id', user.id).order('updated_at', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('profiles').select('*').eq('id', user.id).single(),
@@ -59,6 +61,18 @@ export default async function DashboardPage() {
       }),
     supabase.from('funding_fulfillments').select('*, sponsors(company_name)').order('pledged_at', { ascending: false }),
     supabase.from('team_payout_profiles').select('team_id, w9_uploaded_at, w9_verified_at, w9_rejected_at, w9_rejected_reason, w9_expires_at').maybeSingle(),
+    // Recognition owed. recognition_awards_select_coach scopes this to teams this coach
+    // owns; the deliveries embed rides can_read_recognition_award(). No sponsors embed —
+    // sponsors_select is admin-only since 0063 and the embed would silently return null
+    // (the same trap documented for submissions above). Names come from
+    // v_sponsors_public in the resolver below.
+    supabase
+      .from('sponsor_recognition_awards')
+      .select(
+        'id, sponsor_id, amount_cents, awarded_at, tier_name_snapshot, tier_rank_snapshot, ' +
+        'recognition_benefit_deliveries(id, benefit_type, status, proof_url, admin_void_reason, delivered_at)'
+      )
+      .order('awarded_at', { ascending: false }),
   ])
 
   // Resolve sponsor company names for this coach's own submissions. Kept out of the
@@ -80,6 +94,76 @@ export default async function DashboardPage() {
       for (const s of submissions as any[]) {
         s.company_name = byId.get(s.sponsor_id) ?? undefined
       }
+    }
+  }
+
+  // How many sponsor questions each pitch is carrying, so the list can flag the rows with
+  // something to answer. One query for the whole list, counted in JS — a per-row count
+  // would be an N+1 on the dashboard's hottest path. sm_select_coach means this read can
+  // only ever return this coach's own threads.
+  {
+    const submissionIds = (submissions ?? []).map((s: any) => s.id).filter(Boolean) as string[]
+    if (submissionIds.length > 0) {
+      const { data: questions } = await supabase
+        .from('submission_messages')
+        .select('submission_id')
+        .in('submission_id', submissionIds)
+        .eq('author_role', 'sponsor')
+
+      const counts = new Map<string, number>()
+      for (const q of questions ?? []) {
+        counts.set(q.submission_id, (counts.get(q.submission_id) ?? 0) + 1)
+      }
+      for (const s of submissions as any[]) {
+        s.question_count = counts.get(s.id) ?? 0
+      }
+    }
+  }
+
+  // Appeal eligibility for declined pitches. Computed here, from the same
+  // listAppealableSubjects resolver the appeals pages use, so "can I appeal this" has one
+  // definition rather than three.
+  {
+    const result = await listAppealableSubjects()
+    if (!('error' in result)) {
+      const bySubmission = new Map(
+        result.subjects
+          .filter((s) => s.subjectType === 'submission')
+          .map((s) => [s.subjectId, s])
+      )
+      for (const s of submissions as any[]) {
+        const subject = bySubmission.get(s.id)
+        s.appealable = !!subject?.windowOpen && !subject?.existingAppeal
+        s.appeal_status = subject?.existingAppeal?.status ?? null
+      }
+    }
+  }
+
+  // Sponsor company names for the recognition cards, resolved the same way submissions
+  // resolve theirs.
+  const recognitionAwards: any[] = []
+  {
+    const rows = (recognitionRows ?? []) as any[]
+    const sponsorIds = Array.from(new Set(rows.map((r) => r.sponsor_id).filter(Boolean))) as string[]
+    const byId = new Map<string, string>()
+    if (sponsorIds.length > 0) {
+      const { data: names } = await supabase
+        .from('v_sponsors_public')
+        .select('id, company_name')
+        .in('id', sponsorIds)
+      for (const n of names ?? []) byId.set(n.id as string, n.company_name as string)
+    }
+    for (const r of rows) {
+      recognitionAwards.push({
+        id: r.id,
+        amount_cents: r.amount_cents,
+        awarded_at: r.awarded_at,
+        tier_name_snapshot: r.tier_name_snapshot,
+        company_name: byId.get(r.sponsor_id) ?? null,
+        deliveries: (r.recognition_benefit_deliveries ?? []).slice().sort(
+          (a: any, b: any) => String(a.benefit_type).localeCompare(String(b.benefit_type))
+        ),
+      })
     }
   }
 
@@ -276,6 +360,7 @@ export default async function DashboardPage() {
       achievements={(achievements || []) as any}
       fulfillments={(fulfillments || []) as any}
       payoutProfiles={payoutProfile ? [payoutProfile] : []}
+      recognitionAwards={recognitionAwards as any}
     /></>
   )
 }

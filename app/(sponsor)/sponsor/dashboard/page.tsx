@@ -2,6 +2,7 @@ import { getAuthedProfile } from '@/lib/actions-utils'
 import { redirect } from 'next/navigation'
 import { SponsorDashboardShell } from '@/components/sponsor/dashboard-shell'
 import { RoleRedirectBanner } from '@/components/auth/role-redirect-banner'
+import { SPONSOR_SUBMISSION_SELECT } from '@/lib/sponsor-visibility'
 
 export default async function SponsorDashboardPage() {
   const authed = await getAuthedProfile()
@@ -21,7 +22,7 @@ export default async function SponsorDashboardPage() {
   // Fetch submissions for this sponsor
   const { data: submissions } = await supabase
     .from('submissions')
-    .select('*, teams(team_name, ftc_team_number, city, state, organization)')
+    .select(`${SPONSOR_SUBMISSION_SELECT}, teams(team_name, ftc_team_number, city, state, organization)`)
     .eq('sponsor_id', profile.sponsor_id)
     .order('created_at', { ascending: false })
 

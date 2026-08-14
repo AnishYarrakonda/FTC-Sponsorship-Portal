@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getAuthedProfile } from '@/lib/actions-utils'
 import Link from 'next/link'
-import { Inbox } from 'lucide-react'
+import { Inbox, AlertTriangle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -65,6 +65,28 @@ export default async function ApplicationsPage() {
                       <CardDescription suppressHydrationWarning>
                         {app.contact_name} ({app.contact_email}) · Applied {new Date(app.created_at).toLocaleDateString()}
                       </CardDescription>
+                      {app.website && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          <a
+                            href={app.website.startsWith('http') ? app.website : `https://${app.website}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="underline underline-offset-2 hover:text-foreground"
+                          >
+                            {app.website}
+                          </a>
+                        </p>
+                      )}
+                      {/* Advisory only — a mismatch is never an auto-rejection (0090). */}
+                      {app.domain_match === 'mismatch' && (
+                        <p className="mt-2 inline-flex flex-wrap items-center gap-1.5 rounded-full bg-[var(--badge-warning-bg)] px-2.5 py-1 text-xs font-medium text-[var(--badge-warning-text)]">
+                          <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+                          Email domain doesn&apos;t match company website
+                          <span className="font-normal">
+                            ({app.email_domain ?? 'unknown'} vs {app.website_domain ?? 'unknown'})
+                          </span>
+                        </p>
+                      )}
                     </div>
                     <StatusBadge status={app.status} />
                   </div>

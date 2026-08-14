@@ -471,6 +471,44 @@ export type Database = {
         }
         Relationships: []
       }
+      email_domain_rules: {
+        Row: {
+          category: string
+          created_at: string
+          created_by: string | null
+          domain: string
+          reason: string | null
+          rule: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          domain: string
+          reason?: string | null
+          rule: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          domain?: string
+          reason?: string | null
+          rule?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_domain_rules_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sponsor_applications: {
         Row: {
           approved_at: string | null
@@ -479,6 +517,8 @@ export type Database = {
           contact_email: string
           contact_name: string
           created_at: string
+          domain_match: string | null
+          email_domain: string | null
           id: string
           message: string | null
           proposed_cap_cents: number
@@ -486,6 +526,8 @@ export type Database = {
           reviewed_by: string | null
           status: Database["public"]["Enums"]["application_status"]
           updated_at: string
+          website: string | null
+          website_domain: string | null
         }
         Insert: {
           approved_at?: string | null
@@ -494,6 +536,8 @@ export type Database = {
           contact_email: string
           contact_name: string
           created_at?: string
+          domain_match?: string | null
+          email_domain?: string | null
           id?: string
           message?: string | null
           proposed_cap_cents?: number
@@ -501,6 +545,8 @@ export type Database = {
           reviewed_by?: string | null
           status?: Database["public"]["Enums"]["application_status"]
           updated_at?: string
+          website?: string | null
+          website_domain?: string | null
         }
         Update: {
           approved_at?: string | null
@@ -509,6 +555,8 @@ export type Database = {
           contact_email?: string
           contact_name?: string
           created_at?: string
+          domain_match?: string | null
+          email_domain?: string | null
           id?: string
           message?: string | null
           proposed_cap_cents?: number
@@ -516,6 +564,8 @@ export type Database = {
           reviewed_by?: string | null
           status?: Database["public"]["Enums"]["application_status"]
           updated_at?: string
+          website?: string | null
+          website_domain?: string | null
         }
         Relationships: [
           {
@@ -811,6 +861,405 @@ export type Database = {
             columns: ["submission_id"]
             isOneToOne: false
             referencedRelation: "v_submission_summary"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      // Hand-added for migration 0086_coach_appeals.sql.
+      appeals: {
+        Row: {
+          appellant_profile_id: string
+          assigned_at: string | null
+          assigned_reviewer_id: string | null
+          created_at: string
+          decision_at: string
+          id: string
+          original_decider_id: string | null
+          override_reason: string | null
+          resolution_notes: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          statement: string
+          status: string
+          subject_id: string
+          subject_type: string
+          updated_at: string
+        }
+        Insert: {
+          appellant_profile_id: string
+          assigned_at?: string | null
+          assigned_reviewer_id?: string | null
+          created_at?: string
+          decision_at: string
+          id?: string
+          original_decider_id?: string | null
+          override_reason?: string | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          statement: string
+          status?: string
+          subject_id: string
+          subject_type: string
+          updated_at?: string
+        }
+        Update: {
+          appellant_profile_id?: string
+          assigned_at?: string | null
+          assigned_reviewer_id?: string | null
+          created_at?: string
+          decision_at?: string
+          id?: string
+          original_decider_id?: string | null
+          override_reason?: string | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          statement?: string
+          status?: string
+          subject_id?: string
+          subject_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appeals_appellant_profile_id_fkey"
+            columns: ["appellant_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      // Hand-added for migration 0088_impact_reports.sql. Regenerate with
+      // `supabase gen types` once the migrations are applied.
+      impact_report_snapshots: {
+        Row: {
+          closed_at: string | null
+          created_at: string
+          generated_at: string
+          generated_by: string | null
+          id: string
+          payload: Json
+          payload_schema_version: number
+          report_year: number
+          scope: string
+          sponsor_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          closed_at?: string | null
+          created_at?: string
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          payload: Json
+          payload_schema_version?: number
+          report_year: number
+          scope: string
+          sponsor_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          closed_at?: string | null
+          created_at?: string
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          payload?: Json
+          payload_schema_version?: number
+          report_year?: number
+          scope?: string
+          sponsor_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "impact_report_snapshots_sponsor_id_fkey"
+            columns: ["sponsor_id"]
+            isOneToOne: false
+            referencedRelation: "sponsors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      public_platform_stats: {
+        Row: {
+          dollars_pledged_cents: number
+          dollars_received_cents: number
+          events_hosted: number
+          id: boolean
+          refreshed_at: string
+          sponsors_active: number
+          students_reached: number
+          teams_supported: number
+          volunteer_hours: number
+        }
+        Insert: {
+          dollars_pledged_cents?: number
+          dollars_received_cents?: number
+          events_hosted?: number
+          id?: boolean
+          refreshed_at?: string
+          sponsors_active?: number
+          students_reached?: number
+          teams_supported?: number
+          volunteer_hours?: number
+        }
+        Update: {
+          dollars_pledged_cents?: number
+          dollars_received_cents?: number
+          events_hosted?: number
+          id?: boolean
+          refreshed_at?: string
+          sponsors_active?: number
+          students_reached?: number
+          teams_supported?: number
+          volunteer_hours?: number
+        }
+        Relationships: []
+      }
+      // Hand-added for migration 0087_recognition_tiers.sql. Regenerate with
+      // `supabase gen types` once the migrations are applied.
+      recognition_tiers: {
+        Row: {
+          archived_at: string | null
+          benefits: string[]
+          created_at: string
+          description: string | null
+          id: string
+          max_amount_cents: number | null
+          min_amount_cents: number
+          name: string
+          rank: number
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          benefits?: string[]
+          created_at?: string
+          description?: string | null
+          id?: string
+          max_amount_cents?: number | null
+          min_amount_cents: number
+          name: string
+          rank: number
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          benefits?: string[]
+          created_at?: string
+          description?: string | null
+          id?: string
+          max_amount_cents?: number | null
+          min_amount_cents?: number
+          name?: string
+          rank?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sponsor_recognition_awards: {
+        Row: {
+          amount_cents: number
+          awarded_at: string
+          benefits_snapshot: string[]
+          created_at: string
+          fulfillment_id: string
+          id: string
+          sponsor_id: string
+          team_id: string | null
+          tier_id: string | null
+          tier_min_amount_cents_snapshot: number
+          tier_name_snapshot: string
+          tier_rank_snapshot: number
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          awarded_at?: string
+          benefits_snapshot: string[]
+          created_at?: string
+          fulfillment_id: string
+          id?: string
+          sponsor_id: string
+          team_id?: string | null
+          tier_id?: string | null
+          tier_min_amount_cents_snapshot: number
+          tier_name_snapshot: string
+          tier_rank_snapshot: number
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          awarded_at?: string
+          benefits_snapshot?: string[]
+          created_at?: string
+          fulfillment_id?: string
+          id?: string
+          sponsor_id?: string
+          team_id?: string | null
+          tier_id?: string | null
+          tier_min_amount_cents_snapshot?: number
+          tier_name_snapshot?: string
+          tier_rank_snapshot?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sponsor_recognition_awards_sponsor_id_fkey"
+            columns: ["sponsor_id"]
+            isOneToOne: false
+            referencedRelation: "sponsors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsor_recognition_awards_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsor_recognition_awards_tier_id_fkey"
+            columns: ["tier_id"]
+            isOneToOne: false
+            referencedRelation: "recognition_tiers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recognition_benefit_deliveries: {
+        Row: {
+          admin_void_reason: string | null
+          admin_voided_at: string | null
+          award_id: string
+          benefit_type: string
+          coach_note: string | null
+          created_at: string
+          delivered_at: string | null
+          id: string
+          no_minors_confirmed_at: string | null
+          proof_uploaded_at: string | null
+          proof_url: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          admin_void_reason?: string | null
+          admin_voided_at?: string | null
+          award_id: string
+          benefit_type: string
+          coach_note?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          id?: string
+          no_minors_confirmed_at?: string | null
+          proof_uploaded_at?: string | null
+          proof_url?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          admin_void_reason?: string | null
+          admin_voided_at?: string | null
+          award_id?: string
+          benefit_type?: string
+          coach_note?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          id?: string
+          no_minors_confirmed_at?: string | null
+          proof_uploaded_at?: string | null
+          proof_url?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recognition_benefit_deliveries_award_id_fkey"
+            columns: ["award_id"]
+            isOneToOne: false
+            referencedRelation: "sponsor_recognition_awards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      // Hand-added for migration 0085_submission_qa_thread.sql. Regenerate with
+      // `supabase gen types` once the migrations are applied.
+      submission_messages: {
+        Row: {
+          author_label: string
+          author_profile_id: string | null
+          author_role: Database["public"]["Enums"]["user_role"]
+          author_token_id: string | null
+          body: string
+          created_at: string
+          flagged_at: string | null
+          flagged_by: string | null
+          id: string
+          rejected_reason: string | null
+          released_at: string | null
+          released_by: string | null
+          status: string
+          submission_id: string
+        }
+        Insert: {
+          author_label: string
+          author_profile_id?: string | null
+          author_role: Database["public"]["Enums"]["user_role"]
+          author_token_id?: string | null
+          body: string
+          created_at?: string
+          flagged_at?: string | null
+          flagged_by?: string | null
+          id?: string
+          rejected_reason?: string | null
+          released_at?: string | null
+          released_by?: string | null
+          status?: string
+          submission_id: string
+        }
+        Update: {
+          author_label?: string
+          author_profile_id?: string | null
+          author_role?: Database["public"]["Enums"]["user_role"]
+          author_token_id?: string | null
+          body?: string
+          created_at?: string
+          flagged_at?: string | null
+          flagged_by?: string | null
+          id?: string
+          rejected_reason?: string | null
+          released_at?: string | null
+          released_by?: string | null
+          status?: string
+          submission_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "submission_messages_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "submissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submission_messages_author_profile_id_fkey"
+            columns: ["author_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submission_messages_author_token_id_fkey"
+            columns: ["author_token_id"]
+            isOneToOne: false
+            referencedRelation: "submission_access_tokens"
             referencedColumns: ["id"]
           },
         ]
@@ -1160,6 +1609,7 @@ export type Database = {
           id: string
           logo_url: string | null
           media_urls: Json
+          media_no_minors_confirmed_at: string | null
           mission_statement: string | null
           organization: string | null
           outreach_summary: string | null
@@ -1203,6 +1653,7 @@ export type Database = {
           id?: string
           logo_url?: string | null
           media_urls?: Json
+          media_no_minors_confirmed_at?: string | null
           mission_statement?: string | null
           organization?: string | null
           outreach_summary?: string | null
@@ -1246,6 +1697,7 @@ export type Database = {
           id?: string
           logo_url?: string | null
           media_urls?: Json
+          media_no_minors_confirmed_at?: string | null
           mission_statement?: string | null
           organization?: string | null
           outreach_summary?: string | null
@@ -1820,6 +2272,16 @@ export type Database = {
       }
       check_throttle: {
         Args: { p_key: string; p_limit: number; p_window: string }
+        Returns: boolean
+      }
+      // Hand-added for migration 0085_submission_qa_thread.sql. These two keep EXECUTE for
+      // `authenticated` because the submission_messages RLS policies call them.
+      coach_owns_submission: {
+        Args: { p_submission_id: string }
+        Returns: boolean
+      }
+      sponsor_owns_submission: {
+        Args: { p_submission_id: string }
         Returns: boolean
       }
       distinct_audit_actions: {

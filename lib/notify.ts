@@ -8,6 +8,7 @@ import CoachDenialEmail from '@/emails/coach-denial-email'
 import NotificationEmail from '@/emails/notification-email'
 import FulfillmentNudgeEmail from '@/emails/fulfillment-nudge-email'
 import FundingReceiptEmail from '@/emails/funding-receipt-email'
+import ThreadMessageEmail from '@/emails/thread-message-email'
 import type { ReceiptDocumentContext } from '@/lib/receipt-document'
 import { Resend } from 'resend'
 import { createHash } from 'crypto'
@@ -556,4 +557,161 @@ export async function sendFundingReceiptEmail(args: {
   )
 }
 
+
+
+/**
+ * Email a released Q&A message to the counterparty.
+ *
+ * Called once per release from releaseCoachReply. For a token-only sponsor there is no
+ * profiles row, so createInAppNotification is impossible and this is the ONLY channel that
+ * reaches them — which is why the release path always sends it, even when the in-app
+ * fan-out also fired for account sponsors.
+ *
+ * replyTo is SUPPORT_EMAIL and NEVER the counterparty's address. sendHandshakeEmail
+ * deliberately cross-wires the two humans, but only AFTER a funding match is settled; doing
+ * it here would create exactly the unmoderated coach->sponsor backchannel this whole feature
+ * exists to prevent.
+ */
+export async function sendThreadMessageEmail(messageId: string): Promise<NotifyResult> {
+  try {
+    const admin = createAdminClient()
+
+    const { data: message, error } = await admin
+      .from('submission_messages')
+      .select('id, body, author_role, author_label, status, submission_id')
+      .eq('id', messageId)
+      .single()
+
+    if (error || !message) {
+      return notifyFailure('sendThreadMessageEmail', error ?? new Error('message not found'))
+    }
+    if (message.status !== 'released') {
+      // Defensive: nothing unreleased ever leaves the building.
+      return notifyFailure(
+        'sendThreadMessageEmail',
+        new Error(`refusing to send message ${messageId} with status ${message.status}`)
+      )
+    }
+
+    const { data: submission } = await admin
+      .from('submissions')
+      .select('id, sponsor_id, teams:team_id(team_name, owner_id), sponsors:sponsor_id(company_name, contact_name, contact_email)')
+      .eq('id', message.submission_id)
+      .single()
+
+    if (!submission) {
+      return notifyFailure('sendThreadMessageEmail', new Error('submission not found'))
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const team = (submission as any).teams as { team_name?: string; owner_id?: string } | null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sponsor = (submission as any).sponsors as {
+      company_name?: string
+      contact_name?: string
+      contact_email?: string
+    } | null
+
+    const teamName = team?.team_name ?? 'the team'
+    const sponsorName = sponsor?.company_name ?? 'the sponsor'
+
+    let to: string | null = null
+    let recipientName = 'there'
+    let ctaUrl: string | undefined
+
+    if (message.author_role === 'coach') {
+      // Coach -> sponsor. Prefer a portal account; fall back to the company contact, and to
+      // the still-live token link when that is the only surface they have.
+      // profiles.sponsor_id first, then sponsor_members — the same union
+      // current_sponsor_ids() does (0082), so an org teammate who never had
+      // profiles.sponsor_id stamped is still reachable.
+      let { data: sponsorProfile } = await admin
+        .from('profiles')
+        .select('email, full_name')
+        .eq('role', 'sponsor')
+        .eq('sponsor_id', submission.sponsor_id)
+        .not('email', 'is', null)
+        .limit(1)
+        .maybeSingle()
+
+      if (!sponsorProfile?.email) {
+        const { data: member } = await admin
+          .from('sponsor_members')
+          .select('profiles:profile_id(email, full_name)')
+          .eq('sponsor_id', submission.sponsor_id)
+          .limit(1)
+          .maybeSingle()
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const memberProfile = (member as any)?.profiles as { email?: string; full_name?: string } | null
+        if (memberProfile?.email) {
+          sponsorProfile = { email: memberProfile.email, full_name: memberProfile.full_name ?? '' }
+        }
+      }
+
+      if (sponsorProfile?.email) {
+        to = sponsorProfile.email
+        recipientName = sponsorProfile.full_name ?? sponsor?.contact_name ?? 'there'
+        ctaUrl = `${env.NEXT_PUBLIC_APP_URL}/sponsor/submissions/${submission.id}`
+      } else if (sponsor?.contact_email) {
+        // Token-only sponsor: no portal account, so no portal link.
+        //
+        // The prompt for this feature asked for a /sponsor-view/<token> CTA here, gated on
+        // the token still being unused/unrevoked/unexpired. That is not buildable: 0018
+        // stores only sha256(token) and the raw value is never persisted, so the URL cannot
+        // be reconstructed server-side. Minting a fresh token to make a link would be a new
+        // dispatch surface, which Core Mandate 2 puts behind admin approval — not something
+        // a message release may do implicitly.
+        //
+        // So this email carries the message body and no button. The sponsor still holds the
+        // original dispatch email with their live link, and the body is the actual payload.
+        to = sponsor.contact_email
+        recipientName = sponsor.contact_name ?? 'there'
+        ctaUrl = undefined
+      }
+    } else {
+      // Sponsor -> coach. Only reachable when a caller chooses to email the coach directly;
+      // the normal sponsor path notifies in-app instead.
+      const { data: coach } = await admin
+        .from('profiles')
+        .select('email, full_name')
+        .eq('id', team?.owner_id ?? '')
+        .maybeSingle()
+
+      if (coach?.email) {
+        to = coach.email
+        recipientName = coach.full_name ?? 'Coach'
+        ctaUrl = `${env.NEXT_PUBLIC_APP_URL}/submissions/${submission.id}`
+      }
+    }
+
+    if (!to) {
+      return notifyFailure(
+        'sendThreadMessageEmail',
+        new Error(`no deliverable address for message ${messageId}`)
+      )
+    }
+
+    return sendViaResend(
+      'sendThreadMessageEmail',
+      {
+        from: env.RESEND_FROM_EMAIL,
+        to,
+        replyTo: SUPPORT_EMAIL,
+        subject: `${message.author_label} replied about ${teamName}`,
+        react: ThreadMessageEmail({
+          recipientName,
+          counterpartyLabel: message.author_label,
+          teamName,
+          sponsorName,
+          messageBody: message.body,
+          ctaUrl,
+          ctaLabel: 'Open the conversation',
+        }),
+      },
+      { idempotencyKey: createHash('sha256').update(messageId + 'thread').digest('hex') }
+    )
+  } catch (err) {
+    return notifyFailure('sendThreadMessageEmail', err)
+  }
+}
 

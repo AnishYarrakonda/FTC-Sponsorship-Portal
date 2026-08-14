@@ -1,6 +1,7 @@
 import { getAuthedProfile } from '@/lib/actions-utils'
 import { redirect } from 'next/navigation'
 import { SponsorSubmissionsList } from '@/components/sponsor/submissions-list'
+import { SPONSOR_SUBMISSION_SELECT } from '@/lib/sponsor-visibility'
 
 export default async function SponsorSubmissionsPage() {
   const authed = await getAuthedProfile()
@@ -17,7 +18,7 @@ export default async function SponsorSubmissionsPage() {
 
   const { data: submissions } = await supabase
     .from('submissions')
-    .select('*, teams(team_name, ftc_team_number, city, state)')
+    .select(`${SPONSOR_SUBMISSION_SELECT}, teams(team_name, ftc_team_number, city, state)`)
     .eq('sponsor_id', profile.sponsor_id)
     .order('created_at', { ascending: false })
 

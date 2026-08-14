@@ -27,6 +27,8 @@ import { cn, htmlToPlainText } from '@/lib/utils'
 import { sponsorUpdateSubmissionStatus } from '@/app/actions/sponsor-decision'
 import { toast } from 'sonner'
 import { hasSponsorRole, requiresApproval, type SponsorRole } from '@/lib/sponsor-roles'
+import { SponsorThreadPanel } from '@/components/messages/thread-panels'
+import type { ThreadMessage } from '@/components/messages/thread'
 
 type SponsorSubmission = {
   id: string
@@ -86,12 +88,16 @@ export function SponsorReviewShell({
   memberRole = 'org_admin',
   approvalThresholdCents = null,
   pendingProposal = null,
+  threadMessages = [],
+  threadCanCompose = false,
 }: {
   submission: any
   team: any
   memberRole?: SponsorRole
   approvalThresholdCents?: number | null
   pendingProposal?: { id: string; amount_cents: number; status: string } | null
+  threadMessages?: ThreadMessage[]
+  threadCanCompose?: boolean
 }) {
   const submissionData = submission as SponsorSubmission
   const teamData = team as SponsorTeam
@@ -499,6 +505,17 @@ export function SponsorReviewShell({
           </div>
         </div>
       </div>
+
+      {/* Q&A — placed below the decision console on purpose: a sponsor should be able to
+          read the coach's answer before they commit capacity. */}
+      <section className="max-w-3xl">
+        <SponsorThreadPanel
+          submissionId={submissionData.id}
+          messages={threadMessages}
+          canCompose={threadCanCompose}
+          teamName={teamData?.team_name ?? 'this team'}
+        />
+      </section>
     </div>
   )
 }

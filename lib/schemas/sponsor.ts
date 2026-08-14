@@ -1,4 +1,5 @@
 import { z } from '@/lib/zod-config'
+import { LIMITS } from '@/lib/schemas/limits'
 
 export const sponsorApplicationSchema = z.object({
   companyName: z.string().min(2, 'Company name is required'),
@@ -9,12 +10,11 @@ export const sponsorApplicationSchema = z.object({
   contactEmail: z.string().trim().toLowerCase().email('Invalid email address'),
   proposedCapCents: z.number().min(0, 'Proposed funding cap cannot be negative'),
   message: z.string().optional(),
-  /**
-   * Honeypot — rendered visually hidden in the public form. Humans never fill
-   * it; when a bot does, the action silently no-ops. Never validate it with an
-   * error (that would tip off the bot).
-   */
-  website2: z.string().optional(),
+  // The `website2` honeypot that used to live here went with submitSponsorApplication:
+  // that action was dead code reachable only from its own unit test, and the honeypot
+  // input is rendered solely in the admin-only SponsorForm. The live public path is
+  // createSponsorApplication (app/actions/auth.ts), which is protected by Vercel BotID,
+  // check_throttle, and Clerk email-code verification instead.
 })
 
 export type SponsorApplicationInput = z.infer<typeof sponsorApplicationSchema>
@@ -37,3 +37,23 @@ export const sponsorSchema = z.object({
 })
 
 export type SponsorInput = z.infer<typeof sponsorSchema>
+
+/**
+ * One row of the `email_domain_rules` block/allow list (0090). Admin-only.
+ *
+ * `domain` is a BARE apex host — no scheme, no leading dot, no local part — because that
+ * is exactly what `emailDomain()` produces and what the primary key stores.
+ */
+export const emailDomainRuleSchema = z.object({
+  domain: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(3)
+    .max(253)
+    .regex(/^[a-z0-9.-]+\.[a-z]{2,}$/, 'Enter a bare domain, e.g. acme.com'),
+  rule: z.enum(['block', 'allow']),
+  reason: z.string().trim().max(LIMITS.notes).optional(),
+})
+
+export type EmailDomainRuleInput = z.infer<typeof emailDomainRuleSchema>
