@@ -152,7 +152,7 @@ export async function recordSponsorDecision(
   const { data: context } = await adminClient
     .from('submission_access_tokens')
     .select(
-      `submission_id,
+      `submission_id, used_at, revoked_at, expires_at,
        submissions:submission_id (
          id, sponsor_id, status, reserved_amount_cents, requested_amount_cents,
          teams:team_id (owner_id),
@@ -161,6 +161,31 @@ export async function recordSponsorDecision(
     )
     .eq('token_hash', tokenHash)
     .single()
+
+  /**
+   * Token lifecycle, checked HERE and not only in the RPC.
+   *
+   * `record_sponsor_decision_atomic` validates used_at / revoked_at / expires_at itself,
+   * so for most of this action's history the absence of a check here was harmless. Prompt
+   * 09 then inserted the approval branch BELOW, in front of that RPC — and
+   * `create_sponsor_decision_proposal` only runs its entitlement check when
+   * `p_origin = 'portal'` (0083), doing no token validation at all on the `token` path.
+   *
+   * The result was that a revoked or expired link — a superseded token from the 0070
+   * re-mint, or an old forwarded email — could still originate a pending funding proposal
+   * and cause the org's approvers to be emailed asking them to confirm it. No money moves
+   * without a real approver clicking confirm, but a withdrawn credential must not be able
+   * to start a funding action at all; that is the entire point of revoking it.
+   *
+   * The sibling token path already got this right — see the same three checks in
+   * `postSponsorQuestionByToken` (app/actions/messages.ts).
+   */
+  if (!context) return { ok: false, error: 'This link is no longer valid.' }
+  if (context.revoked_at) return { ok: false, error: 'This link has been revoked.' }
+  if (context.used_at) return { ok: false, error: 'A decision has already been recorded for this pitch.' }
+  if (context.expires_at && new Date(context.expires_at) < new Date()) {
+    return { ok: false, error: 'This link has expired. Contact the team for a new one.' }
+  }
 
   // decision === 'decline' is unchanged: no money moves, so it is never gated (see the
   // "Which decisions are gated" table) — falls through to the existing RPC below.
