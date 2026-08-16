@@ -273,9 +273,13 @@ export async function sendSponsorApplicationConfirmation(
   contactName: string,
   proposedCapCents: number
 ): Promise<NotifyResult> {
+  // First thing a prospective sponsor ever receives from us — a reply must reach a human.
+  // Beyond the human cost, a From whose replies bounce is itself a mild negative reputation
+  // signal with several providers. See docs/email-deliverability.md.
   return sendViaResend('sendSponsorApplicationConfirmation', {
     from: env.RESEND_FROM_EMAIL,
     to: contactEmail,
+    replyTo: SUPPORT_EMAIL,
     subject: 'We received your sponsor application',
     react: SponsorAppConfirmation({
       companyName,
@@ -358,9 +362,12 @@ export async function sendCoachDenialEmail(
   coachName: string,
   reason: string
 ): Promise<NotifyResult> {
+  // This email tells a coach their application needs work; they will reply asking how.
+  // Route that at the support inbox rather than the noreply@ void.
   return sendViaResend('sendCoachDenialEmail', {
     from: env.RESEND_FROM_EMAIL,
     to,
+    replyTo: SUPPORT_EMAIL,
     subject: 'Application Update Required — FTC Pitfund',
     react: CoachDenialEmail({ coachName, reason }),
   })
