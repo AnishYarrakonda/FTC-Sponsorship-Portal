@@ -13,7 +13,7 @@
  */
 
 import { test, expect, type Page } from '@playwright/test'
-import { clerk, setupClerkTestingToken } from '@clerk/testing/playwright'
+import { signIn, evaluateStable } from '../helpers/clerk-auth'
 import { createClient } from '@supabase/supabase-js'
 import { Database } from '../../lib/supabase/types'
 
@@ -30,15 +30,6 @@ const SPONSOR_MEMBER_PASSWORD = process.env.SPONSOR_MEMBER_PASSWORD ?? 'SponsorM
 const SPONSOR2_EMAIL = process.env.SPONSOR2_EMAIL ?? 'sponsor2+clerk_test@example.com'
 const SPONSOR2_PASSWORD = process.env.SPONSOR2_PASSWORD ?? 'Sponsor2Test123!'
 
-async function signIn(page: Page, email: string, password: string) {
-  await setupClerkTestingToken({ page })
-  await page.goto('/')
-  await clerk.signOut({ page }).catch(() => {})
-  await clerk.signIn({
-    page,
-    signInParams: { strategy: 'password', identifier: email, password },
-  })
-}
 
 // Real Clerk-authenticated REST calls, driven from inside the signed-in browser page.
 async function restAs(
@@ -46,7 +37,8 @@ async function restAs(
   path: string,
   init: { method?: string; body?: unknown; prefer?: string } = {}
 ) {
-  return page.evaluate(
+  return evaluateStable(
+    page,
     async ({ path, init, url, anonKey }) => {
       const token = await window.Clerk?.session?.getToken()
       const res = await fetch(`${url}/rest/v1${path}`, {
@@ -94,8 +86,48 @@ test.describe.serial('Sponsor Organizations (0082)', () => {
     coachProfileId = coach!.id
   })
 
+  /** Revoke every pending Clerk invitation for org A, so its membership quota is free. */
+  async function revokePendingInvitations() {
+    const secret = process.env.CLERK_SECRET_KEY ?? ''
+    const { data: org } = await adminClient
+      .from('sponsors')
+      .select('clerk_org_id')
+      .eq('id', sponsorAId)
+      .single()
+    const orgId = org?.clerk_org_id
+    if (!secret || !orgId) return
+
+    const res = await fetch(`https://api.clerk.com/v1/organizations/${orgId}/invitations?limit=50`, {
+      headers: { Authorization: `Bearer ${secret}` },
+    })
+    if (!res.ok) return
+    const { data } = (await res.json()) as { data: Array<{ id: string; status: string }> }
+    for (const inv of data ?? []) {
+      if (inv.status !== 'pending') continue
+      // Clerk rejects this POST with 415 unless Content-Type is set, even though it takes
+      // no body — a silent no-op if you omit it, which leaves the quota full.
+      await fetch(
+        `https://api.clerk.com/v1/organizations/${orgId}/invitations/${inv.id}/revoke`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+          body: '{}',
+        }
+      )
+    }
+  }
+
   test.describe('UI flow', () => {
     test('org admin invites a teammate and the row appears as pending', async ({ page }) => {
+      /**
+       * A Clerk development instance caps an organization at 5 memberships INCLUDING
+       * outstanding invitations. "dev testing" is seeded with 4 members, so exactly one
+       * invitation slot exists — and a leftover invitation from a previous run consumes it,
+       * making the next run fail with `organization_membership_quota_exceeded` (surfaced in
+       * the UI as an invite that simply never appears). Revoke first, and revoke after.
+       */
+      await revokePendingInvitations()
+
       await signIn(page, SPONSOR_EMAIL, SPONSOR_PASSWORD)
       await page.goto('/sponsor/members')
 
@@ -110,6 +142,8 @@ test.describe.serial('Sponsor Organizations (0082)', () => {
       // Clerk-invitation-list merge path in listSponsorMembers, not a DB row.
       await expect(page.getByText(newEmail)).toBeVisible({ timeout: 15_000 })
       await expect(page.getByText(/invited/i).first()).toBeVisible()
+
+      await revokePendingInvitations()
     })
 
     test('the last org_admin cannot be removed or demoted', async ({ page }) => {
@@ -119,8 +153,12 @@ test.describe.serial('Sponsor Organizations (0082)', () => {
       const adminRow = page.getByRole('row', { name: /dev sponsor\b/i }).first()
       await adminRow.getByRole('button').last().click()
 
-      const makeMember = page.getByRole('menuitem', { name: /make member/i })
-      await expect(makeMember).toBeDisabled()
+      // 0083 replaced the old admin/member pair with a four-rung ladder, so the menu items
+      // are "Make viewer / submitter / approver / …". The previous /make member/i matched
+      // nothing at all, which reads as "element not found" rather than "not disabled".
+      for (const rung of [/make viewer/i, /make submitter/i, /make approver/i]) {
+        await expect(page.getByRole('menuitem', { name: rung })).toBeDisabled()
+      }
       const remove = page.getByRole('menuitem', { name: /remove from organization/i })
       await expect(remove).toBeDisabled()
     })
@@ -241,14 +279,34 @@ test.describe.serial('Sponsor Organizations (0082)', () => {
         .limit(1)
         .single()
 
-      const update = await restAs(page, `/sponsor_members?id=eq.${existing!.id}`, {
-        method: 'PATCH',
-        body: { role: 'member' },
-      })
-      expect(update.status).toBeGreaterThanOrEqual(400)
+      /**
+       * An UPDATE or DELETE with no matching write policy is not an error — RLS shrinks the
+       * row set to nothing and PostgREST answers 204 "0 rows changed". Asserting on a 4xx
+       * status therefore fails against a correctly locked-down table. What matters, and what
+       * is asserted here, is that the row is still exactly as it was.
+       */
+      const { data: rowBefore } = await adminClient
+        .from('sponsor_members')
+        .select('*')
+        .eq('id', existing!.id)
+        .single()
 
-      const del = await restAs(page, `/sponsor_members?id=eq.${existing!.id}`, { method: 'DELETE' })
-      expect(del.status).toBeGreaterThanOrEqual(400)
+      await restAs(page, `/sponsor_members?id=eq.${existing!.id}`, {
+        method: 'PATCH',
+        body: { role: 'viewer' },
+        prefer: 'return=representation',
+      })
+      await restAs(page, `/sponsor_members?id=eq.${existing!.id}`, {
+        method: 'DELETE',
+        prefer: 'return=representation',
+      })
+
+      const { data: rowAfter } = await adminClient
+        .from('sponsor_members')
+        .select('*')
+        .eq('id', existing!.id)
+        .single()
+      expect(rowAfter).toEqual(rowBefore)
     })
 
     test('a coach and an unauthenticated caller each read 0 rows from sponsor_members', async ({ page, request }) => {

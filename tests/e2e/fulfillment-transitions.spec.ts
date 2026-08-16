@@ -1,15 +1,21 @@
 import { test, expect } from '@playwright/test'
 import { createClient } from '@supabase/supabase-js'
 import { Database } from '../../lib/supabase/types'
+import { pledge, unpledge } from '../helpers/fixtures'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://127.0.0.1:54321'
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
 
-// Using dev bypass mock data IDs
-const SPONSOR_A_ID = 'user_dev_admin' // Admin has role=admin, but we'll use actual sponsor IDs
-const SPONSOR_A_PROFILE_ID = 'sp1' // mock sponsor 1
-const SPONSOR_B_PROFILE_ID = 'sp2' // mock sponsor 2
+// Sponsor A and Sponsor B must belong to DIFFERENT companies for the boundary tests below
+// to mean anything. The old fixture picked "any sponsor profile" and then "any other sponsor
+// profile", which since 0083 lands on a second member of the SAME org — whom
+// record_fulfillment_transition authorizes on purpose. The cross-sponsor test then failed
+// while reporting a product bug that did not exist. These two accounts are seeded into
+// separate orgs ("dev testing" and "dev testing 2") by scripts/seed-test-accounts.mjs.
+const SPONSOR_A_EMAIL = process.env.SPONSOR_EMAIL ?? 'sponsor+clerk_test@example.com'
+const SPONSOR_B_EMAIL = process.env.SPONSOR2_EMAIL ?? 'sponsor2+clerk_test@example.com'
+const PLEDGE_CENTS = 10_000
 
 test.describe.serial('Fulfillment Transitions & Security Boundaries', () => {
   test.skip(
@@ -19,41 +25,61 @@ test.describe.serial('Fulfillment Transitions & Security Boundaries', () => {
 
   let adminClient: ReturnType<typeof createClient<Database>>
   let fulfillmentId: string
+  let transactionId: string
+  let sponsorACompanyId: string
   let sponsorAUserId: string
   let sponsorBUserId: string
   let coachUserId: string
 
   test.beforeAll(async () => {
     adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
-    
-    // Find a sponsor A user
-    const { data: profA } = await adminClient.from('profiles').select('*').eq('role', 'sponsor').not('sponsor_id', 'is', null).limit(1).single()
-    sponsorAUserId = profA?.id || 'dev-sponsor-a'
-    
-    // Find a sponsor B user
-    const { data: profB } = await adminClient.from('profiles').select('*').eq('role', 'sponsor').not('sponsor_id', 'is', null).neq('id', sponsorAUserId).limit(1).single()
-    sponsorBUserId = profB?.id || 'dev-sponsor-b'
-    
-    // Find a coach user
-    const { data: profC } = await adminClient.from('profiles').select('*').eq('role', 'coach').limit(1).single()
-    coachUserId = profC?.id || 'c1'
 
-    // Create a pledge for Sponsor A
-    const { data: txn } = await adminClient.from('transactions_ledger').insert({
-      sponsor_id: profA?.sponsor_id || 'sp1',
-      amount_cents: 10000,
-      decision_type: 'full',
-      actor_type: 'sponsor'
-    }).select().single()
+    const { data: profA } = await adminClient
+      .from('profiles')
+      .select('id, sponsor_id')
+      .eq('email', SPONSOR_A_EMAIL)
+      .single()
+    expect(profA?.sponsor_id, `seeded sponsor ${SPONSOR_A_EMAIL} with a company`).toBeTruthy()
+    sponsorAUserId = profA!.id
+    sponsorACompanyId = profA!.sponsor_id!
 
-    const { data: f } = await adminClient.from('funding_fulfillments').insert({
-      transaction_id: txn!.id,
-      sponsor_id: profA?.sponsor_id || 'sp1',
-      amount_cents: 10000,
-      status: 'pledged'
-    }).select().single()
-    
-    fulfillmentId = f!.id
+    const { data: profB } = await adminClient
+      .from('profiles')
+      .select('id, sponsor_id')
+      .eq('email', SPONSOR_B_EMAIL)
+      .single()
+    expect(profB?.sponsor_id, `seeded sponsor ${SPONSOR_B_EMAIL} with a company`).toBeTruthy()
+    expect(
+      profB!.sponsor_id,
+      'sponsor B must be in a different company than sponsor A'
+    ).not.toBe(sponsorACompanyId)
+    sponsorBUserId = profB!.id
+
+    const { data: profC } = await adminClient
+      .from('profiles')
+      .select('id')
+      .eq('role', 'coach')
+      .limit(1)
+      .single()
+    coachUserId = profC!.id
+
+    // Ledger + fulfillment + the matching capacity bookkeeping, so this fixture never shows
+    // up as drift to the suites that assert on it.
+    const created = await pledge(adminClient, {
+      sponsorId: sponsorACompanyId,
+      amountCents: PLEDGE_CENTS,
+    })
+    transactionId = created.transactionId
+    fulfillmentId = created.fulfillmentId
+  })
+
+  test.afterAll(async () => {
+    await unpledge(adminClient, {
+      sponsorId: sponsorACompanyId,
+      amountCents: PLEDGE_CENTS,
+      transactionId,
+      fulfillmentId,
+    })
   })
 
   test('Sponsor A marks payment sent on their own fulfillment -> succeeds', async () => {

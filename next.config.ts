@@ -11,13 +11,15 @@ import { withBotId } from "botid/next/config";
  * anything. Derived from the env var rather than hardcoded so the scratch/staging
  * project works too.
  */
-const supabaseHost = (() => {
+const supabaseUrl = (() => {
   try {
-    return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').hostname
+    return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '')
   } catch {
     return null
   }
 })()
+
+const supabaseHost = supabaseUrl?.hostname ?? null
 
 /**
  * Clerk's frontend API host is encoded in the publishable key: strip the `pk_test_` /
@@ -44,8 +46,24 @@ const clerkOrigins = [clerkHost, 'https://*.clerk.accounts.dev', 'https://*.cler
   .filter(Boolean)
   .join(' ')
 
-const supabaseOrigin = supabaseHost ? `https://${supabaseHost}` : ''
-const supabaseSocket = supabaseHost ? `wss://${supabaseHost}` : ''
+/**
+ * Take the scheme and port from the URL instead of forcing `https://<host>`.
+ *
+ * Production is https on the default port, so this is identical there. Locally Supabase is
+ * `http://127.0.0.1:54321`, and the old form emitted `https://127.0.0.1` — a different
+ * origin in every respect the browser cares about. Every direct PostgREST call from a page
+ * was blocked by connect-src and surfaced as a bare `TypeError: Failed to fetch`, which
+ * reads exactly like a broken RLS policy or a down database.
+ */
+const supabaseOrigin = supabaseUrl?.origin ?? ''
+const supabaseSocket = supabaseUrl
+  ? `${supabaseUrl.protocol === 'https:' ? 'wss' : 'ws'}://${supabaseUrl.host}`
+  : ''
+
+// `upgrade-insecure-requests` rewrites http:// subresource requests to https://, which
+// would undo the origin above whenever Supabase is genuinely served over http (local
+// stack only — a deployed environment always has an https Supabase URL).
+const supabaseIsPlaintext = supabaseUrl?.protocol === 'http:'
 
 /**
  * Content-Security-Policy.
@@ -67,9 +85,22 @@ const supabaseSocket = supabaseHost ? `wss://${supabaseHost}` : ''
  * Nonce + strict-dynamic is the tracked follow-up; do it once a browser session can
  * verify every authenticated route.
  */
+/**
+ * React's development build uses `eval()` to reconstruct component stacks for its error
+ * overlay, so a CSP without `'unsafe-eval'` makes every page in `next dev` log
+ * "eval() is not supported in this environment" and silently degrades the dev tooling —
+ * including the preview modes, which exist to be looked at.
+ *
+ * Scoped to development on purpose. `'unsafe-eval'` in a production CSP hands an attacker
+ * who lands any injected string a way to execute it, which is most of what the policy is
+ * here to prevent. React does not use eval in production builds, so there is nothing to
+ * trade away.
+ */
+const isDev = process.env.NODE_ENV === 'development'
+
 const csp = [
   `default-src 'self'`,
-  `script-src 'self' 'unsafe-inline' ${clerkOrigins} https://challenges.cloudflare.com`,
+  `script-src 'self' 'unsafe-inline' ${isDev ? `'unsafe-eval' ` : ''}${clerkOrigins} https://challenges.cloudflare.com`,
   `style-src 'self' 'unsafe-inline'`,
   `img-src 'self' blob: data: ${supabaseOrigin} https://img.clerk.com`,
   `font-src 'self' data:`,
@@ -83,8 +114,9 @@ const csp = [
   `object-src 'none'`,
   `base-uri 'self'`,
   `form-action 'self' ${clerkOrigins}`,
-  `upgrade-insecure-requests`,
+  supabaseIsPlaintext ? '' : `upgrade-insecure-requests`,
 ]
+  .filter(Boolean)
   .map((d) => d.replace(/\s+/g, ' ').trim())
   .join('; ')
 

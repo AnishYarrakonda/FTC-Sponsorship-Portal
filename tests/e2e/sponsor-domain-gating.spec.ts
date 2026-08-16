@@ -28,6 +28,7 @@
 
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { clerk, setupClerkTestingToken } from '@clerk/testing/playwright'
+import { evaluateStable } from '../helpers/clerk-auth'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
@@ -180,7 +181,8 @@ async function signIn(page: Page, email: string) {
 
 /** Read a table with the signed-in user's OWN Clerk token, so RLS is what answers. */
 async function restAs(page: Page, path: string, init: { method?: string; body?: unknown } = {}) {
-  return page.evaluate(
+  return evaluateStable(
+    page,
     async ({ path, init, url, anonKey }) => {
       const w = window as unknown as {
         Clerk?: { session?: { getToken: () => Promise<string | null> } }

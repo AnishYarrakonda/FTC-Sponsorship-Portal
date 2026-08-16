@@ -11,7 +11,8 @@
  */
 
 import { test, expect, type Page } from '@playwright/test'
-import { clerk, setupClerkTestingToken } from '@clerk/testing/playwright'
+import { signIn, evaluateStable } from '../helpers/clerk-auth'
+import { createOwnedTeam, deleteOwnedTeam } from '../helpers/fixtures'
 import { createClient } from '@supabase/supabase-js'
 import { Database } from '../../lib/supabase/types'
 
@@ -32,19 +33,14 @@ const APPROVER_PASSWORD = 'SponsorApproverTest123!'
 const SPONSOR2_EMAIL = process.env.SPONSOR2_EMAIL ?? 'sponsor2+clerk_test@example.com' // org_admin, org B
 const SPONSOR2_PASSWORD = process.env.SPONSOR2_PASSWORD ?? 'Sponsor2Test123!'
 
-async function signIn(page: Page, email: string, password: string) {
-  await setupClerkTestingToken({ page })
-  await page.goto('/')
-  await clerk.signOut({ page }).catch(() => {})
-  await clerk.signIn({ page, signInParams: { strategy: 'password', identifier: email, password } })
-}
 
 async function restAs(
   page: Page,
   path: string,
   init: { method?: string; body?: unknown; prefer?: string } = {}
 ) {
-  return page.evaluate(
+  return evaluateStable(
+    page,
     async ({ path, init, url, anonKey }) => {
       const token = await window.Clerk?.session?.getToken()
       const res = await fetch(`${url}/rest/v1${path}`, {
@@ -78,7 +74,8 @@ test.describe.serial('Org roles & the two-step approver workflow (0083)', () => 
   let adminClient: ReturnType<typeof createClient<Database>>
   let sponsorAId: string
   let sponsorBId: string
-  let coachId: string
+  let fixtureCoachId: string
+  let teamName: string
   let teamId: string
 
   test.beforeAll(async () => {
@@ -88,25 +85,21 @@ test.describe.serial('Org roles & the two-step approver workflow (0083)', () => 
     sponsorAId = orgA!.id
     const { data: orgB } = await adminClient.from('sponsors').select('id').eq('company_name', 'dev testing 2').single()
     sponsorBId = orgB!.id
-    const { data: coach } = await adminClient.from('profiles').select('id').eq('email', COACH_EMAIL).single()
-    coachId = coach!.id
-
     // Off for both orgs at suite start, whatever prior runs left behind.
     await adminClient.from('sponsors').update({ approval_required_above_cents: null }).in('id', [sponsorAId, sponsorBId])
 
-    const { data: team } = await adminClient
-      .from('teams')
-      .insert({
-        owner_id: coachId, status: 'existing', ftc_team_number: 88801, team_name: 'Approvals Test Team',
-        slug: `approvals-test-team-${Date.now()}`, tax_status: 'None',
-      })
-      .select('id')
-      .single()
-    teamId = team!.id
+    // A throwaway coach owns this team. The seeded coach already has one, and the database
+    // enforces one team per owner account, so inserting against the seeded coach fails outright —
+    // and the failure surfaces as a null dereference in this hook, not as a clear message.
+    const owned = await createOwnedTeam(adminClient, { label: 'approvals', ftcTeamNumber: 88801 })
+    fixtureCoachId = owned.coachProfileId
+    teamId = owned.teamId
+    teamName = owned.teamName
   })
 
   test.afterAll(async () => {
-    await adminClient.from('teams').delete().eq('id', teamId)
+    await adminClient.from('submissions').delete().eq('team_id', teamId)
+    await deleteOwnedTeam(adminClient, { coachProfileId: fixtureCoachId, teamId })
     await adminClient.from('sponsors').update({ approval_required_above_cents: null }).in('id', [sponsorAId, sponsorBId])
   })
 
@@ -116,6 +109,10 @@ test.describe.serial('Org roles & the two-step approver workflow (0083)', () => 
       .insert({
         team_id: teamId, sponsor_id: sponsorId, status: 'dispatched',
         requested_amount_cents: amountCents, reserved_amount_cents: amountCents,
+        // `submissions_select_sponsor` requires `sent_at IS NOT NULL` — a row that has not
+        // been dispatched is invisible to the sponsor no matter what its status column says.
+        // Without this the whole suite saw "Pitch not found" instead of the review console.
+        sent_at: new Date().toISOString(),
         expires_at: new Date(Date.now() + expiresInDays * 86_400_000).toISOString(),
       })
       .select('id')
@@ -144,7 +141,10 @@ test.describe.serial('Org roles & the two-step approver workflow (0083)', () => 
 
     await page.getByRole('button', { name: /send for approval/i }).click()
     await page.getByRole('button', { name: /^confirm$/i }).click()
-    await expect(page.getByText(/sent for approval/i)).toBeVisible({ timeout: 15_000 })
+    // The toast reads "Sent to your approvers." — the earlier /sent for approval/i never
+    // matched anything (the button says "Send", not "Sent"), so this assertion could only
+    // ever fail, even though the proposal underneath was created correctly.
+    await expect(page.getByText(/sent to your approvers/i)).toBeVisible({ timeout: 15_000 })
 
     const { data: proposal } = await adminClient
       .from('sponsor_decision_proposals')
@@ -155,7 +155,7 @@ test.describe.serial('Org roles & the two-step approver workflow (0083)', () => 
     expect(proposal?.amount_cents).toBe(250_000)
 
     await page.goto('/sponsor/approvals')
-    await expect(page.getByText('Approvals Test Team')).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText(teamName)).toBeVisible({ timeout: 15_000 })
 
     await adminClient.from('submissions').delete().eq('id', submissionId)
   })
@@ -165,7 +165,9 @@ test.describe.serial('Org roles & the two-step approver workflow (0083)', () => 
     await signIn(page, VIEWER_EMAIL, VIEWER_PASSWORD)
 
     await page.goto(`/sponsor/submissions/${submissionId}`)
-    await expect(page.getByText(/view-only/i)).toBeVisible({ timeout: 15_000 })
+    // Both the card title and its description say "view-only", so an unanchored match is a
+    // strict-mode violation. The title is the element that proves the branch was taken.
+    await expect(page.getByText('View-only', { exact: true })).toBeVisible({ timeout: 15_000 })
     await expect(page.getByRole('button', { name: /approve|decline|send for approval/i })).toHaveCount(0)
 
     await page.goto('/sponsor/approvals')
@@ -336,10 +338,21 @@ test.describe.serial('Org roles & the two-step approver workflow (0083)', () => 
       expect((propose as { ok: boolean }).ok).toBe(true)
       const proposalId = (propose as { proposal_id: string }).proposal_id
 
+      /**
+       * Org B has exactly one member, so proposer and approver are the same person and the
+       * confirm is refused — by the SELF-APPROVAL rule, not by a rank check. That distinction
+       * is the whole point of this test: `forbidden` would mean the legacy fallback failed to
+       * resolve a rank for a sponsor with no `sponsor_members` row, while `self_approval`
+       * means it resolved to org_admin and the two-person rule then did its job.
+       *
+       * The original assertion (`ok === true`) could never hold — the suite's own
+       * "self-approval is refused by the RPC" test asserts the opposite for the same shape.
+       */
       const { data: confirm } = await adminClient.rpc('confirm_sponsor_decision_proposal', {
         p_proposal_id: proposalId, p_approver_id: sponsor2AdminId, p_note: null,
       } as never)
-      expect((confirm as { ok: boolean }).ok).toBe(true)
+      expect((confirm as { ok: boolean; error: string }).ok).toBe(false)
+      expect((confirm as { ok: boolean; error: string }).error).toBe('self_approval')
 
       await adminClient.from('submissions').delete().eq('id', submissionId)
       await adminClient.from('sponsor_members').insert(membershipRow!)

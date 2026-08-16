@@ -8,7 +8,7 @@
  */
 
 import { test, expect, type Page } from '@playwright/test'
-import { clerk, setupClerkTestingToken } from '@clerk/testing/playwright'
+import { signIn } from '../helpers/clerk-auth'
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'admin+clerk_test@example.com'
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? 'AdminTest123!'
@@ -17,15 +17,6 @@ const COACH_PASSWORD = process.env.COACH_PASSWORD ?? 'CoachTest123!'
 const SPONSOR_EMAIL = process.env.SPONSOR_EMAIL ?? 'sponsor+clerk_test@example.com'
 const SPONSOR_PASSWORD = process.env.SPONSOR_PASSWORD ?? 'SponsorTest123!'
 
-async function signIn(page: Page, email: string, password: string) {
-  await setupClerkTestingToken({ page })
-  await page.goto('/')
-  await clerk.signOut({ page }).catch(() => {})
-  await clerk.signIn({
-    page,
-    signInParams: { strategy: 'password', identifier: email, password },
-  })
-}
 
 test.describe('Agreements — access boundaries', () => {
   test('unauthenticated GET /agreements redirects to /login', async ({ page }) => {
@@ -54,6 +45,14 @@ test.describe('Agreements — access boundaries', () => {
   })
 })
 
+const VALID_BODY = [
+  '<p>{{ team_name }} agrees to participate for the {{ season }} season under the terms set',
+  'out below. The team confirms that all listed mentors are verified adults and that no',
+  'student personal information will be shared with the sponsor at any point.</p>',
+  '<p>The team agrees to acknowledge the sponsor in the manner described in the sponsorship',
+  'record and to report on the use of funds at the end of the season.</p>',
+].join(' ')
+
 test.describe('Agreements — admin draft and publish flow', () => {
   test.skip(
     !process.env.SUPABASE_LOCAL || !process.env.ADMIN_EMAIL,
@@ -64,15 +63,34 @@ test.describe('Agreements — admin draft and publish flow', () => {
     await signIn(page, ADMIN_EMAIL, ADMIN_PASSWORD)
     await page.goto('/agreements/team_participation/edit')
 
+    /**
+     * A published version cannot be deleted (`trg_agreement_template_no_delete` — it is a
+     * legal record), so the second run of this test finds v1 already effective and the edit
+     * route renders the read-only card instead of the editor. The test used to assume a
+     * clean slate and hung waiting for a Title field that was not on the page. Branch on
+     * what is actually there: open a fresh draft from the effective version when one exists.
+     */
+    const newVersion = page.getByRole('button', { name: /create version n\+1 from this/i })
+    if (await newVersion.isVisible().catch(() => false)) {
+      await newVersion.click()
+      await expect(page.getByLabel(/title/i)).toBeVisible({ timeout: 20_000 })
+    }
+
     await page.getByLabel(/title/i).fill('Team Participation Agreement')
     await page.locator('#agreement-consent').fill('By signing you consent to transact electronically under ESIGN/UETA law for this document.')
     await page.locator('#agreement-body').fill('<p>{{ bogus_field }}</p>')
 
-    await expect(page.getByText(/unknown merge field/i)).toBeVisible()
+    // Matched with the trailing colon so it hits the alert ("Unknown merge field(s): {{ … }}")
+    // and not the preview pane's "Fix the unknown merge field(s) to see a preview.", which
+    // otherwise makes this a strict-mode violation rather than a real assertion.
+    await expect(page.getByText(/unknown merge field\(s\):/i)).toBeVisible()
     await expect(page.getByRole('button', { name: /save draft/i })).toBeDisabled()
 
-    await page.locator('#agreement-body').fill('<p>{{ team_name }} agrees to participate for {{ season }}.</p>')
-    await expect(page.getByText(/unknown merge field/i)).not.toBeVisible()
+    // createAgreementDraftSchema requires a body of at least 200 characters, so a one-line
+    // sample silently fails validation and the draft is never created — which then reads as
+    // "the Publish button never appeared" several assertions later.
+    await page.locator('#agreement-body').fill(VALID_BODY)
+    await expect(page.getByText(/unknown merge field\(s\):/i)).not.toBeVisible()
     await expect(page.getByRole('button', { name: /save draft/i })).toBeEnabled()
 
     await page.getByRole('button', { name: /save draft/i }).click()

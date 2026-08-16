@@ -1,6 +1,24 @@
 import { test, expect } from '@playwright/test'
 
 test.describe('Fulfillment UI Security & Workflow Boundaries', () => {
+  /**
+   * These specs drive role switching through `GET /api/dev/bypass?role=…`. That route does
+   * not exist in this repo and never has — the dev bypass is an env flag read at server
+   * start (`NEXT_PUBLIC_DEV_AUTH_BYPASS`, lib/dev-bypass.ts), not an HTTP endpoint, so a
+   * single run cannot switch roles by navigation. Every assertion below therefore ran
+   * against `/login` and failed for the wrong reason.
+   *
+   * Skipped rather than deleted: the coverage they describe (prompt 03's sponsor/coach/admin
+   * boundary checks) is still owed, and a permanently-red spec teaches everyone to ignore a
+   * red suite. Unskip by giving each role a real seeded Clerk session, the way
+   * receipts.spec.ts and sponsor-organizations.spec.ts already do. Tracked in
+   * docs/verification-backlog.md under prompt 03.
+   */
+  test.skip(
+    true,
+    'Targets GET /api/dev/bypass, which does not exist. Needs real seeded sessions — see docs/verification-backlog.md (prompt 03).'
+  )
+
   test('1 & 5. Sponsor view boundary: only own commitments visible & no coach controls', async ({ page }) => {
     await page.goto('/api/dev/bypass?role=sponsor')
     await page.goto('/sponsor/funding')

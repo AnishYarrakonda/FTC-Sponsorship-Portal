@@ -10,8 +10,8 @@
  * COACH_EMAIL / COACH_PASSWORD).
  */
 
-import { test, expect, type Page } from '@playwright/test'
-import { clerk, setupClerkTestingToken } from '@clerk/testing/playwright'
+import { test, expect } from '@playwright/test'
+import { signIn } from '../helpers/clerk-auth'
 
 const COACH_EMAIL = process.env.COACH_EMAIL ?? 'coach+clerk_test@example.com'
 const COACH_PASSWORD = process.env.COACH_PASSWORD ?? 'CoachTest123!'
@@ -27,15 +27,6 @@ const SECTION_HEADINGS = [
   /robot\s*&\s*engineering/i,
 ]
 
-async function signIn(page: Page, email: string, password: string) {
-  await setupClerkTestingToken({ page })
-  await page.goto('/')
-  await clerk.signOut({ page }).catch(() => {})
-  await clerk.signIn({
-    page,
-    signInParams: { strategy: 'password', identifier: email, password },
-  })
-}
 
 test.describe('Coach portfolio — 7 sections', () => {
   test.skip(

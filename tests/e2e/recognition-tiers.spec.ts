@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { createClient } from '@supabase/supabase-js'
 import { Database } from '../../lib/supabase/types'
+import { createOwnedTeam, deleteOwnedTeam, pledge, unpledge } from '../helpers/fixtures'
 
 /**
  * Recognition tiers (0087) — pinning, role separation, isolation, and the capacity
@@ -15,6 +16,9 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://127.0.0.1:5
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
 
+// Inside the entry ("Supporter") tier: [$250, $1,000).
+const FIXTURE_AMOUNT_CENTS = 50_000
+
 test.describe.serial('Recognition — pinning, roles, isolation', () => {
   test.skip(
     !process.env.SUPABASE_LOCAL || !SUPABASE_ANON_KEY || !SERVICE_ROLE_KEY,
@@ -24,6 +28,12 @@ test.describe.serial('Recognition — pinning, roles, isolation', () => {
   let admin: ReturnType<typeof createClient<Database>>
   let anon: ReturnType<typeof createClient<Database>>
   let adminProfileId: string
+  let fixtureSponsorId: string
+  let fixtureCoachId: string
+  let fixtureTeamId: string
+  let fixtureSubmissionId: string
+  let fixtureTransactionId: string
+  let fixtureFulfillmentId: string
 
   test.beforeAll(async () => {
     admin = createClient<Database>(SUPABASE_URL, SERVICE_ROLE_KEY)
@@ -37,6 +47,69 @@ test.describe.serial('Recognition — pinning, roles, isolation', () => {
       .maybeSingle()
     test.skip(!adminProfile, 'Needs at least one admin profile')
     adminProfileId = adminProfile!.id
+
+    /**
+     * Provision the settled fulfillment this suite observes, instead of hoping another
+     * suite left one behind. Run on its own, every award-dependent test used to skip —
+     * and the void-proof test, which has no skip guard, crashed on a null delivery row.
+     * $500 sits inside the entry ("Supporter") tier, so the AFTER INSERT trigger on
+     * funding_fulfillments mints exactly one award plus one delivery per benefit.
+     */
+    const { data: sponsor } = await admin
+      .from('sponsors')
+      .select('id')
+      .eq('company_name', 'dev testing')
+      .single()
+    fixtureSponsorId = sponsor!.id
+
+    const owned = await createOwnedTeam(admin, { label: 'recognition', ftcTeamNumber: 88803 })
+    fixtureCoachId = owned.coachProfileId
+    fixtureTeamId = owned.teamId
+
+    const { data: submission } = await admin
+      .from('submissions')
+      .insert({
+        team_id: fixtureTeamId,
+        sponsor_id: fixtureSponsorId,
+        status: 'approved',
+        requested_amount_cents: FIXTURE_AMOUNT_CENTS,
+        reserved_amount_cents: FIXTURE_AMOUNT_CENTS,
+        sent_at: new Date().toISOString(),
+      } as never)
+      .select('id')
+      .single()
+    fixtureSubmissionId = submission!.id
+
+    const created = await pledge(admin, {
+      sponsorId: fixtureSponsorId,
+      teamId: fixtureTeamId,
+      submissionId: fixtureSubmissionId,
+      amountCents: FIXTURE_AMOUNT_CENTS,
+    })
+    fixtureTransactionId = created.transactionId
+    fixtureFulfillmentId = created.fulfillmentId
+  })
+
+  test.afterAll(async () => {
+    // Awards and deliveries are trigger-created children of the fulfillment; remove them
+    // first or the fulfillment delete is refused and the row becomes drift for the next run.
+    const { data: awards } = await admin
+      .from('sponsor_recognition_awards')
+      .select('id')
+      .eq('fulfillment_id', fixtureFulfillmentId)
+    for (const a of awards ?? []) {
+      await admin.from('recognition_benefit_deliveries').delete().eq('award_id', a.id)
+    }
+    await admin.from('sponsor_recognition_awards').delete().eq('fulfillment_id', fixtureFulfillmentId)
+
+    await unpledge(admin, {
+      sponsorId: fixtureSponsorId,
+      amountCents: FIXTURE_AMOUNT_CENTS,
+      transactionId: fixtureTransactionId,
+      fulfillmentId: fixtureFulfillmentId,
+    })
+    await admin.from('submissions').delete().eq('id', fixtureSubmissionId)
+    await deleteOwnedTeam(admin, { coachProfileId: fixtureCoachId, teamId: fixtureTeamId })
   })
 
   test('the tier ladder is seeded and totally ordered', async () => {

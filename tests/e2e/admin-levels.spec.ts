@@ -15,22 +15,13 @@
  */
 
 import { test, expect, type Page } from '@playwright/test'
-import { clerk, setupClerkTestingToken } from '@clerk/testing/playwright'
+import { signIn } from '../helpers/clerk-auth'
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'admin+clerk_test@example.com'
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? 'AdminTest123!'
 const REVIEWER_EMAIL = process.env.REVIEWER_EMAIL
 const REVIEWER_PASSWORD = process.env.REVIEWER_PASSWORD
 
-async function signIn(page: Page, email: string, password: string) {
-  await setupClerkTestingToken({ page })
-  await page.goto('/')
-  await clerk.signOut({ page }).catch(() => {})
-  await clerk.signIn({
-    page,
-    signInParams: { strategy: 'password', identifier: email, password },
-  })
-}
 
 test.describe('Admin team page — access', () => {
   test('unauthenticated GET /admin/team redirects to /login', async ({ page }) => {

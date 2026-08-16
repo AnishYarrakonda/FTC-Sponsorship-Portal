@@ -11,7 +11,7 @@
  */
 
 import { test, expect, type Page } from '@playwright/test'
-import { clerk, setupClerkTestingToken } from '@clerk/testing/playwright'
+import { signIn, evaluateStable } from '../helpers/clerk-auth'
 import { createClient } from '@supabase/supabase-js'
 import { Database } from '../../lib/supabase/types'
 
@@ -26,15 +26,6 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? 'AdminTest123!'
 const SPONSOR_EMAIL = process.env.SPONSOR_EMAIL ?? 'sponsor+clerk_test@example.com'
 const SPONSOR_PASSWORD = process.env.SPONSOR_PASSWORD ?? 'SponsorTest123!'
 
-async function signIn(page: Page, email: string, password: string) {
-  await setupClerkTestingToken({ page })
-  await page.goto('/')
-  await clerk.signOut({ page }).catch(() => {})
-  await clerk.signIn({
-    page,
-    signInParams: { strategy: 'password', identifier: email, password },
-  })
-}
 
 // Real Clerk-authenticated REST calls, driven from inside the signed-in browser page —
 // the same accessToken path lib/supabase/client.ts uses in production (window.Clerk
@@ -45,7 +36,8 @@ async function restAs(
   path: string,
   init: { method?: string; body?: unknown; prefer?: string } = {}
 ) {
-  return page.evaluate(
+  return evaluateStable(
+    page,
     async ({ path, init, url, anonKey }) => {
       const token = await window.Clerk?.session?.getToken()
       const res = await fetch(`${url}/rest/v1${path}`, {
@@ -180,8 +172,15 @@ test.describe.serial('Official FIRST team verification', () => {
     await page.getByLabel(/official team name/i).fill('Gear Heads')
     await page.getByRole('button', { name: /graduate team/i }).click()
 
-    // Not blocked — the team graduates immediately despite the mismatch.
-    await expect(page.getByText(/now an official existing team/i)).toBeVisible({ timeout: 15_000 })
+    /**
+     * Not blocked — the team graduates immediately despite the mismatch.
+     *
+     * Asserted on the post-graduation page rather than on the success toast: the handler
+     * calls `window.location.reload()` on the same tick it raises the toast, so the toast
+     * is frequently torn down before it can be observed. The banner disappearing is the
+     * durable, user-visible signal that the team is no longer an incubator.
+     */
+    await expect(page.getByText(/ready to graduate\?/i)).toHaveCount(0, { timeout: 20_000 })
 
     const { data: record } = await adminClient
       .from('team_verification_records')
@@ -204,15 +203,20 @@ test.describe.serial('Official FIRST team verification', () => {
 
     const reasonBox = page.getByLabel(/reason for override/i)
 
-    // A reason under 20 characters is rejected by the SERVER action, not only the form —
-    // the Confirm button is disabled client-side below that length, so this bypasses the
-    // disabled attribute the same way a determined client (curl, devtools) could, proving
-    // the zod min(20) in lib/schemas/team.ts is the real enforcement, not decoration.
+    /**
+     * A reason under 20 characters cannot be submitted.
+     *
+     * This block used to strip the button's `disabled` attribute and expect the SERVER to
+     * reject the short reason. It cannot: `handleOverride` in coach-verification-card.tsx
+     * returns early on the same length check before it ever calls the action, so no request
+     * is made no matter what the DOM says — the test was asserting a server round-trip that
+     * this UI can never produce. What the browser can honestly prove is the client guard and
+     * that nothing was written; `lib/__tests__` covers the zod `min(20)` in the action, which
+     * is the layer a curl request would actually meet.
+     */
     await reasonBox.fill('too short')
-    const confirmButton = page.getByRole('button', { name: /confirm override/i })
-    await confirmButton.evaluate((el) => el.removeAttribute('disabled'))
-    await confirmButton.click()
-    await expect(page.getByText(/at least 20 characters/i)).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('9/20 characters minimum')).toBeVisible()
+    await expect(page.getByRole('button', { name: /confirm override/i })).toBeDisabled()
 
     const { data: stillPending } = await adminClient
       .from('team_verification_records')
@@ -300,14 +304,24 @@ test.describe.serial('Official FIRST team verification', () => {
       })
       expect(insert.status).toBeGreaterThanOrEqual(400)
 
+      /**
+       * INSERT is refused outright (401/403 — no policy grants it), but UPDATE and DELETE
+       * are refused by making the row set empty: PostgREST answers 204 "0 rows changed",
+       * not an error. Asserting 4xx on those two therefore fails against a correctly
+       * locked-down table. Ask for the affected rows back and assert none came.
+       */
       const update = await restAs(page, `/team_verification_records?team_id=eq.${teamId}`, {
         method: 'PATCH',
         body: { outcome: 'overridden' },
+        prefer: 'return=representation',
       })
-      expect(update.status).toBeGreaterThanOrEqual(400)
+      expect(update.body ?? []).toEqual([])
 
-      const del = await restAs(page, `/team_verification_records?id=eq.${foreignRecordId}`, { method: 'DELETE' })
-      expect(del.status).toBeGreaterThanOrEqual(400)
+      const del = await restAs(page, `/team_verification_records?id=eq.${foreignRecordId}`, {
+        method: 'DELETE',
+        prefer: 'return=representation',
+      })
+      expect(del.body ?? []).toEqual([])
 
       // Untouched — the foreign row (which the coach cannot even see) still exists.
       const { data: stillThere } = await adminClient
@@ -322,11 +336,14 @@ test.describe.serial('Official FIRST team verification', () => {
       await signIn(page, COACH_EMAIL, COACH_PASSWORD)
       await page.goto('/dashboard')
 
+      // Denied by RLS, so 0 rows change and PostgREST reports success — the assertion that
+      // matters is below: the cached official name is untouched.
       const update = await restAs(page, `/ftc_teams_cache?team_number=eq.${REJECTED_NUMBER}`, {
         method: 'PATCH',
         body: { team_name: 'Hijacked Name' },
+        prefer: 'return=representation',
       })
-      expect(update.status).toBeGreaterThanOrEqual(400)
+      expect(update.body ?? []).toEqual([])
 
       const { data: row } = await adminClient
         .from('ftc_teams_cache')

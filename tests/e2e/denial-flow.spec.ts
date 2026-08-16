@@ -17,7 +17,7 @@
  */
 
 import { test, expect, type Page } from '@playwright/test'
-import { clerk, setupClerkTestingToken } from '@clerk/testing/playwright'
+import { signIn } from '../helpers/clerk-auth'
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? ''
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? ''
@@ -27,15 +27,6 @@ const COACH_PASSWORD = process.env.DENIAL_COACH_PASSWORD ?? ''
 // Unique reason so the coach-side assertion can't match stale data.
 const DENIAL_REASON = `E2E denial ${Date.now()}: the provided ID is expired, please upload a valid one.`
 
-async function signIn(page: Page, email: string, password: string) {
-  await setupClerkTestingToken({ page })
-  await page.goto('/')
-  await clerk.signOut({ page }).catch(() => {})
-  await clerk.signIn({
-    page,
-    signInParams: { strategy: 'password', identifier: email, password },
-  })
-}
 
 test.describe.serial('Coach denial flow', () => {
   test.skip(

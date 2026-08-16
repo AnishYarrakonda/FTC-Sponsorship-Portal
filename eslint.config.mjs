@@ -25,6 +25,13 @@ const eslintConfig = defineConfig([
       "react-hooks/immutability": "warn",
       "react-hooks/static-components": "warn",
       "react-hooks/set-state-in-effect": "warn",
+      // A leading underscore is the conventional "deliberately unused" marker. Without
+      // this, a parameter kept only to preserve a call signature (helpers/clerk-auth.ts
+      // `signIn(page, email, _password)`) reads as an oversight in the lint output.
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" },
+      ],
     },
   },
 ]);

@@ -39,8 +39,17 @@ test.describe.serial('Donation Receipts & Security Boundaries', () => {
       p_copy_reviewed_at: null,
     })
 
+    /**
+     * Both codes mean "anon cannot call this", and which one comes back depends on how
+     * PostgREST resolved the name, not on how well the function is protected:
+     *   42501 undefined_privilege — the function resolved and EXECUTE is revoked
+     *   42883 undefined_function  — the overload was not visible to this role at all
+     * Pinning to 42883 alone fails a correctly-locked-down database, so accept either and
+     * assert the thing that actually matters: the call was refused.
+     */
+    const REFUSED = ['42501', '42883']
     expect(issueErr).not.toBeNull()
-    expect(issueErr?.code).toBe('42883') // function does not exist or permission denied for anon
+    expect(REFUSED).toContain(issueErr?.code)
 
     const { error: voidErr } = await anonClient.rpc('void_funding_receipt' as any, {
       p_receipt_id: fakeId,
@@ -49,38 +58,65 @@ test.describe.serial('Donation Receipts & Security Boundaries', () => {
     })
 
     expect(voidErr).not.toBeNull()
-    expect(voidErr?.code).toBe('42883')
+    expect(REFUSED).toContain(voidErr?.code)
   })
 
   test('Deny-all RLS on funding_receipt_counters: SELECT and PATCH are denied for anon', async () => {
-    const { data, error } = await anonClient.from('funding_receipt_counters').select('*')
+    const { data } = await anonClient.from('funding_receipt_counters').select('*')
     expect(data?.length ?? 0).toBe(0)
 
-    const { error: updateErr } = await anonClient
+    /**
+     * A denied write under RLS is not an error — the UPDATE runs against a row set the
+     * policy has already made empty, so PostgREST answers "0 rows changed, no error".
+     * Asserting `error !== null` therefore fails on a correctly locked-down table. What
+     * has to be true is that nothing changed, which is what is checked here: request the
+     * updated rows back and assert none came.
+     */
+    const { data: updated } = await anonClient
       .from('funding_receipt_counters')
       .update({ last_value: 999 } as any)
       .eq('year', 2026)
+      .select()
 
-    expect(updateErr).not.toBeNull()
+    expect(updated ?? []).toHaveLength(0)
+
+    const { data: after } = await adminClient
+      .from('funding_receipt_counters')
+      .select('last_value')
+      .eq('year', 2026)
+      .maybeSingle()
+    expect(after?.last_value ?? 0).not.toBe(999)
   })
 
   test('Deny-all write RLS on funding_receipts: UPDATE and DELETE policies do not exist for non-service roles', async () => {
     const { data: receipts } = await adminClient.from('funding_receipts').select('*').limit(1)
     if (receipts && receipts.length > 0) {
       const targetId = receipts[0].id
-      const { error: updateErr } = await anonClient
+      // Same reasoning as the counters test above: a policy-denied write is a no-op, not
+      // an error. Assert that no row was affected and the document survives untouched.
+      const { data: updated } = await anonClient
         .from('funding_receipts')
         .update({ document_html: 'hacked' })
         .eq('id', targetId)
+        .select()
 
-      expect(updateErr).not.toBeNull()
+      expect(updated ?? []).toHaveLength(0)
 
-      const { error: deleteErr } = await anonClient
+      const { data: deleted } = await anonClient
         .from('funding_receipts')
         .delete()
         .eq('id', targetId)
+        .select()
 
-      expect(deleteErr).not.toBeNull()
+      expect(deleted ?? []).toHaveLength(0)
+
+      const { data: survivor } = await adminClient
+        .from('funding_receipts')
+        .select('id, document_html')
+        .eq('id', targetId)
+        .maybeSingle()
+      expect(survivor?.id).toBe(targetId)
+      expect(survivor?.document_html).not.toBe('hacked')
     }
   })
 })

@@ -117,6 +117,19 @@ async function wipeUsers() {
   // Order matters: children before parents. Supabase .delete() returns an error
   // object rather than throwing, so we check `error` directly.
   const tablesToClear = [
+    // Fulfillment / money trail (0076-0080, 0087-0088) — added because the original list
+    // predates them. Their FKs to profiles/teams/submissions made the `profiles` delete fail,
+    // and that failure was only a warning, so every re-run silently ADDED another copy of
+    // each account. `.single()` lookups later in this script then blew up on multiple rows.
+    'agreement_signatures',
+    'funding_fulfillment_events',
+    'funding_receipts',
+    'funding_fulfillments',
+    'sponsor_decision_proposals',
+    'sponsor_recognition_awards',
+    'impact_report_snapshots',
+    'submission_messages',
+    'appeals',
     'transactions_ledger',
     'notifications',
     'submission_access_tokens',
@@ -124,14 +137,32 @@ async function wipeUsers() {
     'submissions',
     'pitches',
     'team_achievements',
+    'team_payout_profiles',
+    'team_verification_records',
     'teams',
     'sponsor_members',
     'profiles',
   ]
   for (const table of tablesToClear) {
-    const { error } = await admin.from(table).delete().filter('id', 'not.is', null)
-    if (error) warn(`Could not clear ${table}: ${error.message}`)
-    else log(`Cleared ${table}`)
+    /**
+     * Admin profiles survive this pass on purpose. 0084 installs a deferred constraint
+     * trigger that refuses any transaction ENDING with zero super admins, and PostgREST
+     * commits each request on its own — so "delete every profile" can never succeed. The
+     * stale admins are removed later by pruneStaleAdmins(), once the new one exists.
+     */
+    const query = admin.from(table).delete()
+    const { error } =
+      table === 'profiles'
+        ? await query.neq('role', 'admin')
+        : await query.filter('id', 'not.is', null)
+    // A table that does not exist in this database is fine (older schema); anything else
+    // leaves the seed inconsistent, and `profiles` in particular must be empty.
+    if (error && !/does not exist|schema cache/i.test(error.message)) {
+      if (table === 'profiles') throw new Error(`Could not clear profiles: ${error.message}`)
+      warn(`Could not clear ${table}: ${error.message}`)
+    } else {
+      log(`Cleared ${table}`)
+    }
   }
 
   // Delete only the seeded test users from Clerk (matched by email), not every
@@ -162,6 +193,50 @@ async function createUser(email, password, fullName) {
   })
   log(`Created Clerk user ${email}  [id: ${user.id}]`)
   return user.id
+}
+
+// ─── Clerk Organizations ─────────────────────────────────────────────────────
+// `sponsors.clerk_org_id` and `sponsor_members.clerk_membership_id` used to be seeded with
+// invented strings ('org_seed_dev_testing_a'). Anything that calls Clerk with those ids —
+// inviting a teammate, listing pending invitations, reading enterprise connections — got a
+// 404 from Clerk and failed in a way that looked like a product bug. These create the real
+// organizations so the org surfaces are exercisable end to end.
+
+/** Delete any org with this name, then create it fresh. Returns the Clerk org id. */
+async function createOrg(name, createdByClerkUserId) {
+  const existing = await clerk.organizations.getOrganizationList({ query: name, limit: 20 })
+  for (const org of existing.data ?? []) {
+    if (org.name === name) await clerk.organizations.deleteOrganization(org.id)
+  }
+  const org = await clerk.organizations.createOrganization({
+    name,
+    createdBy: createdByClerkUserId,
+  })
+  log(`Created Clerk organization "${name}"  [id: ${org.id}]`)
+  return org.id
+}
+
+/**
+ * Add a member. `createOrganization` already makes the creator an org:admin, so that one is
+ * looked up rather than re-added. Clerk only knows two roles here; the portal's four-rung
+ * ladder (org_admin / approver / submitter / viewer) lives in `sponsor_members.role`.
+ */
+async function addOrgMember(orgId, clerkUserId, clerkRole) {
+  try {
+    const m = await clerk.organizations.createOrganizationMembership({
+      organizationId: orgId,
+      userId: clerkUserId,
+      role: clerkRole,
+    })
+    return m.id
+  } catch {
+    const list = await clerk.organizations.getOrganizationMembershipList({
+      organizationId: orgId,
+      limit: 100,
+    })
+    const found = (list.data ?? []).find((m) => m.publicUserData?.userId === clerkUserId)
+    return found?.id ?? null
+  }
 }
 
 // ─── Step 3: Upsert the matching profile row (links clerk_user_id → role) ─────
@@ -207,12 +282,26 @@ async function main() {
     coppa_acknowledged: true,
     tos_accepted: true,
   })
-  await upsertProfile(adminClerkId, ACCOUNTS.admin.email, ACCOUNTS.admin.fullName, {
-    role: 'admin',
-    admin_level: 'super_admin',
-    coppa_acknowledged: true,
-    tos_accepted: true,
-  })
+  const adminProfileId = await upsertProfile(
+    adminClerkId, ACCOUNTS.admin.email, ACCOUNTS.admin.fullName,
+    {
+      role: 'admin',
+      admin_level: 'super_admin',
+      coppa_acknowledged: true,
+      tos_accepted: true,
+    }
+  )
+
+  // Now that a fresh super admin exists, the ones the wipe had to spare can go. Without
+  // this, every run left the previous admin behind and duplicate emails accumulated until
+  // `.single()` lookups elsewhere in this script started failing on multiple rows.
+  const { error: pruneErr } = await admin
+    .from('profiles')
+    .delete()
+    .eq('role', 'admin')
+    .neq('id', adminProfileId)
+  if (pruneErr) warn(`Could not prune stale admin profiles: ${pruneErr.message}`)
+  else log('Pruned stale admin profiles')
 
   // 4. Create "dev testing" sponsor company.
   // `sponsors` has no unique constraint on company_name, so ON CONFLICT can't be
@@ -280,7 +369,7 @@ async function main() {
     ACCOUNTS.sponsor2.email, ACCOUNTS.sponsor2.password, ACCOUNTS.sponsor2.fullName
   )
 
-  const ORG_A_CLERK_ID = 'org_seed_dev_testing_a'
+  const ORG_A_CLERK_ID = await createOrg('dev testing', sponsorClerkId)
 
   await admin.from('sponsors').update({ clerk_org_id: ORG_A_CLERK_ID }).eq('id', sponsorRow.id)
 
@@ -306,21 +395,25 @@ async function main() {
   await admin.from('sponsor_members').insert([
     {
       sponsor_id: sponsorRow.id, profile_id: sponsorProfile.id, clerk_org_id: ORG_A_CLERK_ID,
-      clerk_membership_id: 'orgmem_seed_a_admin', role: 'org_admin', joined_at: new Date().toISOString(),
+      clerk_membership_id: await addOrgMember(ORG_A_CLERK_ID, sponsorClerkId, 'org:admin'),
+      role: 'org_admin', joined_at: new Date().toISOString(),
     },
     {
       sponsor_id: sponsorRow.id, profile_id: sponsorMemberProfileId, clerk_org_id: ORG_A_CLERK_ID,
-      clerk_membership_id: 'orgmem_seed_a_submitter', role: 'submitter', invited_by: sponsorProfile.id,
+      clerk_membership_id: await addOrgMember(ORG_A_CLERK_ID, sponsorMemberClerkId, 'org:member'),
+      role: 'submitter', invited_by: sponsorProfile.id,
       invited_at: new Date().toISOString(), joined_at: new Date().toISOString(),
     },
     {
       sponsor_id: sponsorRow.id, profile_id: sponsorViewerProfileId, clerk_org_id: ORG_A_CLERK_ID,
-      clerk_membership_id: 'orgmem_seed_a_viewer', role: 'viewer', invited_by: sponsorProfile.id,
+      clerk_membership_id: await addOrgMember(ORG_A_CLERK_ID, sponsorViewerClerkId, 'org:member'),
+      role: 'viewer', invited_by: sponsorProfile.id,
       invited_at: new Date().toISOString(), joined_at: new Date().toISOString(),
     },
     {
       sponsor_id: sponsorRow.id, profile_id: sponsorApproverProfileId, clerk_org_id: ORG_A_CLERK_ID,
-      clerk_membership_id: 'orgmem_seed_a_approver', role: 'approver', invited_by: sponsorProfile.id,
+      clerk_membership_id: await addOrgMember(ORG_A_CLERK_ID, sponsorApproverClerkId, 'org:member'),
+      role: 'approver', invited_by: sponsorProfile.id,
       invited_at: new Date().toISOString(), joined_at: new Date().toISOString(),
     },
   ])
@@ -328,6 +421,8 @@ async function main() {
 
   await admin.from('sponsor_applications').delete().eq('company_name', 'dev testing 2')
   await admin.from('sponsors').delete().eq('company_name', 'dev testing 2')
+
+  const ORG_B_CLERK_ID = await createOrg('dev testing 2', sponsor2ClerkId)
 
   const { data: sponsor2Row, error: sponsor2Err } = await admin
     .from('sponsors')
@@ -338,7 +433,7 @@ async function main() {
       funding_cap_cents: 500000,
       status: 'active',
       source: 'admin_added',
-      clerk_org_id: 'org_seed_dev_testing_b',
+      clerk_org_id: ORG_B_CLERK_ID,
     })
     .select('id')
     .single()
@@ -350,8 +445,9 @@ async function main() {
   )
 
   await admin.from('sponsor_members').insert({
-    sponsor_id: sponsor2Row.id, profile_id: sponsor2ProfileId, clerk_org_id: 'org_seed_dev_testing_b',
-    clerk_membership_id: 'orgmem_seed_b_admin', role: 'org_admin', joined_at: new Date().toISOString(),
+    sponsor_id: sponsor2Row.id, profile_id: sponsor2ProfileId, clerk_org_id: ORG_B_CLERK_ID,
+    clerk_membership_id: await addOrgMember(ORG_B_CLERK_ID, sponsor2ClerkId, 'org:admin'),
+    role: 'org_admin', joined_at: new Date().toISOString(),
   })
   log(`Created second sponsor company "dev testing 2"  [id: ${sponsor2Row.id}]`)
 
