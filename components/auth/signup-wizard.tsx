@@ -29,7 +29,7 @@ function SectionHeading({ title, sub }: { title: string; sub?: string }) {
   return (
     <div className="pt-1">
       <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{title}</h3>
-      {sub && <p className="text-xs text-muted-foreground/80 mt-0.5">{sub}</p>}
+      {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
     </div>
   )
 }

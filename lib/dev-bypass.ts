@@ -12,6 +12,7 @@
 // Flip the switch:  NEXT_PUBLIC_DEV_AUTH_BYPASS=true   (in .env.local)
 //
 import type { Database } from './supabase/types'
+import { PREVIEW_PLACEHOLDER_IMAGE } from './dev-placeholder-image'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
@@ -478,7 +479,7 @@ const DATA: Record<string, any[]> = {
   recognition_benefit_deliveries: [
     {
       id: 'del-1', award_id: 'award-1', benefit_type: 'logo_on_website', status: 'delivered',
-      proof_url: 'https://example.supabase.co/storage/v1/object/public/pitch-media/user_c1/recognition/del-1.jpg',
+      proof_url: PREVIEW_PLACEHOLDER_IMAGE,
       proof_uploaded_at: iso(5), no_minors_confirmed_at: iso(5), delivered_at: iso(5),
       coach_note: null, admin_voided_at: null, admin_void_reason: null,
       created_at: iso(20), updated_at: iso(5),

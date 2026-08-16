@@ -1,4 +1,5 @@
 import { getAuthedProfile } from '@/lib/actions-utils'
+import { SkipToContent } from '@/components/ui/skip-to-content'
 import { AWAITING_SPONSOR_STATUSES } from '@/lib/submission-status'
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
@@ -89,6 +90,7 @@ export default async function SponsorLayout({ children }: { children: React.Reac
 
   return (
     <div className="flex h-screen flex-col overflow-hidden text-foreground lg:flex-row">
+      <SkipToContent />
       <SponsorSidebar
         companyName={companyName}
         userName={userName}
@@ -96,7 +98,7 @@ export default async function SponsorLayout({ children }: { children: React.Reac
         pendingCount={pendingCount ?? 0}
         pendingApprovalCount={pendingApprovalCount ?? 0}
       />
-      <main className="flex-1 overflow-y-auto">
+      <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto focus-visible:outline-none">
         <div className="mx-auto w-full max-w-[1000px] px-4 py-6 sm:px-8 sm:py-8 lg:px-12">
           {children}
         </div>

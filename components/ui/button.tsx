@@ -70,7 +70,9 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           children
         ) : (
           <>
-            {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {/* Decorative — `aria-busy` on the button already conveys the loading state,
+                so announcing the spinner as well is duplication, not information. */}
+            {loading && <Loader2 aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />}
             {children}
           </>
         )}

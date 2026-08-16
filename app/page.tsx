@@ -112,7 +112,7 @@ export default async function HomePage() {
               <h2 className="text-4xl md:text-5xl lg:text-6xl font-medium tracking-tight leading-[1.1] mb-6">
                 Fund your season without the busywork.
               </h2>
-              <p className="text-lg md:text-xl text-primary-foreground/80 mb-10 max-w-lg leading-relaxed">
+              <p className="text-lg md:text-xl text-primary-foreground mb-10 max-w-lg leading-relaxed">
                 Stop managing spreadsheets and tracking cold emails. 
                 Focus on building the robot while we handle the dispatch and follow-ups.
               </p>

@@ -43,7 +43,7 @@ function SectionCard({
       <div className="flex items-start justify-between gap-4 border-b border-border pb-3">
         <div>
           <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">{title}</h3>
-          {description && <p className="mt-1 text-xs text-muted-foreground/80">{description}</p>}
+          {description && <p className="mt-1 text-xs text-muted-foreground">{description}</p>}
         </div>
         {action}
       </div>
@@ -929,7 +929,7 @@ export function PortfolioTab({ team, achievements }: { team: Team, achievements:
               <div className="text-center py-12 px-6 pointer-events-none">
                 <ImageIcon className="mx-auto h-8 w-8 mb-3 text-muted-foreground/50" />
                 <p className="text-sm text-muted-foreground">Drop images here or click Browse above</p>
-                <p className="text-xs text-muted-foreground/80 mt-1">PNG, JPG, WebP, GIF up to 5 MB each</p>
+                <p className="text-xs text-muted-foreground mt-1">PNG, JPG, WebP, GIF up to 5 MB each</p>
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3">
@@ -976,12 +976,12 @@ export function PortfolioTab({ team, achievements }: { team: Team, achievements:
             aria-expanded={engineeringOpen}
           >
             <div className="flex items-start gap-3">
-              <Wrench className="mt-0.5 h-4 w-4 text-muted-foreground/70" />
+              <Wrench className="mt-0.5 h-4 w-4 text-muted-foreground" />
               <div>
                 <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-                  Robot &amp; Engineering <span className="ml-1 font-normal normal-case tracking-normal text-muted-foreground/70">(optional)</span>
+                  Robot &amp; Engineering <span className="ml-1 font-normal normal-case tracking-normal text-muted-foreground">(optional)</span>
                 </h3>
-                <p className="mt-1 text-xs text-muted-foreground/80">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Sponsors rarely ask — add it if you&apos;re proud of it.
                 </p>
               </div>

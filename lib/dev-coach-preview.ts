@@ -13,6 +13,7 @@
 // (mirrors the existing SPONSOR_PREVIEW pattern in lib/dev-preview.ts)
 //
 import type { Database } from './supabase/types'
+import { PREVIEW_PLACEHOLDER_IMAGE } from './dev-placeholder-image'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
@@ -326,7 +327,7 @@ const recognitionAwards = [
       {
         id: 'del-preview-1', award_id: 'award-preview-1', benefit_type: 'logo_on_website',
         status: 'delivered',
-        proof_url: 'https://example.supabase.co/storage/v1/object/public/pitch-media/user_c1/recognition/del-preview-1.jpg',
+        proof_url: PREVIEW_PLACEHOLDER_IMAGE,
         proof_uploaded_at: iso(3), no_minors_confirmed_at: iso(3), delivered_at: iso(3),
         coach_note: null, admin_voided_at: null, admin_void_reason: null,
         created_at: iso(18), updated_at: iso(3),

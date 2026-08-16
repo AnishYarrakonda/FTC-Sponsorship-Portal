@@ -1,4 +1,5 @@
 import { getAuthedProfile } from '@/lib/actions-utils'
+import { SkipToContent } from '@/components/ui/skip-to-content'
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { AdminSidebar } from '@/components/admin/admin-sidebar'
@@ -32,8 +33,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="flex h-screen flex-col overflow-hidden text-foreground lg:flex-row">
+      <SkipToContent />
       <AdminSidebar userName={userName} userEmail={userEmail} adminLevel={adminLevel} />
-      <main className="flex-1 overflow-y-auto">
+      <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto focus-visible:outline-none">
         <div className="mx-auto w-full max-w-[1100px] px-4 py-6 sm:px-8 sm:py-8 lg:px-12">
           {children}
         </div>

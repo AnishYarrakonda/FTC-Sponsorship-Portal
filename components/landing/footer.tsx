@@ -71,7 +71,7 @@ export function LandingFooter() {
             <span className="font-mono text-xs">Built for Season {CURRENT_SEASON}</span>
           </div>
           <div className="mt-5 space-y-1">
-            <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground/80">
+            <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               FIRST Tech Challenge Team {TEAM_NAME} #{TEAM_NUMBER}
             </p>
             <p className="pt-1 text-[13px] text-foreground">
@@ -83,7 +83,7 @@ export function LandingFooter() {
               {IDEA_BY.map((c, i) => (
                 <span key={c.name}>
                   {i > 0 && ' and '}
-                  {c.name} <span className="text-muted-foreground/70">({c.role})</span>
+                  {c.name} <span className="text-muted-foreground">({c.role})</span>
                 </span>
               ))}
             </p>

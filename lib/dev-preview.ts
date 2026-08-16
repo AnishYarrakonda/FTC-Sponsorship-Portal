@@ -13,6 +13,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from './supabase/types'
+import { PREVIEW_PLACEHOLDER_IMAGE } from './dev-placeholder-image'
 
 export const SPONSOR_PREVIEW =
   process.env.NODE_ENV !== 'production' &&
@@ -584,7 +585,7 @@ const FIXTURES: Record<string, unknown[]> = {
         {
           id: 'del-preview-s1', award_id: 'award-preview-s1', benefit_type: 'logo_on_website',
           status: 'delivered',
-          proof_url: 'https://example.supabase.co/storage/v1/object/public/pitch-media/user_c1/recognition/del-preview-s1.jpg',
+          proof_url: PREVIEW_PLACEHOLDER_IMAGE,
           proof_uploaded_at: '2026-07-05T15:00:00.000Z',
           delivered_at: '2026-07-05T15:00:00.000Z',
         },

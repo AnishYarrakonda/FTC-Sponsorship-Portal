@@ -289,8 +289,11 @@ function OverviewTab({
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="space-y-2">
-                    <Label className="text-foreground">New FTC Team Number</Label>
+                    {/* htmlFor/id pair: without it the label is decorative markup — a screen
+                        reader announces an unlabelled number box, and getByLabel finds nothing. */}
+                    <Label htmlFor="grad-team-number" className="text-foreground">New FTC Team Number</Label>
                     <Input
+                      id="grad-team-number"
                       type="number"
                       placeholder="e.g. 12345"
                       className="bg-background border-input text-foreground placeholder:text-muted-foreground focus:ring-primary"
@@ -299,8 +302,9 @@ function OverviewTab({
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-foreground">Official Team Name</Label>
+                    <Label htmlFor="grad-team-name" className="text-foreground">Official Team Name</Label>
                     <Input
+                      id="grad-team-name"
                       placeholder="Enter official team name"
                       className="bg-background border-input text-foreground placeholder:text-muted-foreground focus:ring-primary"
                       value={gradName}
