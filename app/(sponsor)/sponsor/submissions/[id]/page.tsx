@@ -10,15 +10,24 @@ export default async function SponsorSubmissionReviewPage({ params }: { params: 
   const { id } = await params
   const authed = await getAuthedProfile()
   if (!authed) redirect('/login')
-  const { supabase, user } = authed
+  const { supabase } = authed
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role, sponsor_id')
-    .eq('id', user.id)
-    .single()
-
-  if (profile?.role !== 'sponsor' || !profile.sponsor_id) {
+  /**
+   * Resolve the caller's companies through requireSponsorRole, not through
+   * `profiles.sponsor_id`.
+   *
+   * Since 0082 a sponsor teammate belongs to a company via `sponsor_members`, and
+   * `profiles.sponsor_id` is only stamped for the original account holder — it is null for
+   * anyone invited through a Clerk Organization. Gating on that column redirected every
+   * invited viewer, submitter, and approver to /dashboard, so multi-user sponsor accounts
+   * could not open a pitch at all. `sponsorIds` is the same set `current_sponsor_ids()`
+   * uses in RLS, which is what decides the read below.
+   */
+  let sponsorIds: string[]
+  let memberRole: Awaited<ReturnType<typeof requireSponsorRole>>['memberRole']
+  try {
+    ;({ sponsorIds, memberRole } = await requireSponsorRole('viewer'))
+  } catch {
     redirect('/dashboard')
   }
 
@@ -40,16 +49,8 @@ export default async function SponsorSubmissionReviewPage({ params }: { params: 
     .eq('id', id)
     .single()
 
-  if (!submission || submission.sponsor_id !== profile.sponsor_id) {
+  if (!submission || !sponsorIds.includes(submission.sponsor_id as string)) {
     notFound()
-  }
-
-  let memberRole: Awaited<ReturnType<typeof requireSponsorRole>>['memberRole'] = 'org_admin'
-  try {
-    memberRole = (await requireSponsorRole('viewer')).memberRole
-  } catch {
-    // Falls back to the least-privileged read since the console below still gates on
-    // memberRole; this only happens for a non-sponsor caller, which notFound()'d above.
   }
 
   const { data: pendingProposal } = await supabase

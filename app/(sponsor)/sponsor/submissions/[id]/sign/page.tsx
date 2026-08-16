@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
-import { getAuthedProfile } from '@/lib/actions-utils'
+import { requireSponsor } from '@/lib/actions-utils'
 import { BackButton } from '@/components/ui/back-button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -13,17 +13,15 @@ import { SigningPanel } from '@/components/agreements/signing-panel'
 
 export default async function SponsorSignAgreementPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const authed = await getAuthedProfile()
-  if (!authed) redirect('/login')
-  const { supabase, user } = authed
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role, sponsor_id')
-    .eq('id', user.id)
-    .single()
-
-  if (profile?.role !== 'sponsor' || !profile.sponsor_id) {
+  /**
+   * Company membership comes from requireSponsor (profiles.sponsor_id + sponsor_members),
+   * never from `profiles.sponsor_id` alone. That column is null for anyone invited through a
+   * Clerk Organization, and the old guard bounced them to /dashboard — which the coach
+   * layout bounces straight back here, producing an infinite redirect loop.
+   */
+  try {
+    await requireSponsor()
+  } catch {
     redirect('/dashboard')
   }
 

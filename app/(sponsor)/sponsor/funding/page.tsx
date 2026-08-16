@@ -1,4 +1,4 @@
-import { getAuthedProfile } from '@/lib/actions-utils'
+import { requireSponsor } from '@/lib/actions-utils'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { TrendingUp, Wallet, Building2, FileText } from 'lucide-react'
@@ -13,20 +13,22 @@ import { SponsorFulfillmentRow } from '@/components/sponsor/sponsor-fulfillment-
 import { ageInDays } from '@/lib/fulfillment-aging'
 
 export default async function SponsorFundingPage() {
-  const authed = await getAuthedProfile()
-  if (!authed) redirect('/login')
-  const { supabase, user } = authed
+  /**
+   * Company membership comes from requireSponsor (profiles.sponsor_id + sponsor_members),
+   * never from `profiles.sponsor_id` alone. That column is null for anyone invited through a
+   * Clerk Organization, and the old guard bounced them to /dashboard — which the coach
+   * layout bounces straight back here, producing an infinite redirect loop.
+   */
+  let supabase: Awaited<ReturnType<typeof requireSponsor>>['supabase']
+  let sponsorId: string
+  let sponsorIds: string[]
+  try {
+    ;({ supabase, sponsorId, sponsorIds } = await requireSponsor())
+  } catch {
+    redirect('/login')
+  }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('sponsor_id, sponsors(*)')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile?.sponsor_id) redirect('/dashboard')
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sponsor = (profile as any)?.sponsors ?? null
+  const { data: sponsor } = await supabase.from('sponsors').select('*').eq('id', sponsorId).single()
 
   if (!sponsor) {
     return (
@@ -42,13 +44,13 @@ export default async function SponsorFundingPage() {
   const { data: fulfillments } = await supabase
     .from('funding_fulfillments')
     .select('*, teams(team_name, ftc_team_number), funding_receipts(receipt_number)')
-    .eq('sponsor_id', profile.sponsor_id)
+    .in('sponsor_id', sponsorIds)
     .order('pledged_at', { ascending: false })
 
   const { data: receipts } = await supabase
     .from('funding_receipts')
     .select('*, teams(team_name)')
-    .eq('sponsor_id', profile.sponsor_id)
+    .in('sponsor_id', sponsorIds)
     .order('issued_at', { ascending: false })
 
   let totalCommitted = 0

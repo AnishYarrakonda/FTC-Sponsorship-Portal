@@ -1,25 +1,27 @@
-import { getAuthedProfile } from '@/lib/actions-utils'
+import { requireSponsor } from '@/lib/actions-utils'
 import { redirect } from 'next/navigation'
 import { SponsorSubmissionsList } from '@/components/sponsor/submissions-list'
 import { SPONSOR_SUBMISSION_SELECT } from '@/lib/sponsor-visibility'
 
 export default async function SponsorSubmissionsPage() {
-  const authed = await getAuthedProfile()
-  if (!authed) redirect('/login')
-  const { supabase, user } = authed
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('sponsor_id')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile?.sponsor_id) redirect('/dashboard')
+  /**
+   * Company membership comes from requireSponsor (profiles.sponsor_id + sponsor_members),
+   * never from `profiles.sponsor_id` alone. That column is null for anyone invited through a
+   * Clerk Organization, and the old guard bounced them to /dashboard — which the coach
+   * layout bounces straight back here, producing an infinite redirect loop.
+   */
+  let supabase: Awaited<ReturnType<typeof requireSponsor>>['supabase']
+  let sponsorIds: string[]
+  try {
+    ;({ supabase, sponsorIds } = await requireSponsor())
+  } catch {
+    redirect('/login')
+  }
 
   const { data: submissions } = await supabase
     .from('submissions')
     .select(`${SPONSOR_SUBMISSION_SELECT}, teams(team_name, ftc_team_number, city, state)`)
-    .eq('sponsor_id', profile.sponsor_id)
+    .in('sponsor_id', sponsorIds)
     .order('created_at', { ascending: false })
 
   return (
