@@ -349,6 +349,31 @@ test.describe.serial('Sponsor Organizations (0082)', () => {
     })
 
     test('current_sponsor_ids() role gate: a coach with a manually inserted membership row still reads 0 sponsor rows', async ({ page }) => {
+      /**
+       * `sponsors` has a SECOND read policy — sponsors_select_coach — that admits ANY
+       * verified coach to an active sponsor with capacity left, because that is the
+       * browse-sponsors feature. It has nothing to do with membership, so while it
+       * applies, `[]` cannot tell us anything about the role gate: the row would be
+       * hidden or shown for reasons entirely unrelated to sponsor_members.
+       *
+       * This test used to pass only when some earlier spec happened to leave sponsor A's
+       * capacity exhausted, and global-setup's capacity re-sync now resets that to 0 —
+       * so it depended on test order for its meaning, not just its result. Exhaust the
+       * capacity here instead, which shuts the browse policy off deterministically and
+       * leaves sponsors_select_own (i.e. current_sponsor_ids()) as the only policy that
+       * could possibly return the row.
+       */
+      const { data: capBefore } = await adminClient
+        .from('sponsors')
+        .select('funding_cap_cents, funding_used_cents')
+        .eq('id', sponsorAId)
+        .single()
+
+      await adminClient
+        .from('sponsors')
+        .update({ funding_used_cents: capBefore!.funding_cap_cents })
+        .eq('id', sponsorAId)
+
       await adminClient.from('sponsor_members').insert({
         sponsor_id: sponsorAId,
         profile_id: coachProfileId,
@@ -356,13 +381,25 @@ test.describe.serial('Sponsor Organizations (0082)', () => {
         role: 'viewer',
       })
 
-      await signIn(page, COACH_EMAIL, COACH_PASSWORD)
-      await page.goto('/dashboard')
-      const result = await restAs(page, `/sponsors?id=eq.${sponsorAId}`)
-      expect(result.status).toBe(200)
-      expect(result.body).toEqual([])
-
-      await adminClient.from('sponsor_members').delete().eq('sponsor_id', sponsorAId).eq('profile_id', coachProfileId)
+      try {
+        await signIn(page, COACH_EMAIL, COACH_PASSWORD)
+        await page.goto('/dashboard')
+        const result = await restAs(page, `/sponsors?id=eq.${sponsorAId}`)
+        expect(result.status).toBe(200)
+        expect(result.body).toEqual([])
+      } finally {
+        // Cleanup in a finally: previously a failed assertion left the coach holding a
+        // sponsor_members row, which then skewed every later run against this database.
+        await adminClient
+          .from('sponsor_members')
+          .delete()
+          .eq('sponsor_id', sponsorAId)
+          .eq('profile_id', coachProfileId)
+        await adminClient
+          .from('sponsors')
+          .update({ funding_used_cents: capBefore!.funding_used_cents })
+          .eq('id', sponsorAId)
+      }
     })
 
     test('42P17 regression: cycle check on teams/submissions/team_achievements/transactions_ledger', async () => {
