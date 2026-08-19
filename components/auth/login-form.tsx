@@ -518,7 +518,7 @@ export function LoginForm() {
 
                   <Button
                     type="submit"
-                    className="w-full h-11 bg-primary text-primary-foreground hover:opacity-90 font-semibold text-base transition-all duration-200"
+                    className="w-full h-11 bg-primary text-primary-foreground font-semibold text-base transition-all duration-200"
                     disabled={isPending || !isLoaded}
                   >
                     {isPending ? 'Authenticating...' : 'Log In'}
@@ -549,7 +549,7 @@ export function LoginForm() {
                 <Button
                   type="button"
                   onClick={submitDeviceCode}
-                  className="w-full h-11 bg-primary text-primary-foreground hover:opacity-90 font-semibold text-base"
+                  className="w-full h-11 bg-primary text-primary-foreground font-semibold text-base"
                   disabled={isPending || !isLoaded}
                 >
                   {isPending ? 'Verifying…' : 'Verify & Sign In'}
@@ -593,7 +593,7 @@ export function LoginForm() {
                 <Button
                   type="button"
                   onClick={sendResetCode}
-                  className="w-full h-11 bg-primary text-primary-foreground hover:opacity-90 font-semibold text-base"
+                  className="w-full h-11 bg-primary text-primary-foreground font-semibold text-base"
                   disabled={isPending || !isLoaded}
                 >
                   {isPending ? 'Sending…' : 'Send Reset Code'}
@@ -644,7 +644,7 @@ export function LoginForm() {
                 <Button
                   type="button"
                   onClick={submitResetPassword}
-                  className="w-full h-11 bg-primary text-primary-foreground hover:opacity-90 font-semibold text-base"
+                  className="w-full h-11 bg-primary text-primary-foreground font-semibold text-base"
                   disabled={isPending || !isLoaded}
                 >
                   {isPending ? 'Resetting…' : 'Reset Password & Sign In'}

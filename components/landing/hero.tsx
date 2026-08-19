@@ -98,7 +98,7 @@ function ProductHeroMock() {
                >
                   <div className="flex items-center gap-4">
                      <div className="h-10 w-10 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-                       <span className="text-blue-600 font-bold text-xs tracking-wider">TF</span>
+                       <span className="text-blue-700 font-bold text-xs tracking-wider">TF</span>
                      </div>
                      <div className="flex flex-col">
                        <span className="text-sm font-semibold text-foreground">TechFlow Systems</span>
@@ -116,7 +116,7 @@ function ProductHeroMock() {
                >
                   <div className="flex items-center gap-4">
                      <div className="h-10 w-10 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
-                       <span className="text-purple-600 font-bold text-xs tracking-wider">AR</span>
+                       <span className="text-purple-700 font-bold text-xs tracking-wider">AR</span>
                      </div>
                      <div className="flex flex-col">
                        <span className="text-sm font-semibold text-foreground">Apex Robotics</span>
@@ -130,7 +130,7 @@ function ProductHeroMock() {
 
                <motion.div 
                  whileHover={{ scale: 1.01 }}
-                 className="group rounded-xl border border-border bg-background p-4 flex items-center justify-between shadow-sm hover:border-emerald-500/30 transition-all cursor-pointer opacity-80"
+                 className="group rounded-xl border border-border bg-background p-4 flex items-center justify-between shadow-sm hover:border-emerald-500/30 transition-all cursor-pointer"
                >
                   <div className="flex items-center gap-4">
                      <div className="h-10 w-10 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center">

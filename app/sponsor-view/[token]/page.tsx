@@ -134,8 +134,20 @@ export default async function SponsorViewPage({ params }: Props) {
           </div>
 
           {(expired || decided) && (
-            <div className="mt-4 p-3 rounded-lg bg-[var(--badge-warning-bg)] border border-[var(--badge-warning-text)]/20 text-[var(--badge-warning-text)] text-sm font-medium">
-              {decided ? 'A decision has already been recorded for this proposal.' : 'This proposal link has expired.'}
+            /**
+             * role="status" on the decided banner, because this is where a decision LANDS.
+             * recordSponsorDecision calls revalidatePath, and a server action that revalidates
+             * anything also re-renders the route it was invoked from -- so this server branch
+             * routinely replaces SponsorDecisionPanel's client-side "Decision Recorded!" card
+             * before a screen reader ever reaches it. Without a live region here the outcome of
+             * a funding decision is announced only if the client render happens to win a race.
+             * An aria-live region announces on CHANGE, so a link opened cold is unaffected.
+             */
+            <div
+              role={decided ? 'status' : undefined}
+              className="mt-4 p-3 rounded-lg bg-[var(--badge-warning-bg)] border border-[var(--badge-warning-text)]/20 text-[var(--badge-warning-text)] text-sm font-medium"
+            >
+              {decided ? 'Decision recorded — this proposal has already been decided.' : 'This proposal link has expired.'}
             </div>
           )}
         </div>

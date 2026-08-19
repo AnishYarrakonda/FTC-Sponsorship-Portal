@@ -345,7 +345,7 @@ export function SignupWizard() {
                   onClick={handleVerifyEmail}
                   size="lg"
                   disabled={verifyPending || !isLoaded}
-                  className="w-full bg-primary text-primary-foreground hover:opacity-90 font-semibold"
+                  className="w-full bg-primary text-primary-foreground font-semibold"
                 >
                   {verifyPending ? 'Verifying…' : 'Verify Email'}
                 </Button>
@@ -767,11 +767,11 @@ export function SignupWizard() {
                   ) : <div />}
 
                   {step < totalSteps ? (
-                    <Button type="button" onClick={nextStep} disabled={step === 1 && (isPending || !isLoaded)} className="bg-primary text-primary-foreground hover:opacity-90">
+                    <Button type="button" onClick={nextStep} disabled={step === 1 && (isPending || !isLoaded)} className="bg-primary text-primary-foreground">
                       {step === 1 && isPending ? 'Sending code…' : <>Next <ChevronRight className="w-4 h-4 ml-2" /></>}
                     </Button>
                   ) : (
-                    <Button type="submit" size="lg" disabled={isPending} className="bg-primary text-primary-foreground hover:opacity-90 font-semibold px-8">
+                    <Button type="submit" size="lg" disabled={isPending} className="bg-primary text-primary-foreground font-semibold px-8">
                       {isPending ? 'Submitting…' : 'Complete Registration'}
                     </Button>
                   )}

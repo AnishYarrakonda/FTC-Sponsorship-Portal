@@ -34,6 +34,7 @@
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
@@ -107,6 +108,11 @@
   /* Pine accent */
   --primary: #1F6F5C;
   --primary-foreground: #F7F3EE;
+  /* Buttons must DARKEN on hover, not lighten. The shadcn default was hover:bg-primary/90,
+   * which composites #1F6F5C toward the cream canvas to #357D6B -- 4.42:1 against
+   * --primary-foreground, just under the 4.5:1 AA floor, on every primary button in the app.
+   * #1A5F50 is 6.95:1 and reads as a normal pressed-darker affordance. */
+  --primary-hover: #1A5F50;
   
   --secondary: #FBF8F2;
   --secondary-foreground: #181818;

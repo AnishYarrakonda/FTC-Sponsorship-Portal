@@ -52,7 +52,52 @@ function formatViolations(violations: Awaited<ReturnType<AxeBuilder['analyze']>>
     .join('\n\n')
 }
 
+/**
+ * Wait for every running animation to settle before auditing.
+ *
+ * The wizard steps fade in via framer-motion (opacity 0 -> 1). axe composites the colour it
+ * actually sees, so sampling mid-fade measures the button at ~80% opacity and reports a
+ * contrast failure (#f8f4ef on #4a8a79 = 3.68:1) for markup that is 5.53:1 once settled.
+ * That is a measurement artefact, not a defect -- but a fixed sleep only moves the race, so
+ * wait on the animations themselves.
+ */
+async function settleAnimations(page: Page) {
+  // Both wait styles are needed. getAnimations() covers CSS/WAAPI; framer-motion drives
+  // opacity from rAF, which getAnimations() does not report at all -- hence the second
+  // pass, which simply waits for every computed opacity on the page to stop CHANGING.
+  // Sampling for stability rather than for "opacity === 1" keeps deliberate static
+  // partial opacity (disabled icons at opacity-50) from hanging the wait forever.
+  await page
+    .waitForFunction(
+      () => document.getAnimations().every((a) => a.playState === 'finished' || a.playState === 'idle'),
+      null,
+      { timeout: 5_000 }
+    )
+    .catch(() => {})
+
+  await page
+    .waitForFunction(
+      () => {
+        const snapshot = Array.from(document.querySelectorAll('*'))
+          .map((el) => getComputedStyle(el).opacity)
+          .join(',')
+        const w = window as unknown as { __a11yPrev?: string }
+        const stable = w.__a11yPrev === snapshot
+        w.__a11yPrev = snapshot
+        return stable
+      },
+      null,
+      { timeout: 5_000, polling: 150 }
+    )
+    .catch(() => {})
+
+  await page.evaluate(() => {
+    delete (window as unknown as { __a11yPrev?: string }).__a11yPrev
+  })
+}
+
 async function expectNoViolations(page: Page, builder = axe(page)) {
+  await settleAnimations(page)
   const results = await builder.analyze()
   expect(results.violations, `\n${formatViolations(results.violations)}\n`).toEqual([])
 }
@@ -167,11 +212,11 @@ test.describe('Accessibility — authenticated journeys', () => {
       .insert({
         team_id: team!.id,
         sponsor_id: sponsor!.id,
-        status: 'sent',
+        status: 'dispatched',
         sent_at: new Date().toISOString(),
         custom_pitch_alignment:
           'Your engineering apprenticeship program is why we approached you first, and two of our mentors came through it.',
-        specific_needs:
+        specific_needs_statement:
           'We need $2,400 for competition registration, $900 for a drivetrain rebuild, and $700 for regional travel.',
       } as never)
       .select('id')
@@ -214,7 +259,8 @@ test.describe('Accessibility — authenticated journeys', () => {
 
     // An over-large offer must be described, not just silently disable the button.
     await amount.fill('999999')
-    const error = page.getByRole('alert')
+    const error = page.locator('#partial-amount-error')
+    await expect(error).toHaveAttribute('role', 'alert')
     await expect(error).toContainText(/can't exceed the full request/i)
     await expect(amount).toHaveAttribute('aria-invalid', 'true')
     const describedBy = await amount.getAttribute('aria-describedby')

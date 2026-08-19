@@ -111,7 +111,7 @@ export function SponsorDecisionPanel({ token, totalAskCents, teamName, approvalT
           <div className="grid gap-3">
             <Button
               size="lg"
-              className="bg-green-600 hover:bg-green-700 text-white"
+              className="bg-primary text-primary-foreground"
               disabled={isPending}
               onClick={() => submit('full')}
             >
@@ -181,7 +181,7 @@ export function SponsorDecisionPanel({ token, totalAskCents, teamName, approvalT
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setStep('choose')} disabled={isPending}>Back</Button>
               <Button
-                className="bg-green-600 hover:bg-green-700 text-white"
+                className="bg-primary text-primary-foreground"
                 disabled={isPending || !partialAmount || parseFloat(partialAmount) <= 0 || exceedsAsk}
                 onClick={() => submit('partial', Math.round(parseFloat(partialAmount) * 100))}
               >

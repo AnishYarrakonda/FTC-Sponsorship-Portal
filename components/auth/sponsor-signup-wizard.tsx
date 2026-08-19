@@ -325,7 +325,7 @@ export function SponsorSignupWizard() {
                   onClick={handleVerifyEmail}
                   size="lg"
                   disabled={verifyPending || !isLoaded}
-                  className="w-full bg-primary text-primary-foreground hover:opacity-90 font-semibold"
+                  className="w-full bg-primary text-primary-foreground font-semibold"
                 >
                   {verifyPending ? 'Verifying…' : 'Verify Email'}
                 </Button>
