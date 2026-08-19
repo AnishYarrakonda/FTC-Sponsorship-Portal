@@ -32,9 +32,9 @@ export async function sponsorUpdateSubmissionStatus(
   const parsed = sponsorUpdateSchema.safeParse({ submissionId, status, feedback })
   if (!parsed.success) return { error: 'Invalid data provided' }
 
-  let user, sponsorId, adminClient
+  let user, sponsorId, sponsorIds, adminClient
   try {
-    ({ user, sponsorId, adminClient } = await requireSponsorRole('submitter'))
+    ({ user, sponsorId, sponsorIds, adminClient } = await requireSponsorRole('submitter'))
   } catch (e: any) {
     return { error: e.message }
   }
@@ -74,13 +74,27 @@ export async function sponsorUpdateSubmissionStatus(
   // can require a second signature.
   const { data: sub } = await adminClient
     .from('submissions')
-    .select('reserved_amount_cents, requested_amount_cents')
+    .select('sponsor_id, reserved_amount_cents, requested_amount_cents')
     .eq('id', submissionId)
     .single()
+
+  /**
+   * The threshold that decides whether this commitment needs a second signature must come
+   * from the org that is actually FUNDING the pitch, not from whichever org happens to be
+   * the caller's primary seat. Reading it from `sponsorId` was only correct because one
+   * org per profile is enforced in the invite action and the Clerk webhook -- application
+   * code, not a schema constraint. The moment a profile holds two memberships, org A's
+   * approval policy would gate a commitment made on behalf of org B.
+   */
+  const decisionSponsorId = sub?.sponsor_id ?? sponsorId
+  if (!sponsorIds.includes(decisionSponsorId)) {
+    return { error: 'You do not have permission to do that.' }
+  }
+
   const { data: sponsor } = await adminClient
     .from('sponsors')
     .select('approval_required_above_cents')
-    .eq('id', sponsorId)
+    .eq('id', decisionSponsorId)
     .single()
 
   const amountCents = sub?.reserved_amount_cents || sub?.requested_amount_cents || 0
@@ -98,8 +112,10 @@ export async function sponsorUpdateSubmissionStatus(
     const result = rpcResult as { ok: boolean; error?: string; proposal_id?: string; amount_cents?: number }
     if (!result?.ok) return { error: mapDecisionError(result?.error) }
 
+    // Same reason as the threshold above: the approvers who must countersign belong to the
+    // funding org, not to the caller's primary seat.
     const warning = await notifyEligibleApprovers({
-      sponsorId,
+      sponsorId: decisionSponsorId,
       submissionId,
       excludeProfileId: user.id,
       title: 'A funding request needs your approval',

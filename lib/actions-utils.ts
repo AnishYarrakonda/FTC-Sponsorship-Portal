@@ -154,10 +154,25 @@ export async function requireSponsor(): Promise<{
     throw new Error('Forbidden')
   }
 
-  const { data: memberships } = await supabase
+  const { data: memberships, error: membershipError } = await supabase
     .from('sponsor_members')
     .select('id, sponsor_id, role')
     .eq('profile_id', user.id)
+
+  /**
+   * Fail CLOSED on a read error. Discarding this error made `memberships` null, which is
+   * indistinguishable from "this profile has no membership row" -- and that empty case is
+   * exactly what requireSponsorRole() treats as a LEGACY_MEMBER_ROLE ('org_admin') seat.
+   * So a transient failure on this one query silently PROMOTED a viewer to org admin for
+   * the rest of the request. confirmSponsorDecisionProposal re-checks rank in SQL and was
+   * safe, but updateOrgApprovalSettings and inviteSponsorMember trust memberRole alone.
+   *
+   * A genuine zero-row result still falls through to the legacy seat below, which is the
+   * case the fallback was written for.
+   */
+  if (membershipError) {
+    throw new Error('Could not verify your organization membership. Please try again.')
+  }
 
   const rows = (memberships ?? []) as { id: string; sponsor_id: string; role: string }[]
   const ownMembership = rows.find((m) => m.sponsor_id === user.sponsor_id) ?? rows[0] ?? null

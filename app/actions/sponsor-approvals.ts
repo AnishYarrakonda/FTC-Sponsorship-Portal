@@ -5,6 +5,7 @@ import { requireSponsorRole } from '@/lib/actions-utils'
 import { createInAppNotification } from '@/lib/notify'
 import { runDecisionFollowUp, mapDecisionError, notifyEligibleApprovers } from '@/lib/decision-followup'
 import { mapDbError } from '@/lib/errors'
+import { updateSponsorAsOrgAdmin } from '@/lib/sponsor-org-writes'
 import {
   confirmProposalSchema,
   rejectProposalSchema,
@@ -207,10 +208,12 @@ export async function updateOrgApprovalSettings(data: { approvalRequiredAboveCen
     .eq('id', sponsorId)
     .single()
 
-  const { error: updateError } = await adminClient
-    .from('sponsors')
-    .update({ approval_required_above_cents: approvalRequiredAboveCents })
-    .eq('id', sponsorId)
+  // Column allowlist, not a bare object literal -- see lib/sponsor-org-writes.ts. An org
+  // admin reaches `sponsors` only through the RLS-bypassing admin client, so this is the
+  // control that keeps funding_cap_cents out of reach.
+  const { error: updateError } = await updateSponsorAsOrgAdmin(adminClient, sponsorId, {
+    approval_required_above_cents: approvalRequiredAboveCents,
+  })
   if (updateError) return { error: mapDbError(updateError, 'updateOrgApprovalSettings.update') }
 
   await adminClient.from('audit_log').insert({
