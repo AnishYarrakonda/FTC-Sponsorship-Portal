@@ -94,6 +94,24 @@ const ACCOUNTS = {
     fullName: 'Dev Sponsor Approver',
     role: 'sponsor',
   },
+  // 0084 backfills every pre-existing admin to super_admin, so admin-levels.spec.ts had
+  // no reviewer to sign in as and skipped its whole "Reviewer boundaries" describe. This is
+  // that reviewer: a real second admin, pinned to admin_level 'reviewer'.
+  reviewer: {
+    email: 'reviewer+clerk_test@example.com',
+    password: 'ReviewerTest123!',
+    fullName: 'Dev Reviewer',
+    role: 'admin',
+  },
+  // denial-flow.spec.ts needs a coach sitting in the "Awaiting Verification" queue —
+  // unverified WITH credentials uploaded. The main coach is verified, and the spec denies
+  // whoever it is pointed at, so it must not be reused.
+  denialCoach: {
+    email: 'denial-coach+clerk_test@example.com',
+    password: 'DenialCoachTest123!',
+    fullName: 'Dev Denial Coach',
+    role: 'coach',
+  },
   sponsor2: {
     email: 'sponsor2+clerk_test@example.com',
     password: 'Sponsor2Test123!',
@@ -261,6 +279,24 @@ async function upsertProfile(clerkUserId, email, fullName, patch) {
   return data.id
 }
 
+// ─── Storage: a stand-in credential image ─────────────────────────────────────
+// /coaches mints a 30-minute signed URL for everyone in the review queue. A row whose
+// coach_credentials_url points at nothing still renders (the page tolerates a null URL),
+// but the reviewer's document viewer would be empty, so put a real object behind it.
+// The path's first segment must be the Clerk user id — storage RLS partitions on it.
+const PLACEHOLDER_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64'
+)
+
+async function uploadPlaceholderCredential(path) {
+  const { error } = await admin.storage
+    .from('coach-credentials')
+    .upload(path, PLACEHOLDER_PNG, { contentType: 'image/png', upsert: true })
+  if (error) warn(`Could not upload placeholder credential to ${path}: ${error.message}`)
+  else log(`Uploaded placeholder credential  [${path}]`)
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
   console.log('\n🚀  FTC Portal — test account seeder (Clerk)\n')
@@ -273,6 +309,8 @@ async function main() {
   const coachClerkId   = await createUser(ACCOUNTS.coach.email,   ACCOUNTS.coach.password,   ACCOUNTS.coach.fullName)
   const adminClerkId   = await createUser(ACCOUNTS.admin.email,   ACCOUNTS.admin.password,   ACCOUNTS.admin.fullName)
   const sponsorClerkId = await createUser(ACCOUNTS.sponsor.email, ACCOUNTS.sponsor.password, ACCOUNTS.sponsor.fullName)
+  const reviewerClerkId     = await createUser(ACCOUNTS.reviewer.email,     ACCOUNTS.reviewer.password,     ACCOUNTS.reviewer.fullName)
+  const denialCoachClerkId  = await createUser(ACCOUNTS.denialCoach.email,  ACCOUNTS.denialCoach.password,  ACCOUNTS.denialCoach.fullName)
 
   // 3. Upsert profiles with roles (no DB trigger — write them directly)
   section('Creating profiles & configuring roles')
@@ -302,6 +340,31 @@ async function main() {
     .neq('id', adminProfileId)
   if (pruneErr) warn(`Could not prune stale admin profiles: ${pruneErr.message}`)
   else log('Pruned stale admin profiles')
+
+  // The reviewer has to be created AFTER the prune above, which deletes every admin that
+  // is not `adminProfileId` — building it earlier would just delete it again.
+  await upsertProfile(reviewerClerkId, ACCOUNTS.reviewer.email, ACCOUNTS.reviewer.fullName, {
+    role: 'admin',
+    admin_level: 'reviewer',
+    coppa_acknowledged: true,
+    tos_accepted: true,
+  })
+
+  // Unverified, but WITH a credentials object, which is exactly the predicate
+  // /coaches uses to put a coach in the "Awaiting Verification" queue
+  // (!coach_verified && !!coach_credentials_url). denied_at/denial_reason stay null so
+  // each run starts from an undecided application.
+  const denialCredentialsPath = `${denialCoachClerkId}/dev-denial-coach-id.png`
+  await upsertProfile(denialCoachClerkId, ACCOUNTS.denialCoach.email, ACCOUNTS.denialCoach.fullName, {
+    role: 'coach',
+    coach_verified: false,
+    coach_credentials_url: denialCredentialsPath,
+    denial_reason: null,
+    denied_at: null,
+    coppa_acknowledged: true,
+    tos_accepted: true,
+  })
+  await uploadPlaceholderCredential(denialCredentialsPath)
 
   // 4. Create "dev testing" sponsor company.
   // `sponsors` has no unique constraint on company_name, so ON CONFLICT can't be
@@ -524,6 +587,14 @@ async function main() {
 ║  SPONSOR 2 (org_admin of "dev testing 2" — separate org)      ║
 ║    Email:    sponsor2+clerk_test@example.com                  ║
 ║    Password: Sponsor2Test123!                                  ║
+╠══════════════════════════════════════════════════════════════╣
+║  REVIEWER (admin, admin_level = reviewer)                     ║
+║    Email:    reviewer+clerk_test@example.com                  ║
+║    Password: ReviewerTest123!                                  ║
+╠══════════════════════════════════════════════════════════════╣
+║  DENIAL COACH (unverified, credentials uploaded)              ║
+║    Email:    denial-coach+clerk_test@example.com              ║
+║    Password: DenialCoachTest123!                               ║
 ╚══════════════════════════════════════════════════════════════╝
 
 Email verification (if prompted): use the Clerk test code 424242.

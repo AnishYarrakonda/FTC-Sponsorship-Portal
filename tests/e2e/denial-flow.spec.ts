@@ -17,7 +17,9 @@
  */
 
 import { test, expect, type Page } from '@playwright/test'
+import { createClient } from '@supabase/supabase-js'
 import { signIn } from '../helpers/clerk-auth'
+import type { Database } from '../../lib/supabase/types'
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? ''
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? ''
@@ -33,6 +35,54 @@ test.describe.serial('Coach denial flow', () => {
     !process.env.SUPABASE_LOCAL || !ADMIN_EMAIL || !COACH_EMAIL,
     'Set SUPABASE_LOCAL=true, ADMIN_EMAIL/ADMIN_PASSWORD and DENIAL_COACH_EMAIL/DENIAL_COACH_PASSWORD (an unverified coach with uploaded credentials) to enable the denial-flow E2E test'
   )
+
+  /**
+   * Test 1 denies the coach, which takes them out of the "Awaiting Verification" queue
+   * the same test needs to find them in. Without this reset the spec passes exactly once
+   * per seed and fails on every re-run — which is how it failed inside a full sweep after
+   * having passed in isolation minutes earlier. Put the application back to undecided.
+   */
+  test.beforeAll(async () => {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://127.0.0.1:54321'
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
+    if (!serviceKey) return
+    const admin = createClient<Database>(url, serviceKey)
+
+    const { data: profile, error: readErr } = await admin
+      .from('profiles')
+      .select('clerk_user_id')
+      .eq('email', COACH_EMAIL)
+      .single()
+    if (readErr) throw new Error(`could not load the denial-flow coach: ${readErr.message}`)
+
+    /**
+     * Denying a coach purges their credential, which drops them out of the
+     * "Awaiting Verification" queue entirely — /coaches keys that queue on
+     * (!coach_verified && !!coach_credentials_url). Restoring the column is what makes
+     * the application pending again, so put the storage object back behind it too rather
+     * than leaving the reviewer's document viewer pointed at nothing.
+     */
+    const credentialsPath = `${profile!.clerk_user_id}/dev-denial-coach-id.png`
+    const placeholderPng = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64'
+    )
+    await admin.storage
+      .from('coach-credentials')
+      .upload(credentialsPath, placeholderPng, { contentType: 'image/png', upsert: true })
+
+    const { error } = await admin
+      .from('profiles')
+      .update({
+        coach_verified: false,
+        coach_credentials_url: credentialsPath,
+        coach_credentials_purged_at: null,
+        denial_reason: null,
+        denied_at: null,
+      })
+      .eq('email', COACH_EMAIL)
+    if (error) throw new Error(`could not reset the denial-flow coach: ${error.message}`)
+  })
 
   test('1. Admin denies the pending coach with a reason', async ({ page }) => {
     await signIn(page, ADMIN_EMAIL, ADMIN_PASSWORD)
