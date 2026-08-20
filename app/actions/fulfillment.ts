@@ -33,9 +33,9 @@ export async function markPaymentSent(data: z.input<typeof markPaymentSentSchema
     return { error: 'Validation failed: ' + parsed.error.issues.map(i => i.message).join(', ') }
   }
 
-  let user, supabase, adminClient, sponsorId
+  let user, supabase, adminClient, sponsorIds
   try {
-    ({ user, supabase, adminClient, sponsorId } = await requireSponsorRole('approver'))
+    ({ user, supabase, adminClient, sponsorIds } = await requireSponsorRole('approver'))
   } catch (e: any) {
     return { error: e.message }
   }
@@ -46,7 +46,10 @@ export async function markPaymentSent(data: z.input<typeof markPaymentSentSchema
     .eq('id', parsed.data.fulfillmentId)
     .single()
 
-  if (fetchErr || !fulfillment || fulfillment.sponsor_id !== sponsorId) {
+  // sponsorId is user.sponsor_id ?? sponsorIds[0] — a single seat. A member of two orgs
+  // would get a false "not found" on whichever org is not their primary. sponsor-decision.ts:90
+  // and recognition.ts:313 both already scope by the full set.
+  if (fetchErr || !fulfillment || !sponsorIds.includes(fulfillment.sponsor_id)) {
     return { error: 'Fulfillment not found.' }
   }
 
