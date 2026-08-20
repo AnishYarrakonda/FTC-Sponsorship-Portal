@@ -128,9 +128,36 @@ Migration `0012` does not exist — numbering skips it.
 >   agreement gate on fulfillment transitions (prompt 06)
 > - `0081_ftc_official_verification.sql` — official-FIRST-roster fields on
 >   `ftc_teams_cache` plus `team_verification_records` (prompt 07)
+> - `0082_sponsor_organizations.sql` — Clerk Organizations multi-user sponsors:
+>   `sponsor_members`, `sponsors.clerk_org_id`. **Sponsor resolution moved off
+>   `profiles.sponsor_id`** (prompt 08)
+> - `0083_sponsor_roles_and_approvals.sql` — `sponsor_decision_proposals`, org roles
+>   (`org_admin`/`approver`/`submitter`/`viewer`), `approval_required_above_cents` (prompt 09)
+> - `0084_admin_levels_and_capacity_audit.sql` — `profiles.admin_level`
+>   (`reviewer`/`super_admin`), `detect_capacity_drift()` (prompt 11)
+> - `0085_submission_qa_thread.sql` — `submission_messages`, admin-released Q&A (prompt 12)
+> - `0086_coach_appeals.sql` — `appeals` (prompt 13)
+> - `0087_recognition_tiers.sql` — `recognition_tiers`, `sponsor_recognition_awards`,
+>   `recognition_benefit_deliveries` (prompt 14)
+> - `0088_impact_reports.sql` — `impact_report_snapshots`, `public_platform_stats` (prompt 15)
+> - `0089_sponsor_org_authorization_drift.sql` — **`sponsor_ids_for_profile(uuid)` and
+>   `current_sponsor_ids()` are the one true sponsor resolver.** Never write a new policy or
+>   RPC against `profiles.sponsor_id`; it is NULL forever for an invited teammate
+> - `0090_email_domain_gating.sql` — `email_domain_rules` (prompt 16)
+> - `0091`/`0092`/`0093` — admin override actor role; agreement-template author deletion;
+>   `sign_agreement_atomic`'s undeclared `v_actor_id` (this one had broken **every** sponsor
+>   e-signature since 0089)
+> - `0094_fulfillment_sponsor_org_members.sql` — `record_fulfillment_transition` still
+>   resolved its sponsor branch with the pre-0082 pattern, making the fulfillment machine
+>   inert for invited sponsors
+> - `0095_release_capacity_on_cancel.sql` — `funding_capacity_releases`; cancelling a
+>   fulfillment now returns the sponsor's capacity. **The capacity invariant is now
+>   `funding_used_cents = open reservations + settled ledger - released capacity`** and
+>   `detect_capacity_drift()` carries the third term (audit finding F-01)
 >
-> Read those files directly for their tables, columns, RLS policies, and RPCs — they
-> are not described below. Everything below `0075` remains accurate.
+> Read those files directly for their columns, RLS policies, and RPCs — they are not
+> described in full below. Everything below `0075` remains accurate **except** any statement
+> that sponsor identity comes from `profiles.sponsor_id`; see `0082`/`0089` above.
 
 ### Enums
 

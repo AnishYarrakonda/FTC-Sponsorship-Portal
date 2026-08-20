@@ -73,10 +73,17 @@ inside a session.
 | ✅ Shipped | `16` BotID + corporate email gating · `18` accessibility (WCAG 2.2 AA) — see `docs/accessibility-audit.md` |
 | 🚧 Partial | `17` — the code half is shipped (Resend `email.complained` handling, `noreply@` trap in `lib/env.ts`, `docs/email-deliverability.md`). **DMARC is still unpublished** at `_dmarc.exodiusftc.com`, and the Resend webhook is not yet subscribed to `email.complained`. Both are registrar/dashboard actions — records to paste are in §3.1 of that doc. |
 
-Migrations applied so far: `0076`–`0093`, including `0084` and the three fixes
-`0091`/`0092`/`0093` (applied to production 2026-08-15).
+Migrations applied so far: `0076`–`0095`. That includes `0084`, the three fixes
+`0091`/`0092`/`0093` (production 2026-08-15), `0094` (production 2026-08-19, the
+`sponsor_ids_for_profile` fix to `record_fulfillment_transition`), and `0095`
+(production 2026-08-20, capacity release on fulfillment cancellation — audit finding F-01).
 Prompt `10` added no migration. Real head is always `ls supabase/migrations | tail -3` —
-trust that over this table.
+trust that over this table, which has been wrong before.
+
+**All 18 prompts are implemented.** What remains is not a prompt: it is `17`'s registrar and
+dashboard half, `07`'s FIRST API credentials, `10`'s Clerk enterprise connection, and legal
+review of the receipt/agreement copy. See `prompts/_AUDIT-11-18.md` for the verification
+sweep over `11`–`18`, and `prompts/_AUDIT-01-10.md` for the earlier one.
 
 **Do not re-run `01`–`11`.** Their "Current state (verified)" sections were regenerated after
 the implementations landed, so they now describe finished work rather than the gap they were

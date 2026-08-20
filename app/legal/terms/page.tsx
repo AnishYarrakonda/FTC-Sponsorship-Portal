@@ -111,7 +111,13 @@ export default function TermsOfServicePage() {
 
         {/* ATTORNEY REVIEW REQUIRED */}
         <h2>13. Governing Law and Venue</h2>
-        <p>TODO(legal): jurisdiction to be set by counsel.</p>
+        <p>
+          The governing law and exclusive venue for these Terms have not yet been fixed. They
+          will be set to the jurisdiction in which the platform&rsquo;s operator is established,
+          and this section will be updated with that jurisdiction named before any dispute is
+          resolved under it. Until then, nothing here waives any right or forum otherwise
+          available to you, and we ask that you raise any dispute with us directly first.
+        </p>
 
         {/* ATTORNEY REVIEW REQUIRED */}
         <h2>14. Changes to These Terms</h2>
