@@ -228,7 +228,7 @@ export function Hero() {
           </Link>
           <Link
             href="/sponsors/apply"
-            className="inline-flex items-center gap-2 rounded-full bg-primary px-7 py-3.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors active:scale-[0.98] shadow-sm"
+            className="inline-flex items-center gap-2 rounded-full bg-primary px-7 py-3.5 text-sm font-medium text-primary-foreground hover:bg-primary-hover transition-colors active:scale-[0.98] shadow-sm"
           >
             Sponsor a team
           </Link>

@@ -77,7 +77,7 @@ export function TopNav() {
           </Link>
           <Link
             href="/signup"
-            className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors active:scale-[0.98]"
+            className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary-hover transition-colors active:scale-[0.98]"
           >
             Open portal
           </Link>

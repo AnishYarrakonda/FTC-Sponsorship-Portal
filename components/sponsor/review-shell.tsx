@@ -420,7 +420,7 @@ export function SponsorReviewShell({
                   <div className="grid grid-cols-1 gap-3 pt-6 border-t border-border">
                     <Button
                       variant="default"
-                      className="w-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
+                      className="w-full bg-primary hover:bg-primary-hover text-primary-foreground shadow-sm"
                       disabled={isPending}
                       onClick={() => setShowConfirm('approved')}
                     >
@@ -479,7 +479,7 @@ export function SponsorReviewShell({
                       variant="default" 
                       className={cn(
                         "flex-1 text-[13px] shadow-sm",
-                        showConfirm === 'approved' ? 'bg-primary hover:bg-primary/90' : showConfirm === 'declined' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-amber-600 hover:bg-amber-700'
+                        showConfirm === 'approved' ? 'bg-primary hover:bg-primary-hover' : showConfirm === 'declined' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-amber-600 hover:bg-amber-700'
                       )}
                       onClick={() => handleDecision(showConfirm)}
                       disabled={isPending}

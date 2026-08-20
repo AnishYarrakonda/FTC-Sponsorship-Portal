@@ -1010,7 +1010,7 @@ export function PortfolioTab({ team, achievements }: { team: Team, achievements:
         </div>
 
         <div className="flex justify-end pt-4">
-          <Button type="submit" disabled={isPending} className="px-8 h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-sm">
+          <Button type="submit" disabled={isPending} className="px-8 h-11 bg-primary hover:bg-primary-hover text-primary-foreground font-semibold shadow-sm">
             {isPending ? 'Saving…' : 'Save Changes'}
           </Button>
         </div>

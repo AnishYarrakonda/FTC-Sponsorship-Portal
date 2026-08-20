@@ -331,7 +331,7 @@ export default async function DashboardPage() {
           <div className="flex flex-col gap-2">
             <Link 
               href="/dashboard"
-              className="flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity"
+              className="flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary-hover transition-colors"
             >
               Try Again
             </Link>
