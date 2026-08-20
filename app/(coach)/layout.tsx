@@ -1,4 +1,5 @@
 import { getAuthedProfile } from '@/lib/actions-utils'
+import { SkipToContent } from '@/components/ui/skip-to-content'
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { Suspense } from 'react'
@@ -40,10 +41,11 @@ export default async function CoachLayout({ children }: { children: React.ReactN
 
   return (
     <div className="flex h-screen flex-col overflow-hidden text-foreground lg:flex-row">
+      <SkipToContent />
       <Suspense fallback={<div className="hidden w-56 shrink-0 border-r border-border bg-card lg:block" />}>
         <CoachSidebar userName={userName} userEmail={userEmail} />
       </Suspense>
-      <main className="flex-1 overflow-y-auto">
+      <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto focus-visible:outline-none">
         <div className="mx-auto w-full max-w-[1100px] px-4 py-6 sm:px-8 sm:py-8 lg:px-12">
           {children}
         </div>

@@ -25,6 +25,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { GlobalShortcuts } from "@/components/global-shortcuts"
 import { RoboticsCursor } from "@/components/robotics-cursor"
 import { DotGridClient } from "@/components/ui/dot-grid-client"
+import { MotionPreferences } from "@/components/motion/motion-preferences"
 
 export default function RootLayout({
   children,
@@ -57,14 +58,16 @@ export default function RootLayout({
             enableSystem={false}
             disableTransitionOnChange
           >
-            {/* isolate creates a stacking context so the fixed canvas at z-index:-1 sits above the body background */}
-            <div style={{ isolation: 'isolate', position: 'relative' }}>
-              <DotGridClient />
-              {children}
-              <GlobalShortcuts />
-              <RoboticsCursor />
-              <Toaster richColors position="top-right" />
-            </div>
+            <MotionPreferences>
+              {/* isolate creates a stacking context so the fixed canvas at z-index:-1 sits above the body background */}
+              <div style={{ isolation: 'isolate', position: 'relative' }}>
+                <DotGridClient />
+                {children}
+                <GlobalShortcuts />
+                <RoboticsCursor />
+                <Toaster richColors position="top-right" />
+              </div>
+            </MotionPreferences>
           </ThemeProvider>
         </body>
       </html>

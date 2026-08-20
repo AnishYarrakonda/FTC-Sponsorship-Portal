@@ -34,6 +34,7 @@
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
@@ -107,6 +108,11 @@
   /* Pine accent */
   --primary: #1F6F5C;
   --primary-foreground: #F7F3EE;
+  /* Buttons must DARKEN on hover, not lighten. The shadcn default was hover:bg-primary/90,
+   * which composites #1F6F5C toward the cream canvas to #357D6B -- 4.42:1 against
+   * --primary-foreground, just under the 4.5:1 AA floor, on every primary button in the app.
+   * #1A5F50 is 6.95:1 and reads as a normal pressed-darker affordance. */
+  --primary-hover: #1A5F50;
   
   --secondary: #FBF8F2;
   --secondary-foreground: #181818;
@@ -248,6 +254,32 @@
     outline-offset: 2px;
   }
 
+  /* WCAG 2.2 — 2.4.1 Bypass Blocks.
+     The skip link is the first focusable element in every portal layout. It is
+     positioned off-canvas rather than `display:none`, because a hidden element is
+     not focusable and the link would never be reachable by the keyboard users it
+     exists for. */
+  .skip-to-content {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 100;
+  }
+  .skip-to-content:focus-visible,
+  .skip-to-content:focus {
+    left: 0.5rem;
+    top: 0.5rem;
+    width: auto;
+    height: auto;
+    padding: 0.5rem 0.875rem;
+    border-radius: 0.375rem;
+    background: var(--card);
+    color: var(--foreground);
+    border: 1px solid var(--border);
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
   /* Hide spin buttons for number inputs */
   input::-webkit-outer-spin-button,
   input::-webkit-inner-spin-button {
@@ -256,5 +288,26 @@
   }
   input[type=number] {
     -moz-appearance: textfield;
+  }
+}
+
+/* WCAG 2.2 — 2.3.3 Animation from Interactions.
+   The criterion asks for animation to be *removed*, not slowed: a 0.01ms duration
+   still fires the transition end event that code may depend on, while being
+   imperceptible. `!important` is deliberate and is the one place it is warranted —
+   this block has to beat Tailwind utilities and inline styles alike, including the
+   ones framer-motion writes onto elements at runtime.
+
+   framer-motion's own JS-driven animations are handled separately by
+   <MotionConfig reducedMotion="user"> in components/motion/motion-preferences.tsx;
+   CSS alone cannot stop a library that animates via requestAnimationFrame. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

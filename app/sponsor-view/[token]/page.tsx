@@ -5,8 +5,11 @@ import { statusLabel } from '@/components/ui/status-badge'
 import { notFound } from 'next/navigation'
 import { createHash } from 'crypto'
 import { SponsorDecisionPanel } from '@/components/sponsor/sponsor-decision-panel'
+import { TokenThreadPanel } from '@/components/messages/thread-panels'
+import type { ThreadMessage } from '@/components/messages/thread'
 import { RichText } from '@/components/ui/rich-text'
 import { htmlToPlainText } from '@/lib/utils'
+import { fetchRecognitionLadder, ladderForEmail } from '@/lib/recognition'
 
 interface Props {
   params: Promise<{ token: string }>
@@ -40,6 +43,25 @@ export default async function SponsorViewPage({ params }: Props) {
   const decided = !!row.used_at
 
   const submission = row.submissions
+
+  // !! THIS PAGE READS THROUGH THE ADMIN CLIENT, WHICH BYPASSES RLS !!
+  // sm_select_sponsor is not doing any work for us here, so the "released OR the sponsor's
+  // own" filter has to live in the QUERY ITSELF. Without these two clauses a sponsor would
+  // be handed the coach's un-reviewed drafts — the single most likely leak in this feature.
+  // author_role='sponsor' is safe to include unreleased because a sponsor message is only
+  // ever inserted at status='released' anyway; it is here so the shape matches the policy.
+  const { data: threadRows } = await supabase
+    .from('submission_messages')
+    .select('id, author_role, author_label, body, status, created_at')
+    .eq('submission_id', submission.id)
+    .or('status.eq.released,author_role.eq.sponsor')
+    .order('created_at', { ascending: true })
+
+  // The recognition ladder, through the same helper the pitch email uses so the two can
+  // never disagree. Config only — nothing here is specific to this sponsor, and a failure
+  // just hides the card rather than breaking the page.
+  const recognitionLadder = ladderForEmail(await fetchRecognitionLadder(supabase))
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const team = submission.teams as Record<string, any>
   const budgetItems = (team.budget_items as { label: string; qty: number; unit_cost_cents: number; total_cents: number }[]) ?? []
@@ -112,8 +134,20 @@ export default async function SponsorViewPage({ params }: Props) {
           </div>
 
           {(expired || decided) && (
-            <div className="mt-4 p-3 rounded-lg bg-[var(--badge-warning-bg)] border border-[var(--badge-warning-text)]/20 text-[var(--badge-warning-text)] text-sm font-medium">
-              {decided ? 'A decision has already been recorded for this proposal.' : 'This proposal link has expired.'}
+            /**
+             * role="status" on the decided banner, because this is where a decision LANDS.
+             * recordSponsorDecision calls revalidatePath, and a server action that revalidates
+             * anything also re-renders the route it was invoked from -- so this server branch
+             * routinely replaces SponsorDecisionPanel's client-side "Decision Recorded!" card
+             * before a screen reader ever reaches it. Without a live region here the outcome of
+             * a funding decision is announced only if the client render happens to win a race.
+             * An aria-live region announces on CHANGE, so a link opened cold is unaffected.
+             */
+            <div
+              role={decided ? 'status' : undefined}
+              className="mt-4 p-3 rounded-lg bg-[var(--badge-warning-bg)] border border-[var(--badge-warning-text)]/20 text-[var(--badge-warning-text)] text-sm font-medium"
+            >
+              {decided ? 'Decision recorded — this proposal has already been decided.' : 'This proposal link has expired.'}
             </div>
           )}
         </div>
@@ -258,6 +292,31 @@ export default async function SponsorViewPage({ params }: Props) {
           )}
         </div>
 
+        {/* 5b. What the sponsor gets back. Render-only — this page's single mutation is
+            still the decision panel, and it renders whether or not that panel is live: an
+            expired or already-decided link should still explain what was on offer. */}
+        {recognitionLadder.length > 0 && (
+          <div className="bg-card rounded-xl border p-8 shadow-sm space-y-4">
+            <h2 className="text-xl font-bold text-foreground">What your sponsorship earns</h2>
+            <div className="divide-y divide-border">
+              {recognitionLadder.map((tier) => (
+                <div key={tier.name} className="py-3 sm:flex sm:gap-6">
+                  <div className="sm:w-44 shrink-0">
+                    <p className="font-medium text-foreground">{tier.name}</p>
+                    <p className="text-sm tabular-nums text-muted-foreground">{tier.range}</p>
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground sm:mt-0">
+                    {tier.benefits.join(' · ')}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Recognition levels are indicative and are confirmed when a sponsorship is finalised.
+            </p>
+          </div>
+        )}
+
         {/* 6. Media */}
         {youtubeUrl && (
           <div className="bg-card rounded-xl border p-8 shadow-sm space-y-2">
@@ -282,6 +341,17 @@ export default async function SponsorViewPage({ params }: Props) {
             )}
           </div>
         )}
+
+        {/* Q&A — above the decision panel, so a question can be asked (and read) before a
+            decision is made. The composer gate is the SAME expression the decision panel
+            uses below, not a re-derivation of it. Asking a question never consumes the
+            token, so the panel below stays live afterwards. */}
+        <TokenThreadPanel
+          token={token}
+          messages={(threadRows ?? []) as ThreadMessage[]}
+          canCompose={!expired && !decided && isAwaitingSponsor(submission.status as string)}
+          teamName={String(team.team_name ?? 'this team')}
+        />
 
         {/* Decision Panel */}
         {/*
@@ -310,6 +380,8 @@ export default async function SponsorViewPage({ params }: Props) {
             token={token}
             totalAskCents={totalAsk}
             teamName={String(team.team_name ?? '')}
+            approvalThresholdCents={(submission.sponsors as { approval_required_above_cents?: number | null } | null)?.approval_required_above_cents ?? null}
+            companyName={String((submission.sponsors as { company_name?: string } | null)?.company_name ?? 'This company')}
           />
         )}
 

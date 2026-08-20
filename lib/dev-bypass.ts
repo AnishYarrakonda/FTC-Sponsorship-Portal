@@ -12,6 +12,7 @@
 // Flip the switch:  NEXT_PUBLIC_DEV_AUTH_BYPASS=true   (in .env.local)
 //
 import type { Database } from './supabase/types'
+import { PREVIEW_PLACEHOLDER_IMAGE } from './dev-placeholder-image'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
@@ -34,6 +35,8 @@ export const MOCK_ADMIN_PROFILE = {
   id: ADMIN_ID,
   clerk_user_id: 'user_dev_admin',
   role: 'admin',
+  // Without this the preview breaks the moment any page calls requireSuperAdmin() (0084).
+  admin_level: 'super_admin',
   full_name: 'Dev Admin',
   email: 'admin+clerk_test@example.com',
   coach_verified: false,
@@ -121,7 +124,7 @@ const DATA: Record<string, any[]> = {
   ],
 
   sponsors: [
-    { id: 'sp1', company_name: 'Acme Robotics', industry: 'Manufacturing', contact_name: 'Dana Cole', contact_email: 'dana@acmerobotics.com', status: 'active', funding_cap_cents: 5_000_000, funding_used_cents: 1_250_000, created_at: iso(90) },
+    { id: 'sp1', company_name: 'Acme Robotics', industry: 'Manufacturing', contact_name: 'Dana Cole', contact_email: 'dana@acmerobotics.com', status: 'active', funding_cap_cents: 5_000_000, funding_used_cents: 1_250_000, created_at: iso(90), clerk_org_id: 'org_dev_sp1' },
     { id: 'sp2', company_name: 'TechNova', industry: 'Software', contact_name: 'Wei Chen', contact_email: 'wei@technova.io', status: 'active', funding_cap_cents: 3_000_000, funding_used_cents: 2_700_000, created_at: iso(70) },
     { id: 'sp3', company_name: 'Quantum Dynamics', industry: 'Aerospace', contact_name: 'Lena Vogt', contact_email: 'lena@quantumdyn.com', status: 'pending', funding_cap_cents: 2_000_000, funding_used_cents: 0, created_at: iso(10) },
     { id: 'sp4', company_name: 'BrightForge Tools', industry: 'Hardware', contact_name: 'Omar Said', contact_email: 'omar@brightforge.com', status: 'active', funding_cap_cents: 1_500_000, funding_used_cents: 450_000, created_at: iso(45) },
@@ -170,10 +173,28 @@ const DATA: Record<string, any[]> = {
     },
   ],
 
+  // app2 deliberately carries a domain_match of 'mismatch' so the advisory badge on
+  // /applications is visible in `npm run dev:admin-preview` (0090).
   sponsor_applications: [
-    { id: 'app1', company_name: 'Northwind Logistics', contact_name: 'Grace Park', contact_email: 'grace@northwind.co', status: 'pending', proposed_cap_cents: 2_500_000, message: 'We’d love to fund teams in the DFW area and offer facility tours.', created_at: iso(2) },
-    { id: 'app2', company_name: 'Helios Energy', contact_name: 'Ravi Menon', contact_email: 'ravi@helios.energy', status: 'pending', proposed_cap_cents: 4_000_000, message: 'Interested in sponsoring 3–5 teams this season.', created_at: iso(5) },
-    { id: 'app3', company_name: 'Cobalt Labs', contact_name: 'Mia Brandt', contact_email: 'mia@cobaltlabs.dev', status: 'approved', proposed_cap_cents: 1_000_000, message: 'Long-time FIRST supporter.', created_at: iso(20) },
+    { id: 'app1', company_name: 'Northwind Logistics', contact_name: 'Grace Park', contact_email: 'grace@northwind.co', status: 'pending', proposed_cap_cents: 2_500_000, message: 'We’d love to fund teams in the DFW area and offer facility tours.', created_at: iso(2), website: 'https://northwind.co', email_domain: 'northwind.co', website_domain: 'northwind.co', domain_match: 'match' },
+    { id: 'app2', company_name: 'Helios Energy', contact_name: 'Ravi Menon', contact_email: 'ravi@helios.energy', status: 'pending', proposed_cap_cents: 4_000_000, message: 'Interested in sponsoring 3–5 teams this season.', created_at: iso(5), website: 'https://helios-energy.com', email_domain: 'helios.energy', website_domain: 'helios-energy.com', domain_match: 'mismatch' },
+    { id: 'app3', company_name: 'Cobalt Labs', contact_name: 'Mia Brandt', contact_email: 'mia@cobaltlabs.dev', status: 'approved', proposed_cap_cents: 1_000_000, message: 'Long-time FIRST supporter.', created_at: iso(20), website: 'cobaltlabs.dev', email_domain: 'cobaltlabs.dev', website_domain: 'cobaltlabs.dev', domain_match: 'match' },
+  ],
+
+  email_domain_rules: [
+    { domain: 'gmail.com', rule: 'block', category: 'consumer', reason: 'Consumer mail', created_by: null, created_at: iso(30), updated_at: iso(30) },
+    { domain: 'outlook.com', rule: 'block', category: 'consumer', reason: 'Consumer mail', created_by: null, created_at: iso(30), updated_at: iso(30) },
+    { domain: 'mailinator.com', rule: 'block', category: 'disposable', reason: 'Disposable mail', created_by: null, created_at: iso(30), updated_at: iso(30) },
+    { domain: 'brandtfamilyfoundation.org', rule: 'allow', category: 'manual', reason: 'Family foundation with no company domain', created_by: ADMIN_ID, created_at: iso(4), updated_at: iso(4) },
+  ],
+
+  sponsor_members: [
+    {
+      id: 'sm1', sponsor_id: 'sp1', profile_id: 'c5', clerk_org_id: 'org_dev_sp1',
+      clerk_membership_id: 'orgmem_dev_1', role: 'org_admin', invited_by: null,
+      invited_at: iso(90), joined_at: iso(90), created_at: iso(90), updated_at: iso(90),
+      profiles: { id: 'c5', full_name: 'Dana Cole', email: 'dana@acmerobotics.com' },
+    },
   ],
 
   transactions_ledger: [
@@ -181,6 +202,25 @@ const DATA: Record<string, any[]> = {
     { id: 'tx2', amount_cents: 250_000 },
     { id: 'tx3', amount_cents: 180_000 },
     { id: 'tx4', amount_cents: 120_000 },
+  ],
+
+  team_verification_records: [
+    {
+      id: 'tvr-1', team_id: 't1', profile_id: 'c1', ftc_team_number: 31579,
+      claimed_team_name: 'Exodius', claimed_organization: 'Plano Robotics Collective',
+      official_team_name: 'Exodius', official_organization: 'Plano Robotics Collective',
+      source: 'first_api', name_score: 1, organization_score: 1, confidence: 1,
+      outcome: 'auto_pass', override_reason: null, overridden_by: null, overridden_at: null,
+      checked_at: iso(5),
+    },
+    {
+      id: 'tvr-2', team_id: null, profile_id: 'c2', ftc_team_number: 21044,
+      claimed_team_name: 'Robo Knights', claimed_organization: null,
+      official_team_name: 'RoboKnights FTC', official_organization: 'Frisco ISD',
+      source: 'ftcscout', name_score: 0.72, organization_score: null, confidence: 0.72,
+      outcome: 'needs_review', override_reason: null, overridden_by: null, overridden_at: null,
+      checked_at: iso(3),
+    },
   ],
 
   audit_log: [
@@ -213,7 +253,289 @@ const DATA: Record<string, any[]> = {
     { id: 'f-1', sponsor_id: 'sp1', team_id: 't1', amount_cents: 250_000, status: 'payment_sent', pledged_at: iso(10), payment_sent_at: iso(2), sponsors: { company_name: 'Acme Robotics' }, teams: { team_name: 'Exodius' } },
     { id: 'f-2', sponsor_id: 'sp2', team_id: 't2', amount_cents: 150_000, status: 'pledged', pledged_at: iso(40), sponsors: { company_name: 'TechNova' }, teams: { team_name: 'Robo Knights' } },
     { id: 'f-3', sponsor_id: 'sp4', team_id: 't3', amount_cents: 50_000, status: 'payment_sent', pledged_at: iso(100), payment_sent_at: iso(80), sponsors: { company_name: 'BrightForge Tools' }, teams: { team_name: 'Steel Comets' } },
-    { id: 'f-4', sponsor_id: 'sp4', team_id: 't4', amount_cents: 50_000, status: 'payment_received', pledged_at: iso(100), payment_sent_at: iso(80), payment_received_at: iso(70), sponsors: { company_name: 'BrightForge Tools' }, teams: { team_name: 'Circuit Breakers' } }
+    { id: 'f-4', sponsor_id: 'sp4', team_id: 't4', amount_cents: 50_000, status: 'receipted', receipt_number: 'PF-2026-000003', pledged_at: iso(100), payment_sent_at: iso(80), payment_received_at: iso(70), sponsors: { company_name: 'BrightForge Tools' }, teams: { team_name: 'Circuit Breakers' } }
+  ],
+
+  agreement_templates: [
+    {
+      id: 'agr-1',
+      key: 'sponsorship_agreement',
+      version: 1,
+      title: 'FTC Team Sponsorship Agreement',
+      body: '<h2>1. Parties</h2><p>{{ sponsor_company_name }} and {{ team_legal_payee_name }} for FTC Team {{ team_number }} ({{ team_name }}) of {{ team_organization }}, {{ team_city }}, {{ team_state }}, effective {{ agreement_date }}.</p><h2>2. Commitment</h2><p>{{ amount_formatted }} for the {{ season }} season, facilitated by {{ platform_name }}.</p>',
+      consent_text: 'By typing your name and clicking "Sign," you consent to transact electronically under ESIGN/UETA.',
+      merge_fields: ['sponsor_company_name', 'team_legal_payee_name', 'team_number', 'team_name', 'team_organization', 'team_city', 'team_state', 'agreement_date', 'amount_formatted', 'season', 'platform_name'],
+      status: 'effective',
+      needs_legal_review: true,
+      effective_from: iso(20),
+      retired_at: null,
+      created_by: null,
+      created_at: iso(20),
+      updated_at: iso(20),
+    },
+    {
+      id: 'agr-2',
+      key: 'sponsorship_agreement',
+      version: 2,
+      title: 'FTC Team Sponsorship Agreement (draft)',
+      body: '<h2>1. Parties</h2><p>{{ sponsor_company_name }} and {{ team_legal_payee_name }} for FTC Team {{ team_number }} ({{ team_name }}) of {{ team_organization }}, {{ team_city }}, {{ team_state }}, effective {{ agreement_date }}.</p><h2>2. Commitment</h2><p>{{ amount_formatted }} for the {{ season }} season, facilitated by {{ platform_name }}. Draft revision adding a recognition clause.</p>',
+      consent_text: 'By typing your name and clicking "Sign," you consent to transact electronically under ESIGN/UETA.',
+      merge_fields: ['sponsor_company_name', 'team_legal_payee_name', 'team_number', 'team_name', 'team_organization', 'team_city', 'team_state', 'agreement_date', 'amount_formatted', 'season', 'platform_name'],
+      status: 'draft',
+      needs_legal_review: true,
+      effective_from: null,
+      retired_at: null,
+      created_by: ADMIN_ID,
+      created_at: iso(1),
+      updated_at: iso(1),
+    },
+  ],
+
+  agreement_signatures: [
+    {
+      id: '00000000-0000-4000-8000-000000000301',
+      template_id: 'agr-1',
+      template_key: 'sponsorship_agreement',
+      template_version: 1,
+      signer_profile_id: 'c5',
+      signer_role: 'sponsor',
+      signer_legal_name: 'Dana Cole',
+      signer_email: 'dana@acmerobotics.com',
+      submission_id: 's3',
+      sponsor_id: 'sp1',
+      team_id: 't3',
+      entity_snapshot: { team_number: 14502, team_name: 'Steel Comets', team_organization: null, sponsor_company_name: 'Acme Robotics', amount_cents: 300_000 },
+      typed_name: 'Dana Cole',
+      signed_at: iso(4),
+      ip_address: '203.0.113.10',
+      user_agent: 'Mozilla/5.0 (dev preview)',
+      document_hash: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+      document_storage_path: 'preview/sig-admin-1.html',
+      consent_text_version: 1,
+      consent_text_hash: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+      created_at: iso(4),
+    },
+    {
+      id: '00000000-0000-4000-8000-000000000302',
+      template_id: 'agr-1',
+      template_key: 'sponsorship_agreement',
+      template_version: 1,
+      signer_profile_id: 'c1',
+      signer_role: 'coach',
+      signer_legal_name: 'Anish Yarrakonda',
+      signer_email: 'coach+clerk_test@example.com',
+      submission_id: 's3',
+      sponsor_id: 'sp1',
+      team_id: 't3',
+      entity_snapshot: { team_number: 14502, team_name: 'Steel Comets', team_organization: null, sponsor_company_name: 'Acme Robotics', amount_cents: 300_000 },
+      typed_name: 'Anish Yarrakonda',
+      signed_at: iso(3),
+      ip_address: '203.0.113.42',
+      user_agent: 'Mozilla/5.0 (dev preview)',
+      document_hash: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+      document_storage_path: 'preview/sig-admin-2.html',
+      consent_text_version: 1,
+      consent_text_hash: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+      created_at: iso(3),
+    },
+  ],
+
+  funding_receipts: [
+    {
+      id: 'rec-3',
+      receipt_number: 'PF-2026-000003',
+      fulfillment_id: 'f-4',
+      transaction_id: 'txn-4',
+      sponsor_id: 'sp4',
+      team_id: 't4',
+      amount_cents: 50_000,
+      contribution_date: iso(70).split('T')[0],
+      variant: 'charitable_501c3',
+      payee_legal_name: 'Circuit Breakers Booster Club',
+      payee_ein_last4: '4321',
+      payee_tax_classification: '501c3_org',
+      sponsor_legal_name: 'BrightForge Tools',
+      sponsor_contact_email: 'grants@brightforge.example',
+      document_html: '<div style="padding: 24px;"><h1>Contribution acknowledgment</h1><p>Circuit Breakers Booster Club (EIN 11-2233445) acknowledges receipt of $500.00 from BrightForge Tools on 2026-06-01.</p><p><strong>No goods or services were provided by Circuit Breakers Booster Club in exchange for this contribution.</strong></p></div>',
+      document_sha256: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+      copy_version: '2026-08-v1',
+      copy_reviewed_at: null,
+      status: 'issued',
+      issued_at: iso(70),
+      emailed_at: iso(70),
+      teams: { team_name: 'Circuit Breakers' }
+    }
+  ],
+
+  // Appeals (0086). The admin queue reads this; without an `open` row the /appeals preview
+  // renders an empty state and the review UI cannot be exercised. `original_decider_id` is
+  // the mock admin on purpose, so the self-review override banner is reachable in preview.
+  appeals: [
+    {
+      id: 'apl-1', subject_type: 'submission', subject_id: 's4',
+      appellant_profile_id: 'c1', appellant_name: 'Anish Yarrakonda',
+      statement: 'The travel budget line was flagged as unclear, but the itemised quote was attached to the pitch. Please take another look — we cannot compete without the regional travel covered.',
+      status: 'open', decision_at: iso(6), original_decider_id: ADMIN_ID,
+      assigned_reviewer_id: null, assigned_at: null, override_reason: null,
+      resolution_notes: null, resolved_by: null, resolved_at: null,
+      created_at: iso(4), updated_at: iso(4),
+    },
+    {
+      id: 'apl-2', subject_type: 'coach_verification', subject_id: 'c2',
+      appellant_profile_id: 'c2', appellant_name: 'Jordan Lee',
+      statement: 'My licence photo was rejected as illegible. I have a clearer scan and my school can confirm my role directly if that helps.',
+      status: 'under_review', decision_at: iso(9), original_decider_id: null,
+      assigned_reviewer_id: ADMIN_ID, assigned_at: iso(2), override_reason: null,
+      resolution_notes: null, resolved_by: null, resolved_at: null,
+      created_at: iso(8), updated_at: iso(2),
+    },
+    {
+      id: 'apl-3', subject_type: 'submission', subject_id: 's5',
+      appellant_profile_id: 'c5', appellant_name: 'Maria Gomez',
+      statement: 'We were declined for an incomplete portfolio, but the missing achievements were added the same day.',
+      status: 'overturned', decision_at: iso(25), original_decider_id: ADMIN_ID,
+      assigned_reviewer_id: ADMIN_ID, assigned_at: iso(20),
+      override_reason: 'Sole administrator on this deployment; self-review recorded.',
+      resolution_notes: 'Portfolio was complete at the time of review. Returned for resubmission.',
+      resolved_by: ADMIN_ID, resolved_at: iso(19),
+      created_at: iso(22), updated_at: iso(19),
+    },
+  ],
+
+  // Q&A threads (0085). The admin release queue reads this; without a `pending` coach reply
+  // the /moderation preview renders an empty section and the review UI cannot be exercised.
+  // Embedded relations are inlined because MockQuery ignores the select() column list.
+  submission_messages: [
+    {
+      id: 'msg-1', submission_id: 's3', author_role: 'sponsor', author_profile_id: 'sp-user-1',
+      author_token_id: null, author_label: 'Dana Cole', status: 'released',
+      body: 'Is the 501(c)(3) the school district itself, or a separate booster club? Our grants team needs the EIN on the receipt to match the payee.',
+      released_at: iso(3), released_by: null, rejected_reason: null,
+      flagged_at: null, flagged_by: null, created_at: iso(3),
+      submissions: { teams: { team_name: 'Steel Comets' }, sponsors: { company_name: 'Acme Robotics' } },
+    },
+    {
+      id: 'msg-2', submission_id: 's3', author_role: 'coach', author_profile_id: 'c5',
+      author_token_id: null, author_label: 'Maria Gomez', status: 'pending',
+      body: 'It is a separate booster club — Steel Comets Booster Club, EIN ending 4321. The district is not the payee. Happy to send the determination letter to whichever address your grants team prefers.',
+      released_at: null, released_by: null, rejected_reason: null,
+      flagged_at: null, flagged_by: null, created_at: iso(2),
+      submissions: { teams: { team_name: 'Steel Comets' }, sponsors: { company_name: 'Acme Robotics' } },
+    },
+    {
+      id: 'msg-3', submission_id: 's1', author_role: 'sponsor', author_profile_id: 'sp-user-1',
+      author_token_id: null, author_label: 'Dana Cole', status: 'released',
+      body: 'Which students are on the swerve subteam, and can you send their names for our press release?',
+      released_at: iso(1), released_by: null, rejected_reason: null,
+      flagged_at: iso(1), flagged_by: 'c1', created_at: iso(1),
+      submissions: { teams: { team_name: 'Exodius' }, sponsors: { company_name: 'Acme Robotics' } },
+    },
+  ],
+  // The four seeded tiers, plus one archived row so the admin ladder shows both states.
+  recognition_tiers: [
+    {
+      id: 'tier-supporter', name: 'Supporter', rank: 0, min_amount_cents: 25000,
+      max_amount_cents: 100000, benefits: ['logo_on_website'],
+      description: 'Entry-level recognition on the team website.',
+      archived_at: null, created_at: iso(90), updated_at: iso(90),
+    },
+    {
+      id: 'tier-bronze', name: 'Bronze', rank: 1, min_amount_cents: 100000,
+      max_amount_cents: 250000, benefits: ['logo_on_website', 'social_media_mention'],
+      description: 'Website placement plus a social media thank-you post.',
+      archived_at: null, created_at: iso(90), updated_at: iso(90),
+    },
+    {
+      id: 'tier-silver', name: 'Silver', rank: 2, min_amount_cents: 250000,
+      max_amount_cents: 750000,
+      benefits: ['logo_on_website', 'social_media_mention', 'logo_on_team_shirt', 'mention_in_outreach_materials'],
+      description: 'Team apparel placement and inclusion in outreach materials.',
+      archived_at: null, created_at: iso(90), updated_at: iso(90),
+    },
+    {
+      id: 'tier-gold', name: 'Gold', rank: 3, min_amount_cents: 750000,
+      max_amount_cents: null,
+      benefits: ['logo_on_website', 'social_media_mention', 'logo_on_team_shirt', 'mention_in_outreach_materials', 'logo_on_robot', 'event_signage'],
+      description: 'Full recognition including placement on the competition robot and event signage.',
+      archived_at: null, created_at: iso(90), updated_at: iso(90),
+    },
+    {
+      id: 'tier-legacy', name: 'Founding Partner', rank: 9, min_amount_cents: 2000000,
+      max_amount_cents: null, benefits: ['logo_on_robot'],
+      description: 'Retired 2025 tier, kept so awards pinned against it still resolve.',
+      archived_at: iso(30), created_at: iso(400), updated_at: iso(30),
+    },
+  ],
+  sponsor_recognition_awards: [
+    {
+      id: 'award-1', fulfillment_id: 'ff-1', sponsor_id: 'sp1', team_id: 't1',
+      amount_cents: 300000, tier_id: 'tier-silver', tier_name_snapshot: 'Silver',
+      tier_rank_snapshot: 2, tier_min_amount_cents_snapshot: 250000,
+      benefits_snapshot: ['logo_on_website', 'social_media_mention', 'logo_on_team_shirt', 'mention_in_outreach_materials'],
+      awarded_at: iso(20), created_at: iso(20), updated_at: iso(5),
+      sponsors: { company_name: 'Acme Robotics' }, teams: { team_name: 'Exodius' },
+    },
+  ],
+  recognition_benefit_deliveries: [
+    {
+      id: 'del-1', award_id: 'award-1', benefit_type: 'logo_on_website', status: 'delivered',
+      proof_url: PREVIEW_PLACEHOLDER_IMAGE,
+      proof_uploaded_at: iso(5), no_minors_confirmed_at: iso(5), delivered_at: iso(5),
+      coach_note: null, admin_voided_at: null, admin_void_reason: null,
+      created_at: iso(20), updated_at: iso(5),
+      sponsor_recognition_awards: { sponsors: { company_name: 'Acme Robotics' }, teams: { team_name: 'Exodius' } },
+    },
+    {
+      id: 'del-2', award_id: 'award-1', benefit_type: 'logo_on_team_shirt', status: 'in_progress',
+      proof_url: null, proof_uploaded_at: null, no_minors_confirmed_at: null, delivered_at: null,
+      coach_note: null, admin_voided_at: iso(2),
+      admin_void_reason: 'A student was visible in the background of the previous photo.',
+      created_at: iso(20), updated_at: iso(2),
+      sponsor_recognition_awards: { sponsors: { company_name: 'Acme Robotics' }, teams: { team_name: 'Exodius' } },
+    },
+    {
+      id: 'del-3', award_id: 'award-1', benefit_type: 'social_media_mention', status: 'promised',
+      proof_url: null, proof_uploaded_at: null, no_minors_confirmed_at: null, delivered_at: null,
+      coach_note: null, admin_voided_at: null, admin_void_reason: null,
+      created_at: iso(20), updated_at: iso(20),
+      sponsor_recognition_awards: { sponsors: { company_name: 'Acme Robotics' }, teams: { team_name: 'Exodius' } },
+    },
+  ],
+  impact_report_snapshots: [
+    {
+      id: 'snap-platform-2026', scope: 'platform', sponsor_id: null, report_year: 2026,
+      status: 'open', payload_schema_version: 1, generated_at: iso(1), closed_at: null,
+      payload: {
+        schema_version: 1, year: 2026, generated_at: iso(1), sponsors_active: 5,
+        totals: {
+          pledged_cents: 4200000, received_cents: 2600000, outstanding_cents: 1600000,
+          teams_supported: 12, students_reached: 9400, events_hosted: 61,
+          volunteer_hours: 3100, benefits_promised: 28, benefits_delivered: 19,
+        },
+        footnotes: ['The platform never handles funds.'],
+      },
+    },
+    {
+      id: 'snap-sponsor-2026', scope: 'sponsor', sponsor_id: 'sp1', report_year: 2026,
+      status: 'open', payload_schema_version: 1, generated_at: iso(1), closed_at: null,
+      payload: {
+        schema_version: 1, year: 2026, generated_at: iso(1),
+        sponsor: { company_name: 'Acme Robotics', logo_url: null },
+        totals: {
+          pledged_cents: 300000, received_cents: 100000, outstanding_cents: 200000,
+          teams_supported: 1, students_reached: 1200, events_hosted: 8,
+          volunteer_hours: 340, benefits_promised: 4, benefits_delivered: 1,
+        },
+        teams: [], footnotes: [],
+      },
+    },
+  ],
+  public_platform_stats: [
+    {
+      id: true, teams_supported: 12, sponsors_active: 5, dollars_pledged_cents: 4200000,
+      dollars_received_cents: 2600000, students_reached: 9400, events_hosted: 61,
+      volunteer_hours: 3100, refreshed_at: iso(0),
+    },
   ],
 }
 
@@ -253,6 +575,7 @@ class MockQuery implements PromiseLike<any> {
     return this
   }
   ilike() { return this }
+  or() { return this }
   order(col: string, opts?: { ascending?: boolean }) { this.orderBy = { col, asc: opts?.ascending ?? true }; return this }
   limit(n: number) { this.limitN = n; return this }
   range(from: number, to: number) { this.rangeFromTo = [from, to]; return this }

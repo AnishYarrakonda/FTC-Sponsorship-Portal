@@ -12,12 +12,18 @@ export default async function NewSponsorPage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, admin_level')
     .eq('id', user.id)
     .single()
 
   if (profile?.role !== 'admin') {
     redirect('/dashboard')
+  }
+
+  // Creating a sponsor company sets a funding cap, so the whole form is super-admin-only
+  // (adminCreateSponsor rejects a reviewer regardless).
+  if (profile?.admin_level !== 'super_admin') {
+    redirect('/sponsors?error=super_admin_required')
   }
 
   return (

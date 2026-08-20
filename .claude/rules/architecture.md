@@ -32,7 +32,7 @@
 - `lib/dev-bypass.ts` — dev-only admin auth bypass + mock Supabase data (`NEXT_PUBLIC_DEV_AUTH_BYPASS=true`; forced off in production).
 - `lib/dev-preview.ts` — dev-only sponsor portal preview with static fixtures (`NEXT_PUBLIC_SPONSOR_PREVIEW=1`; forced off in production).
 - `lib/dev-coach-preview.ts` — dev-only coach portal preview with static fixtures (`NEXT_PUBLIC_COACH_PREVIEW=1`; forced off in production).
-- `supabase/migrations/*.sql` — numbered, idempotent migrations (latest: `0075_query_efficiency.sql`; note `0012` does not exist — the numbering skips it). Always confirm the real latest with `ls supabase/migrations | tail -3` before adding one.
+- `supabase/migrations/*.sql` — numbered, idempotent migrations (latest: `0095_release_capacity_on_cancel.sql`; note `0012` does not exist — the numbering skips it). Always confirm the real latest with `ls supabase/migrations | tail -3` before adding one — this line has been stale before.
 - `tests/` — Playwright E2E + `global-setup.ts`; `scripts/seed-test-accounts.mjs` for local data.
 
 ## Roles & key tables

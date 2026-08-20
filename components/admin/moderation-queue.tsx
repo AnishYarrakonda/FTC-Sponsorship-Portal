@@ -293,7 +293,7 @@ function ApprovePreviewDrawer({ open, onClose, submission, onConfirm, isPending 
               <p><span className="text-muted-foreground">Total ask:</span>{' '}
                 <span className="font-mono font-medium">${(financialAsk / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
               </p>
-              <p className="text-xs italic text-muted-foreground/70">+ Secure viewer link (14-day expiry)</p>
+              <p className="text-xs italic text-muted-foreground">+ Secure viewer link (14-day expiry)</p>
             </div>
           </div>
 

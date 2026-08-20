@@ -5,6 +5,8 @@ import { redirect } from 'next/navigation'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { SignOutButton } from './sign-out-button'
+import { AppealForm } from '@/components/coach/appeal-form'
+import { listAppealableSubjects } from '@/app/actions/appeals'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -38,6 +40,16 @@ export default async function AwaitingVerificationPage() {
   const hasCredentials = !!profile?.coach_credentials_url
   const displayName = profile?.full_name ?? user.email ?? 'Coach'
   const isDenied = !profile?.coach_verified && !!profile?.denied_at
+
+  // Only resolved on the denied branch — listAppealableSubjects reads submissions and
+  // audit_log, which is wasted work on the ordinary "awaiting review" path.
+  const credentialAppeal = isDenied
+    ? await (async () => {
+        const result = await listAppealableSubjects()
+        if ('error' in result) return null
+        return result.subjects.find((s) => s.subjectType === 'coach_verification') ?? null
+      })()
+    : null
 
   if (isDenied) {
     return (
@@ -80,6 +92,8 @@ export default async function AwaitingVerificationPage() {
                 <li>Still stuck? Reply to the denial email or contact support below.</li>
               </ul>
             </div>
+
+            {credentialAppeal && <AppealForm subject={credentialAppeal} />}
 
             <p className="text-xs text-muted-foreground">
               Registered as <span className="font-medium text-foreground">{user.email}</span>

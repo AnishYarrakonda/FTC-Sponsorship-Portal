@@ -111,9 +111,53 @@ MFA was **fully removed**. Do not reintroduce it unless a prompt explicitly asks
 
 ---
 
-## 2. Current database schema (final state after `0075`)
+## 2. Current database schema
 
-Migration `0012` does not exist — numbering skips it. **Next free number: `0076`.**
+Migration `0012` does not exist — numbering skips it.
+
+> **⚠️ This section documents the schema as of `0075`, which was the head when this pack was
+> written. Migrations have landed since.** Always run `ls supabase/migrations | tail -3` to
+> find the real head before reserving a number.
+>
+> **Applied since this snapshot:**
+> - `0076_funding_fulfillments.sql` — the funding fulfillment state machine (prompt 01)
+> - `0077_team_payout_profiles.sql` — team payout profiles and W-9 collection (prompt 02)
+> - `0078_funding_receipts.sql` — receipts and acknowledgment letters (prompt 04)
+> - `0079_agreement_templates.sql` — versioned sponsorship agreement templates (prompt 05)
+> - `0080_agreement_signatures.sql` — in-house e-sign capture and the database-enforced
+>   agreement gate on fulfillment transitions (prompt 06)
+> - `0081_ftc_official_verification.sql` — official-FIRST-roster fields on
+>   `ftc_teams_cache` plus `team_verification_records` (prompt 07)
+> - `0082_sponsor_organizations.sql` — Clerk Organizations multi-user sponsors:
+>   `sponsor_members`, `sponsors.clerk_org_id`. **Sponsor resolution moved off
+>   `profiles.sponsor_id`** (prompt 08)
+> - `0083_sponsor_roles_and_approvals.sql` — `sponsor_decision_proposals`, org roles
+>   (`org_admin`/`approver`/`submitter`/`viewer`), `approval_required_above_cents` (prompt 09)
+> - `0084_admin_levels_and_capacity_audit.sql` — `profiles.admin_level`
+>   (`reviewer`/`super_admin`), `detect_capacity_drift()` (prompt 11)
+> - `0085_submission_qa_thread.sql` — `submission_messages`, admin-released Q&A (prompt 12)
+> - `0086_coach_appeals.sql` — `appeals` (prompt 13)
+> - `0087_recognition_tiers.sql` — `recognition_tiers`, `sponsor_recognition_awards`,
+>   `recognition_benefit_deliveries` (prompt 14)
+> - `0088_impact_reports.sql` — `impact_report_snapshots`, `public_platform_stats` (prompt 15)
+> - `0089_sponsor_org_authorization_drift.sql` — **`sponsor_ids_for_profile(uuid)` and
+>   `current_sponsor_ids()` are the one true sponsor resolver.** Never write a new policy or
+>   RPC against `profiles.sponsor_id`; it is NULL forever for an invited teammate
+> - `0090_email_domain_gating.sql` — `email_domain_rules` (prompt 16)
+> - `0091`/`0092`/`0093` — admin override actor role; agreement-template author deletion;
+>   `sign_agreement_atomic`'s undeclared `v_actor_id` (this one had broken **every** sponsor
+>   e-signature since 0089)
+> - `0094_fulfillment_sponsor_org_members.sql` — `record_fulfillment_transition` still
+>   resolved its sponsor branch with the pre-0082 pattern, making the fulfillment machine
+>   inert for invited sponsors
+> - `0095_release_capacity_on_cancel.sql` — `funding_capacity_releases`; cancelling a
+>   fulfillment now returns the sponsor's capacity. **The capacity invariant is now
+>   `funding_used_cents = open reservations + settled ledger - released capacity`** and
+>   `detect_capacity_drift()` carries the third term (audit finding F-01)
+>
+> Read those files directly for their columns, RLS policies, and RPCs — they are not
+> described in full below. Everything below `0075` remains accurate **except** any statement
+> that sponsor identity comes from `profiles.sponsor_id`; see `0082`/`0089` above.
 
 ### Enums
 

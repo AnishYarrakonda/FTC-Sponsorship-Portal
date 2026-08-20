@@ -64,6 +64,16 @@ export function SponsorFulfillmentRow({ fulfillment: f }: { fulfillment: any }) 
           <div className="mt-1 flex justify-end">
             <StatusBadge status={f.status} />
           </div>
+          {(f.receipt_number || f.receipts?.[0]?.receipt_number) && (
+            <div className="mt-1 text-right">
+              <a
+                href={`/receipts/${f.receipt_number || f.receipts?.[0]?.receipt_number}`}
+                className="text-xs text-primary font-mono hover:underline"
+              >
+                {f.receipt_number || f.receipts?.[0]?.receipt_number}
+              </a>
+            </div>
+          )}
         </div>
         {canTransition(f.status, 'payment_sent', 'sponsor') && (
           <MarkPaymentSentDialog fulfillmentId={f.id} />

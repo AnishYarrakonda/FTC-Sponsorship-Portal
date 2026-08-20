@@ -7,9 +7,21 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { ActionWarning } from '@/components/ui/action-warning'
-import { verifyCoach, denyCoach } from '@/app/actions/admin'
-import { CheckCircle, ExternalLink, XCircle, AlertTriangle, Building, MapPin, Phone, Calendar, Target, ShieldCheck } from 'lucide-react'
+import { verifyCoach, denyCoach, overrideTeamVerification } from '@/app/actions/admin'
+import { CheckCircle, ExternalLink, XCircle, AlertTriangle, Building, MapPin, Phone, Calendar, Target, ShieldCheck, BadgeCheck } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+
+export type TeamVerificationData = {
+  id: string
+  ftc_team_number: number
+  claimed_team_name: string
+  claimed_organization: string | null
+  official_team_name: string | null
+  official_organization: string | null
+  source: string
+  confidence: number
+  outcome: string
+}
 
 export type CoachData = {
   id: string
@@ -33,6 +45,7 @@ export type CoachData = {
   pending_team_data: any | null
   signedUrl: string | null
   team: { team_name: string; ftc_team_number: number | null; city: string | null; state: string | null } | null
+  verification?: TeamVerificationData | null
 }
 
 export function CoachVerificationCard({ coach }: { coach: CoachData }) {
@@ -42,8 +55,32 @@ export function CoachVerificationCard({ coach }: { coach: CoachData }) {
   const [dismissed, setDismissed] = useState(false)
   const [isDenyModalOpen, setIsDenyModalOpen] = useState(false)
   const [denyReason, setDenyReason] = useState('')
+  const [isOverrideOpen, setIsOverrideOpen] = useState(false)
+  const [overrideReason, setOverrideReason] = useState('')
+  const [overrideError, setOverrideError] = useState<string | null>(null)
+  const [overridden, setOverridden] = useState(false)
 
   if (dismissed) return null
+
+  const MIN_OVERRIDE_REASON = 20
+
+  function handleOverride() {
+    if (!coach.verification) return
+    if (overrideReason.trim().length < MIN_OVERRIDE_REASON) {
+      setOverrideError(`Give a reason of at least ${MIN_OVERRIDE_REASON} characters`)
+      return
+    }
+    setOverrideError(null)
+    startTransition(async () => {
+      const result = await overrideTeamVerification({ recordId: coach.verification!.id, reason: overrideReason.trim() })
+      if (result?.error) {
+        setOverrideError(result.error)
+      } else {
+        setIsOverrideOpen(false)
+        setOverridden(true)
+      }
+    })
+  }
 
   function handleVerify(verified: boolean) {
     setError(null)
@@ -157,6 +194,93 @@ export function CoachVerificationCard({ coach }: { coach: CoachData }) {
           <p className="text-xs text-red-600/90 mt-1 line-clamp-2" title={coach.denial_reason}>
             Prior denial reason: {coach.denial_reason}
           </p>
+        )}
+        {coach.verification && (
+          <div className="mt-2 rounded-md border border-border/60 bg-muted/30 p-3 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <BadgeCheck className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs font-semibold text-foreground">FTC verification</span>
+              <span
+                className={`inline-flex items-center rounded-full text-[10px] font-medium px-2 py-0.5 border ${
+                  overridden || coach.verification.outcome === 'overridden'
+                    ? 'bg-emerald-500/10 border-emerald-500/20 text-status-success'
+                    : coach.verification.outcome === 'auto_pass'
+                      ? 'bg-emerald-500/10 border-emerald-500/20 text-status-success'
+                      : coach.verification.outcome === 'needs_review'
+                        ? 'bg-amber-500/10 border-amber-500/20 text-status-warning'
+                        : coach.verification.outcome === 'unavailable'
+                          ? 'bg-muted border-border text-muted-foreground'
+                          : 'bg-red-500/10 border-red-500/20 text-red-600'
+                }`}
+              >
+                {overridden ? 'overridden' : coach.verification.outcome.replace('_', ' ')}
+              </span>
+              <span className="inline-flex items-center rounded-full bg-muted border border-border text-muted-foreground text-[10px] font-medium px-2 py-0.5">
+                {coach.verification.source} · {Math.round(coach.verification.confidence * 100)}%
+              </span>
+            </div>
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs">
+              <div>
+                <dt className="text-muted-foreground">Claimed</dt>
+                <dd className="text-foreground font-medium">{coach.verification.claimed_team_name}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Official</dt>
+                <dd className="text-foreground font-medium">{coach.verification.official_team_name ?? 'Unknown'}</dd>
+              </div>
+            </dl>
+            {!overridden && coach.verification.outcome !== 'auto_pass' && coach.verification.outcome !== 'overridden' && (
+              <Dialog open={isOverrideOpen} onOpenChange={(open) => { setIsOverrideOpen(open); if (!open) setOverrideError(null) }}>
+                <DialogTrigger render={<Button size="sm" variant="outline" className="h-7 text-xs" />}>
+                  Override
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md border-border bg-background">
+                  <DialogHeader>
+                    <DialogTitle>Manually verify FTC Team #{coach.verification.ftc_team_number}</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm rounded-md border border-border/50 bg-muted/30 p-3">
+                      <div>
+                        <dt className="text-xs text-muted-foreground">Claimed</dt>
+                        <dd className="text-foreground">{coach.verification.claimed_team_name}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-muted-foreground">Official</dt>
+                        <dd className="text-foreground">{coach.verification.official_team_name ?? 'Unknown'}</dd>
+                      </div>
+                    </dl>
+                    <div className="space-y-2">
+                      <Label htmlFor="overrideReason" className="text-foreground">
+                        Reason for override <span className="text-red-500" aria-hidden>*</span>
+                      </Label>
+                      <Textarea
+                        id="overrideReason"
+                        placeholder="e.g., Confirmed with the coach by phone — the team recently renamed with FIRST."
+                        value={overrideReason}
+                        onChange={(e) => setOverrideReason(e.target.value)}
+                        required
+                        aria-required
+                        className="h-24 bg-background border-input resize-none"
+                      />
+                      <p className={`text-xs ${overrideReason.trim().length < MIN_OVERRIDE_REASON ? 'text-muted-foreground' : 'text-status-success'}`}>
+                        {overrideReason.trim().length}/{MIN_OVERRIDE_REASON} characters minimum
+                      </p>
+                      {overrideError && <p className="text-xs text-red-400">{overrideError}</p>}
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsOverrideOpen(false)}>Cancel</Button>
+                    <Button
+                      onClick={handleOverride}
+                      disabled={isPending || overrideReason.trim().length < MIN_OVERRIDE_REASON}
+                    >
+                      {isPending ? 'Saving…' : 'Confirm override'}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
         )}
         {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
         {warning && (

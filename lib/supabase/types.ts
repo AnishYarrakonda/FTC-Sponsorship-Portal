@@ -77,30 +77,218 @@ export type Database = {
           },
         ]
       }
+      agreement_templates: {
+        Row: {
+          id: string
+          key: string
+          version: number
+          title: string
+          body: string
+          consent_text: string
+          merge_fields: string[]
+          status: string
+          needs_legal_review: boolean
+          effective_from: string | null
+          retired_at: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          key: string
+          version: number
+          title: string
+          body: string
+          consent_text: string
+          merge_fields?: string[]
+          status?: string
+          needs_legal_review?: boolean
+          effective_from?: string | null
+          retired_at?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          key?: string
+          version?: number
+          title?: string
+          body?: string
+          consent_text?: string
+          merge_fields?: string[]
+          status?: string
+          needs_legal_review?: boolean
+          effective_from?: string | null
+          retired_at?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agreement_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agreement_signatures: {
+        Row: {
+          id: string
+          template_id: string | null
+          template_key: string
+          template_version: number
+          signer_profile_id: string | null
+          signer_role: string
+          signer_legal_name: string
+          signer_email: string
+          submission_id: string | null
+          sponsor_id: string | null
+          team_id: string | null
+          entity_snapshot: Json
+          typed_name: string
+          signed_at: string
+          ip_address: string
+          user_agent: string
+          document_hash: string
+          document_storage_path: string
+          consent_text_version: number
+          consent_text_hash: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          template_id?: string | null
+          template_key: string
+          template_version: number
+          signer_profile_id?: string | null
+          signer_role: string
+          signer_legal_name: string
+          signer_email: string
+          submission_id?: string | null
+          sponsor_id?: string | null
+          team_id?: string | null
+          entity_snapshot?: Json
+          typed_name: string
+          signed_at?: string
+          ip_address: string
+          user_agent: string
+          document_hash: string
+          document_storage_path: string
+          consent_text_version: number
+          consent_text_hash: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          template_id?: string | null
+          template_key?: string
+          template_version?: number
+          signer_profile_id?: string | null
+          signer_role?: string
+          signer_legal_name?: string
+          signer_email?: string
+          submission_id?: string | null
+          sponsor_id?: string | null
+          team_id?: string | null
+          entity_snapshot?: Json
+          typed_name?: string
+          signed_at?: string
+          ip_address?: string
+          user_agent?: string
+          document_hash?: string
+          document_storage_path?: string
+          consent_text_version?: number
+          consent_text_hash?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agreement_signatures_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "agreement_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agreement_signatures_signer_profile_id_fkey"
+            columns: ["signer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agreement_signatures_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "submissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agreement_signatures_sponsor_id_fkey"
+            columns: ["sponsor_id"]
+            isOneToOne: false
+            referencedRelation: "sponsors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agreement_signatures_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ftc_teams_cache: {
         Row: {
           city: string | null
           country: string | null
+          district_code: string | null
           last_synced: string
+          official_team_name: string | null
+          organization: string | null
+          region_code: string | null
+          rookie_year: number | null
+          source: string
           state: string | null
           team_name: string
           team_number: number
+          verified_at: string | null
         }
         Insert: {
           city?: string | null
           country?: string | null
+          district_code?: string | null
           last_synced?: string
+          official_team_name?: string | null
+          organization?: string | null
+          region_code?: string | null
+          rookie_year?: number | null
+          source?: string
           state?: string | null
           team_name: string
           team_number: number
+          verified_at?: string | null
         }
         Update: {
           city?: string | null
           country?: string | null
+          district_code?: string | null
           last_synced?: string
+          official_team_name?: string | null
+          organization?: string | null
+          region_code?: string | null
+          rookie_year?: number | null
+          source?: string
           state?: string | null
           team_name?: string
           team_number?: number
+          verified_at?: string | null
         }
         Relationships: []
       }
@@ -162,6 +350,7 @@ export type Database = {
       profiles: {
         Row: {
           address_line1: string | null
+          admin_level: Database["public"]["Enums"]["admin_level"] | null
           age_confirmed_at: string | null
           city: string | null
           clerk_user_id: string | null
@@ -188,6 +377,7 @@ export type Database = {
         }
         Insert: {
           address_line1?: string | null
+          admin_level?: Database["public"]["Enums"]["admin_level"] | null
           age_confirmed_at?: string | null
           city?: string | null
           clerk_user_id?: string | null
@@ -214,6 +404,7 @@ export type Database = {
         }
         Update: {
           address_line1?: string | null
+          admin_level?: Database["public"]["Enums"]["admin_level"] | null
           age_confirmed_at?: string | null
           city?: string | null
           clerk_user_id?: string | null
@@ -280,6 +471,44 @@ export type Database = {
         }
         Relationships: []
       }
+      email_domain_rules: {
+        Row: {
+          category: string
+          created_at: string
+          created_by: string | null
+          domain: string
+          reason: string | null
+          rule: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          domain: string
+          reason?: string | null
+          rule: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          domain?: string
+          reason?: string | null
+          rule?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_domain_rules_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sponsor_applications: {
         Row: {
           approved_at: string | null
@@ -288,6 +517,8 @@ export type Database = {
           contact_email: string
           contact_name: string
           created_at: string
+          domain_match: string | null
+          email_domain: string | null
           id: string
           message: string | null
           proposed_cap_cents: number
@@ -295,6 +526,8 @@ export type Database = {
           reviewed_by: string | null
           status: Database["public"]["Enums"]["application_status"]
           updated_at: string
+          website: string | null
+          website_domain: string | null
         }
         Insert: {
           approved_at?: string | null
@@ -303,6 +536,8 @@ export type Database = {
           contact_email: string
           contact_name: string
           created_at?: string
+          domain_match?: string | null
+          email_domain?: string | null
           id?: string
           message?: string | null
           proposed_cap_cents?: number
@@ -310,6 +545,8 @@ export type Database = {
           reviewed_by?: string | null
           status?: Database["public"]["Enums"]["application_status"]
           updated_at?: string
+          website?: string | null
+          website_domain?: string | null
         }
         Update: {
           approved_at?: string | null
@@ -318,6 +555,8 @@ export type Database = {
           contact_email?: string
           contact_name?: string
           created_at?: string
+          domain_match?: string | null
+          email_domain?: string | null
           id?: string
           message?: string | null
           proposed_cap_cents?: number
@@ -325,6 +564,8 @@ export type Database = {
           reviewed_by?: string | null
           status?: Database["public"]["Enums"]["application_status"]
           updated_at?: string
+          website?: string | null
+          website_domain?: string | null
         }
         Relationships: [
           {
@@ -343,8 +584,88 @@ export type Database = {
           },
         ]
       }
+      sponsor_members: {
+        Row: {
+          clerk_membership_id: string | null
+          clerk_org_id: string
+          created_at: string
+          id: string
+          invited_at: string | null
+          invited_by: string | null
+          joined_at: string | null
+          profile_id: string
+          role: string
+          sponsor_id: string
+          updated_at: string
+        }
+        Insert: {
+          clerk_membership_id?: string | null
+          clerk_org_id: string
+          created_at?: string
+          id?: string
+          invited_at?: string | null
+          invited_by?: string | null
+          joined_at?: string | null
+          profile_id: string
+          role?: string
+          sponsor_id: string
+          updated_at?: string
+        }
+        Update: {
+          clerk_membership_id?: string | null
+          clerk_org_id?: string
+          created_at?: string
+          id?: string
+          invited_at?: string | null
+          invited_by?: string | null
+          joined_at?: string | null
+          profile_id?: string
+          role?: string
+          sponsor_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sponsor_members_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsor_members_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsor_members_sponsor_id_fkey"
+            columns: ["sponsor_id"]
+            isOneToOne: false
+            referencedRelation: "sponsors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsor_members_sponsor_id_fkey"
+            columns: ["sponsor_id"]
+            isOneToOne: false
+            referencedRelation: "v_sponsor_capacity"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsor_members_sponsor_id_fkey"
+            columns: ["sponsor_id"]
+            isOneToOne: false
+            referencedRelation: "v_sponsors_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sponsors: {
         Row: {
+          approval_required_above_cents: number | null
+          clerk_org_id: string | null
           company_name: string
           contact_email: string
           contact_name: string
@@ -364,6 +685,8 @@ export type Database = {
           website: string | null
         }
         Insert: {
+          approval_required_above_cents?: number | null
+          clerk_org_id?: string | null
           company_name: string
           contact_email: string
           contact_name: string
@@ -383,6 +706,8 @@ export type Database = {
           website?: string | null
         }
         Update: {
+          approval_required_above_cents?: number | null
+          clerk_org_id?: string | null
           company_name?: string
           contact_email?: string
           contact_name?: string
@@ -402,6 +727,98 @@ export type Database = {
           website?: string | null
         }
         Relationships: []
+      }
+      sponsor_decision_proposals: {
+        Row: {
+          amount_cents: number
+          closed_reason: string | null
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision: string
+          decision_note: string | null
+          expires_at: string
+          feedback: string | null
+          id: string
+          origin: string
+          proposed_at: string
+          proposed_by: string | null
+          settled_amount_cents: number | null
+          sponsor_id: string
+          status: string
+          submission_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          closed_reason?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: string
+          decision_note?: string | null
+          expires_at: string
+          feedback?: string | null
+          id?: string
+          origin?: string
+          proposed_at?: string
+          proposed_by?: string | null
+          settled_amount_cents?: number | null
+          sponsor_id: string
+          status?: string
+          submission_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          closed_reason?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: string
+          decision_note?: string | null
+          expires_at?: string
+          feedback?: string | null
+          id?: string
+          origin?: string
+          proposed_at?: string
+          proposed_by?: string | null
+          settled_amount_cents?: number | null
+          sponsor_id?: string
+          status?: string
+          submission_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sponsor_decision_proposals_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsor_decision_proposals_proposed_by_fkey"
+            columns: ["proposed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsor_decision_proposals_sponsor_id_fkey"
+            columns: ["sponsor_id"]
+            isOneToOne: false
+            referencedRelation: "sponsors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsor_decision_proposals_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "submissions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       submission_access_tokens: {
         Row: {
@@ -444,6 +861,405 @@ export type Database = {
             columns: ["submission_id"]
             isOneToOne: false
             referencedRelation: "v_submission_summary"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      // Hand-added for migration 0086_coach_appeals.sql.
+      appeals: {
+        Row: {
+          appellant_profile_id: string
+          assigned_at: string | null
+          assigned_reviewer_id: string | null
+          created_at: string
+          decision_at: string
+          id: string
+          original_decider_id: string | null
+          override_reason: string | null
+          resolution_notes: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          statement: string
+          status: string
+          subject_id: string
+          subject_type: string
+          updated_at: string
+        }
+        Insert: {
+          appellant_profile_id: string
+          assigned_at?: string | null
+          assigned_reviewer_id?: string | null
+          created_at?: string
+          decision_at: string
+          id?: string
+          original_decider_id?: string | null
+          override_reason?: string | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          statement: string
+          status?: string
+          subject_id: string
+          subject_type: string
+          updated_at?: string
+        }
+        Update: {
+          appellant_profile_id?: string
+          assigned_at?: string | null
+          assigned_reviewer_id?: string | null
+          created_at?: string
+          decision_at?: string
+          id?: string
+          original_decider_id?: string | null
+          override_reason?: string | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          statement?: string
+          status?: string
+          subject_id?: string
+          subject_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appeals_appellant_profile_id_fkey"
+            columns: ["appellant_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      // Hand-added for migration 0088_impact_reports.sql. Regenerate with
+      // `supabase gen types` once the migrations are applied.
+      impact_report_snapshots: {
+        Row: {
+          closed_at: string | null
+          created_at: string
+          generated_at: string
+          generated_by: string | null
+          id: string
+          payload: Json
+          payload_schema_version: number
+          report_year: number
+          scope: string
+          sponsor_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          closed_at?: string | null
+          created_at?: string
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          payload: Json
+          payload_schema_version?: number
+          report_year: number
+          scope: string
+          sponsor_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          closed_at?: string | null
+          created_at?: string
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          payload?: Json
+          payload_schema_version?: number
+          report_year?: number
+          scope?: string
+          sponsor_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "impact_report_snapshots_sponsor_id_fkey"
+            columns: ["sponsor_id"]
+            isOneToOne: false
+            referencedRelation: "sponsors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      public_platform_stats: {
+        Row: {
+          dollars_pledged_cents: number
+          dollars_received_cents: number
+          events_hosted: number
+          id: boolean
+          refreshed_at: string
+          sponsors_active: number
+          students_reached: number
+          teams_supported: number
+          volunteer_hours: number
+        }
+        Insert: {
+          dollars_pledged_cents?: number
+          dollars_received_cents?: number
+          events_hosted?: number
+          id?: boolean
+          refreshed_at?: string
+          sponsors_active?: number
+          students_reached?: number
+          teams_supported?: number
+          volunteer_hours?: number
+        }
+        Update: {
+          dollars_pledged_cents?: number
+          dollars_received_cents?: number
+          events_hosted?: number
+          id?: boolean
+          refreshed_at?: string
+          sponsors_active?: number
+          students_reached?: number
+          teams_supported?: number
+          volunteer_hours?: number
+        }
+        Relationships: []
+      }
+      // Hand-added for migration 0087_recognition_tiers.sql. Regenerate with
+      // `supabase gen types` once the migrations are applied.
+      recognition_tiers: {
+        Row: {
+          archived_at: string | null
+          benefits: string[]
+          created_at: string
+          description: string | null
+          id: string
+          max_amount_cents: number | null
+          min_amount_cents: number
+          name: string
+          rank: number
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          benefits?: string[]
+          created_at?: string
+          description?: string | null
+          id?: string
+          max_amount_cents?: number | null
+          min_amount_cents: number
+          name: string
+          rank: number
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          benefits?: string[]
+          created_at?: string
+          description?: string | null
+          id?: string
+          max_amount_cents?: number | null
+          min_amount_cents?: number
+          name?: string
+          rank?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sponsor_recognition_awards: {
+        Row: {
+          amount_cents: number
+          awarded_at: string
+          benefits_snapshot: string[]
+          created_at: string
+          fulfillment_id: string
+          id: string
+          sponsor_id: string
+          team_id: string | null
+          tier_id: string | null
+          tier_min_amount_cents_snapshot: number
+          tier_name_snapshot: string
+          tier_rank_snapshot: number
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          awarded_at?: string
+          benefits_snapshot: string[]
+          created_at?: string
+          fulfillment_id: string
+          id?: string
+          sponsor_id: string
+          team_id?: string | null
+          tier_id?: string | null
+          tier_min_amount_cents_snapshot: number
+          tier_name_snapshot: string
+          tier_rank_snapshot: number
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          awarded_at?: string
+          benefits_snapshot?: string[]
+          created_at?: string
+          fulfillment_id?: string
+          id?: string
+          sponsor_id?: string
+          team_id?: string | null
+          tier_id?: string | null
+          tier_min_amount_cents_snapshot?: number
+          tier_name_snapshot?: string
+          tier_rank_snapshot?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sponsor_recognition_awards_sponsor_id_fkey"
+            columns: ["sponsor_id"]
+            isOneToOne: false
+            referencedRelation: "sponsors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsor_recognition_awards_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sponsor_recognition_awards_tier_id_fkey"
+            columns: ["tier_id"]
+            isOneToOne: false
+            referencedRelation: "recognition_tiers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recognition_benefit_deliveries: {
+        Row: {
+          admin_void_reason: string | null
+          admin_voided_at: string | null
+          award_id: string
+          benefit_type: string
+          coach_note: string | null
+          created_at: string
+          delivered_at: string | null
+          id: string
+          no_minors_confirmed_at: string | null
+          proof_uploaded_at: string | null
+          proof_url: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          admin_void_reason?: string | null
+          admin_voided_at?: string | null
+          award_id: string
+          benefit_type: string
+          coach_note?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          id?: string
+          no_minors_confirmed_at?: string | null
+          proof_uploaded_at?: string | null
+          proof_url?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          admin_void_reason?: string | null
+          admin_voided_at?: string | null
+          award_id?: string
+          benefit_type?: string
+          coach_note?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          id?: string
+          no_minors_confirmed_at?: string | null
+          proof_uploaded_at?: string | null
+          proof_url?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recognition_benefit_deliveries_award_id_fkey"
+            columns: ["award_id"]
+            isOneToOne: false
+            referencedRelation: "sponsor_recognition_awards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      // Hand-added for migration 0085_submission_qa_thread.sql. Regenerate with
+      // `supabase gen types` once the migrations are applied.
+      submission_messages: {
+        Row: {
+          author_label: string
+          author_profile_id: string | null
+          author_role: Database["public"]["Enums"]["user_role"]
+          author_token_id: string | null
+          body: string
+          created_at: string
+          flagged_at: string | null
+          flagged_by: string | null
+          id: string
+          rejected_reason: string | null
+          released_at: string | null
+          released_by: string | null
+          status: string
+          submission_id: string
+        }
+        Insert: {
+          author_label: string
+          author_profile_id?: string | null
+          author_role: Database["public"]["Enums"]["user_role"]
+          author_token_id?: string | null
+          body: string
+          created_at?: string
+          flagged_at?: string | null
+          flagged_by?: string | null
+          id?: string
+          rejected_reason?: string | null
+          released_at?: string | null
+          released_by?: string | null
+          status?: string
+          submission_id: string
+        }
+        Update: {
+          author_label?: string
+          author_profile_id?: string | null
+          author_role?: Database["public"]["Enums"]["user_role"]
+          author_token_id?: string | null
+          body?: string
+          created_at?: string
+          flagged_at?: string | null
+          flagged_by?: string | null
+          id?: string
+          rejected_reason?: string | null
+          released_at?: string | null
+          released_by?: string | null
+          status?: string
+          submission_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "submission_messages_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "submissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submission_messages_author_profile_id_fkey"
+            columns: ["author_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submission_messages_author_token_id_fkey"
+            columns: ["author_token_id"]
+            isOneToOne: false
+            referencedRelation: "submission_access_tokens"
             referencedColumns: ["id"]
           },
         ]
@@ -693,6 +1509,88 @@ export type Database = {
           }
         ]
       }
+      team_verification_records: {
+        Row: {
+          checked_at: string
+          claimed_organization: string | null
+          claimed_team_name: string
+          confidence: number
+          ftc_team_number: number
+          id: string
+          name_score: number
+          official_organization: string | null
+          official_team_name: string | null
+          organization_score: number | null
+          outcome: string
+          override_reason: string | null
+          overridden_at: string | null
+          overridden_by: string | null
+          profile_id: string | null
+          source: string
+          team_id: string | null
+        }
+        Insert: {
+          checked_at?: string
+          claimed_organization?: string | null
+          claimed_team_name: string
+          confidence?: number
+          ftc_team_number: number
+          id?: string
+          name_score?: number
+          official_organization?: string | null
+          official_team_name?: string | null
+          organization_score?: number | null
+          outcome: string
+          override_reason?: string | null
+          overridden_at?: string | null
+          overridden_by?: string | null
+          profile_id?: string | null
+          source: string
+          team_id?: string | null
+        }
+        Update: {
+          checked_at?: string
+          claimed_organization?: string | null
+          claimed_team_name?: string
+          confidence?: number
+          ftc_team_number?: number
+          id?: string
+          name_score?: number
+          official_organization?: string | null
+          official_team_name?: string | null
+          organization_score?: number | null
+          outcome?: string
+          override_reason?: string | null
+          overridden_at?: string | null
+          overridden_by?: string | null
+          profile_id?: string | null
+          source?: string
+          team_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_verification_records_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_verification_records_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_verification_records_overridden_by_fkey"
+            columns: ["overridden_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       teams: {
         Row: {
           budget_items: Json
@@ -711,6 +1609,7 @@ export type Database = {
           id: string
           logo_url: string | null
           media_urls: Json
+          media_no_minors_confirmed_at: string | null
           mission_statement: string | null
           organization: string | null
           outreach_summary: string | null
@@ -754,6 +1653,7 @@ export type Database = {
           id?: string
           logo_url?: string | null
           media_urls?: Json
+          media_no_minors_confirmed_at?: string | null
           mission_statement?: string | null
           organization?: string | null
           outreach_summary?: string | null
@@ -797,6 +1697,7 @@ export type Database = {
           id?: string
           logo_url?: string | null
           media_urls?: Json
+          media_no_minors_confirmed_at?: string | null
           mission_statement?: string | null
           organization?: string | null
           outreach_summary?: string | null
@@ -905,6 +1806,89 @@ export type Database = {
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      funding_capacity_releases: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          fulfillment_id: string
+          id: string
+          reason: string | null
+          released_by: string | null
+          sponsor_id: string
+          submission_id: string | null
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          fulfillment_id: string
+          id?: string
+          reason?: string | null
+          released_by?: string | null
+          sponsor_id: string
+          submission_id?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          fulfillment_id?: string
+          id?: string
+          reason?: string | null
+          released_by?: string | null
+          sponsor_id?: string
+          submission_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funding_capacity_releases_fulfillment_id_fkey"
+            columns: ["fulfillment_id"]
+            isOneToOne: true
+            referencedRelation: "funding_fulfillments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funding_capacity_releases_released_by_fkey"
+            columns: ["released_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funding_capacity_releases_sponsor_id_fkey"
+            columns: ["sponsor_id"]
+            isOneToOne: false
+            referencedRelation: "sponsors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funding_capacity_releases_sponsor_id_fkey"
+            columns: ["sponsor_id"]
+            isOneToOne: false
+            referencedRelation: "v_sponsor_capacity"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funding_capacity_releases_sponsor_id_fkey"
+            columns: ["sponsor_id"]
+            isOneToOne: false
+            referencedRelation: "v_sponsors_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funding_capacity_releases_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "submissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funding_capacity_releases_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "v_submission_summary"
             referencedColumns: ["id"]
           },
         ]
@@ -1061,6 +2045,177 @@ export type Database = {
                         }
                       ]
                     };
+      funding_receipt_counters: {
+        Row: {
+          last_value: number
+          year: number
+        }
+        Insert: {
+          last_value?: number
+          year: number
+        }
+        Update: {
+          last_value?: number
+          year?: number
+        }
+        Relationships: []
+      }
+      funding_receipts: {
+        Row: {
+          amount_cents: number
+          contribution_date: string
+          copy_reviewed_at: string | null
+          copy_version: string
+          created_at: string
+          document_html: string
+          document_sha256: string
+          emailed_at: string | null
+          fulfillment_id: string
+          goods_or_services_description: string | null
+          goods_or_services_fmv_cents: number | null
+          id: string
+          issued_at: string
+          issued_by: string | null
+          payee_ein_last4: string | null
+          payee_legal_name: string
+          payee_tax_classification: string | null
+          receipt_number: string
+          sponsor_contact_email: string | null
+          sponsor_id: string
+          sponsor_legal_name: string
+          status: Database["public"]["Enums"]["receipt_status"]
+          superseded_by_receipt_id: string | null
+          supersedes_receipt_id: string | null
+          team_id: string | null
+          transaction_id: string
+          variant: Database["public"]["Enums"]["receipt_variant"]
+          voided_at: string | null
+          voided_by: string | null
+          voided_reason: string | null
+        }
+        Insert: {
+          amount_cents: number
+          contribution_date: string
+          copy_reviewed_at?: string | null
+          copy_version: string
+          created_at?: string
+          document_html: string
+          document_sha256: string
+          emailed_at?: string | null
+          fulfillment_id: string
+          goods_or_services_description?: string | null
+          goods_or_services_fmv_cents?: number | null
+          id?: string
+          issued_at?: string
+          issued_by?: string | null
+          payee_ein_last4?: string | null
+          payee_legal_name: string
+          payee_tax_classification?: string | null
+          receipt_number: string
+          sponsor_contact_email?: string | null
+          sponsor_id: string
+          sponsor_legal_name: string
+          status?: Database["public"]["Enums"]["receipt_status"]
+          superseded_by_receipt_id?: string | null
+          supersedes_receipt_id?: string | null
+          team_id?: string | null
+          transaction_id: string
+          variant: Database["public"]["Enums"]["receipt_variant"]
+          voided_at?: string | null
+          voided_by?: string | null
+          voided_reason?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          contribution_date?: string
+          copy_reviewed_at?: string | null
+          copy_version?: string
+          created_at?: string
+          document_html?: string
+          document_sha256?: string
+          emailed_at?: string | null
+          fulfillment_id?: string
+          goods_or_services_description?: string | null
+          goods_or_services_fmv_cents?: number | null
+          id?: string
+          issued_at?: string
+          issued_by?: string | null
+          payee_ein_last4?: string | null
+          payee_legal_name?: string
+          payee_tax_classification?: string | null
+          receipt_number?: string
+          sponsor_contact_email?: string | null
+          sponsor_id?: string
+          sponsor_legal_name?: string
+          status?: Database["public"]["Enums"]["receipt_status"]
+          superseded_by_receipt_id?: string | null
+          supersedes_receipt_id?: string | null
+          team_id?: string | null
+          transaction_id?: string
+          variant?: Database["public"]["Enums"]["receipt_variant"]
+          voided_at?: string | null
+          voided_by?: string | null
+          voided_reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funding_receipts_fulfillment_id_fkey"
+            columns: ["fulfillment_id"]
+            isOneToOne: false
+            referencedRelation: "funding_fulfillments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funding_receipts_issued_by_fkey"
+            columns: ["issued_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funding_receipts_sponsor_id_fkey"
+            columns: ["sponsor_id"]
+            isOneToOne: false
+            referencedRelation: "sponsors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funding_receipts_superseded_by_receipt_id_fkey"
+            columns: ["superseded_by_receipt_id"]
+            isOneToOne: false
+            referencedRelation: "funding_receipts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funding_receipts_supersedes_receipt_id_fkey"
+            columns: ["supersedes_receipt_id"]
+            isOneToOne: false
+            referencedRelation: "funding_receipts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funding_receipts_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funding_receipts_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions_ledger"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funding_receipts_voided_by_fkey"
+            columns: ["voided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       v_sponsor_capacity: {
@@ -1202,6 +2357,16 @@ export type Database = {
         Args: { p_key: string; p_limit: number; p_window: string }
         Returns: boolean
       }
+      // Hand-added for migration 0085_submission_qa_thread.sql. These two keep EXECUTE for
+      // `authenticated` because the submission_messages RLS policies call them.
+      coach_owns_submission: {
+        Args: { p_submission_id: string }
+        Returns: boolean
+      }
+      sponsor_owns_submission: {
+        Args: { p_submission_id: string }
+        Returns: boolean
+      }
       distinct_audit_actions: {
         Args: Record<PropertyKey, never>
         Returns: { action: string }[]
@@ -1213,12 +2378,53 @@ export type Database = {
         Returns: Json
       }
       current_profile_id: { Args: never; Returns: string }
+      // Hand-added for migration 0082_sponsor_organizations.sql.
+      current_sponsor_ids: { Args: never; Returns: string[] }
+      is_sponsor_org_member: { Args: { p_sponsor_id: string }; Returns: boolean }
+      // Hand-added for migration 0083_sponsor_roles_and_approvals.sql.
+      sponsor_member_role_rank: { Args: { p_role: string }; Returns: number }
+      current_sponsor_member_role: { Args: { p_sponsor_id: string }; Returns: string }
+      has_sponsor_permission: {
+        Args: { p_min_role: string; p_sponsor_id: string }
+        Returns: boolean
+      }
+      create_sponsor_decision_proposal: {
+        Args: {
+          p_amount_cents: number
+          p_feedback?: string
+          p_origin?: string
+          p_proposed_by: string | null
+          p_submission_id: string
+        }
+        Returns: Json
+      }
+      confirm_sponsor_decision_proposal: {
+        Args: { p_approver_id: string; p_note?: string; p_proposal_id: string }
+        Returns: Json
+      }
+      expire_stale_decision_proposals: { Args: never; Returns: Json }
       expire_overdue_submissions: { Args: never; Returns: Json }
       increment_sponsor_funding: {
         Args: { amount: number; sponsor_uuid: string }
         Returns: undefined
       }
       is_admin: { Args: never; Returns: boolean }
+      // Hand-added for migration 0084_admin_levels_and_capacity_audit.sql.
+      is_super_admin: { Args: never; Returns: boolean }
+      detect_capacity_drift: {
+        Args: never
+        Returns: {
+          sponsor_id: string
+          company_name: string
+          funding_cap_cents: number
+          funding_used_cents: number
+          open_reservations_cents: number
+          settled_ledger_cents: number
+          released_capacity_cents: number
+          expected_used_cents: number
+          drift_cents: number
+        }[]
+      }
       is_coach_verified: { Args: never; Returns: boolean }
       record_sponsor_decision_atomic: {
         Args: {
@@ -1262,8 +2468,63 @@ export type Database = {
                       status?: Database["public"]["Enums"]["fulfillment_status"]
                     }
                   };
+      issue_funding_receipt: {
+        Args: {
+          p_fulfillment_id: string
+          p_actor_profile_id: string | null
+          p_variant: Database["public"]["Enums"]["receipt_variant"]
+          p_payee_legal_name: string
+          p_payee_ein_last4: string | null
+          p_payee_tax_classification: string | null
+          p_sponsor_legal_name: string
+          p_sponsor_contact_email: string | null
+          p_goods_or_services: string | null
+          p_goods_or_services_fmv_cents: number | null
+          p_document_html: string
+          p_document_sha256: string
+          p_copy_version: string
+          p_copy_reviewed_at: string | null
+        }
+        Returns: Json
+      }
+      publish_agreement_version: {
+        Args: {
+          p_template_id: string
+          p_actor_profile_id: string
+        }
+        Returns: Json
+      }
+      sign_agreement_atomic: {
+        Args: {
+          p_template_id: string
+          p_signer_profile_id: string
+          p_signer_role: string
+          p_submission_id: string
+          p_typed_name: string
+          p_ip: string
+          p_user_agent: string
+          p_document_hash: string
+          p_document_storage_path: string
+          p_consent_text_hash: string
+          p_entity_snapshot: Json
+        }
+        Returns: Json
+      }
+      agreement_is_signed: {
+        Args: { p_submission_id: string }
+        Returns: boolean
+      }
+      void_funding_receipt: {
+        Args: {
+          p_receipt_id: string
+          p_actor_profile_id: string | null
+          p_reason: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
+      admin_level: "reviewer" | "super_admin"
       application_status: "pending" | "approved" | "rejected"
       sponsor_source: "admin_added" | "public_optin"
       sponsor_status: "active" | "inactive" | "pending_review"
@@ -1283,6 +2544,8 @@ export type Database = {
       user_role: "coach" | "admin" | "sponsor"
         fulfillment_payment_method: "check" | "ach" | "wire" | "other";
         fulfillment_status: "pledged" | "agreement_signed" | "payment_sent" | "payment_received" | "receipted" | "cancelled";
+        receipt_status: "issued" | "voided";
+        receipt_variant: "charitable_501c3" | "governmental_school" | "non_charitable";
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1413,6 +2676,7 @@ export const Constants = {
   },
   public: {
     Enums: {
+      admin_level: ["reviewer", "super_admin"],
       application_status: ["pending", "approved", "rejected"],
       sponsor_source: ["admin_added", "public_optin"],
       sponsor_status: ["active", "inactive", "pending_review"],

@@ -173,13 +173,16 @@ export function PortalSidebar({
 
   return (
     <>
-      {/* Desktop sidebar — unchanged from the original fixed pattern */}
-      <aside className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col border-r border-border bg-card lg:flex">
+      {/* Desktop sidebar — unchanged from the original fixed pattern.
+          data-print-hide is the opt-in contract the impact report's print stylesheet keys
+          off, so a printed CSR report carries no portal chrome. Marked here rather than
+          restructuring the shell. */}
+      <aside data-print-hide className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col border-r border-border bg-card print:hidden lg:flex">
         {children}
       </aside>
 
       {/* Mobile top bar + sheet */}
-      <div className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card px-4 lg:hidden">
+      <div data-print-hide className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card px-4 print:hidden lg:hidden">
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger
             aria-label="Open navigation menu"

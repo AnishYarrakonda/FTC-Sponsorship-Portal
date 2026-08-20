@@ -3,6 +3,12 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { headers } from 'next/headers'
 import type { Database } from '@/lib/supabase/types'
+import {
+  type SponsorRole,
+  LEGACY_MEMBER_ROLE,
+  hasSponsorRole,
+  isSponsorRole,
+} from '@/lib/sponsor-roles'
 import { SPONSOR_PREVIEW, mockProfile, createMockSupabaseClient } from '@/lib/dev-preview'
 import { isDevAuthBypass, MOCK_ADMIN_PROFILE, createMockSupabaseClient as createAdminMockClient } from '@/lib/dev-bypass'
 import { COACH_PREVIEW, mockCoachProfile, createMockCoachClient } from '@/lib/dev-coach-preview'
@@ -111,18 +117,113 @@ export async function requireAdmin() {
   return { supabase, user, clerkUserId, adminClient: createAdminClient() }
 }
 
-export async function requireSponsor() {
+// The super-admin rung of profiles.admin_level (0084). Gates the acts that move money or
+// mint privilege: funding caps, sponsor company creation/deletion, sponsor application
+// decisions, the CSV export, and admin provisioning. Everything else an admin does —
+// the moderation queue, coach verification — stays on requireAdmin(), which is UNCHANGED:
+// a reviewer is still an admin.
+//
+// This is the REAL gate. The prevent_role_elevation() trigger early-returns for the
+// service-role client that every server action writes through, so it is defence in depth
+// against direct PostgREST calls, not the primary control.
+export async function requireSuperAdmin() {
   const { supabase, user, clerkUserId } = await requireAuth()
-  if (user.role !== 'sponsor' || !user.sponsor_id) {
+  if (user.role !== 'admin' || user.admin_level !== 'super_admin') {
     throw new Error('Forbidden')
   }
+  return { supabase, user, clerkUserId, adminClient: createAdminClient() }
+}
+
+// A sponsor org member, resolved from `sponsor_members` via the RLS-respecting server
+// client (its `sponsor_members_select_own_org` policy always admits the caller's own
+// `profile_id = current_profile_id()` rows regardless of sponsor_id). Unioned with
+// `user.sponsor_id` so an invited teammate whose profiles.sponsor_id has not yet been
+// stamped (a brief window between accepting the Clerk invite and the webhook landing)
+// still resolves — without this they would hit "Awaiting verification" forever.
+export async function requireSponsor(): Promise<{
+  supabase: Awaited<ReturnType<typeof createClient>>
+  user: Profile
+  clerkUserId: string
+  sponsorId: string
+  sponsorIds: string[]
+  membership: { id: string; role: SponsorRole } | null
+  adminClient: ReturnType<typeof createAdminClient>
+}> {
+  const { supabase, user, clerkUserId } = await requireAuth()
+  if (user.role !== 'sponsor') {
+    throw new Error('Forbidden')
+  }
+
+  const { data: memberships, error: membershipError } = await supabase
+    .from('sponsor_members')
+    .select('id, sponsor_id, role')
+    .eq('profile_id', user.id)
+
+  /**
+   * Fail CLOSED on a read error. Discarding this error made `memberships` null, which is
+   * indistinguishable from "this profile has no membership row" -- and that empty case is
+   * exactly what requireSponsorRole() treats as a LEGACY_MEMBER_ROLE ('org_admin') seat.
+   * So a transient failure on this one query silently PROMOTED a viewer to org admin for
+   * the rest of the request. confirmSponsorDecisionProposal re-checks rank in SQL and was
+   * safe, but updateOrgApprovalSettings and inviteSponsorMember trust memberRole alone.
+   *
+   * A genuine zero-row result still falls through to the legacy seat below, which is the
+   * case the fallback was written for.
+   */
+  if (membershipError) {
+    throw new Error('Could not verify your organization membership. Please try again.')
+  }
+
+  const rows = (memberships ?? []) as { id: string; sponsor_id: string; role: string }[]
+  const ownMembership = rows.find((m) => m.sponsor_id === user.sponsor_id) ?? rows[0] ?? null
+
+  const sponsorIds = Array.from(
+    new Set([...(user.sponsor_id ? [user.sponsor_id] : []), ...rows.map((m) => m.sponsor_id)])
+  )
+  const sponsorId = user.sponsor_id ?? sponsorIds[0]
+
+  if (!sponsorId) {
+    throw new Error('Forbidden')
+  }
+
   return {
     supabase,
     user,
     clerkUserId,
-    sponsorId: user.sponsor_id,
+    sponsorId,
+    sponsorIds,
+    membership: ownMembership
+      ? { id: ownMembership.id, role: isSponsorRole(ownMembership.role) ? ownMembership.role : 'viewer' }
+      : null,
     adminClient: createAdminClient(),
   }
+}
+
+// Built on requireSponsor() — does not duplicate its resolution logic. The
+// LEGACY_MEMBER_ROLE fallback (memberRole = membership?.role ?? LEGACY_MEMBER_ROLE) MUST
+// agree with the SQL COALESCE fallback in current_sponsor_member_role() (0083); a test
+// in lib/__tests__/sponsor-roles.test.ts pins LEGACY_MEMBER_ROLE === 'org_admin' so the
+// two layers cannot silently drift apart.
+export async function requireSponsorRole(minRole: SponsorRole): Promise<{
+  supabase: Awaited<ReturnType<typeof createClient>>
+  user: Profile
+  clerkUserId: string
+  sponsorId: string
+  sponsorIds: string[]
+  membership: { id: string; role: SponsorRole } | null
+  memberRole: SponsorRole
+  adminClient: ReturnType<typeof createAdminClient>
+}> {
+  const auth = await requireSponsor()
+  const memberRole = auth.membership?.role ?? LEGACY_MEMBER_ROLE
+
+  if (!hasSponsorRole(memberRole, minRole)) {
+    const e: Error & { code?: string } = new Error('You do not have permission to do that.')
+    e.code = 'INSUFFICIENT_ORG_ROLE'
+    throw e
+  }
+
+  return { ...auth, memberRole }
 }
 
 export async function requireVerifiedCoach() {

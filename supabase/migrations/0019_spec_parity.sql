@@ -7,6 +7,7 @@
 ALTER TABLE teams
   ADD COLUMN IF NOT EXISTS tagline text;
 
+ALTER TABLE teams DROP CONSTRAINT IF EXISTS teams_tagline_max_len;
 ALTER TABLE teams
   ADD CONSTRAINT teams_tagline_max_len
   CHECK (tagline IS NULL OR char_length(tagline) <= 250);

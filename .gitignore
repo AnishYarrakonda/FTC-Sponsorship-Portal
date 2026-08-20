@@ -66,7 +66,20 @@ next-env.d.ts
 # Scoped to .md on purpose: a bare *REMEDIATION* also matched
 # lib/__tests__/remediation-invariants.test.ts (git uses core.ignorecase on macOS),
 # silently dropping a real test file from the repo.
-/docs/
+#
+# `/docs/*` (not `/docs/`) so the allowlist below can work at all: a gitignore
+# negation cannot re-include a file whose PARENT DIRECTORY is excluded. Everything
+# in docs/ stays ignored by default; the runbooks below are deliberate exceptions
+# and are operational procedure, not vulnerability disclosure. Adding a new
+# committed doc means adding a line here — `git add -f` works but leaves the next
+# person's `git status` lying to them.
+/docs/*
+!/docs/enterprise-sso-runbook.md
+!/docs/email-deliverability.md
+# Committed on purpose: procurement teams ask for the audit behind the public
+# conformance statement, and a statement with no auditable record behind it is
+# a claim, not evidence. It lists accessibility gaps, not security ones.
+!/docs/accessibility-audit.md
 *QA-REPORT*.md
 *QA-FINDINGS*.md
 *REMEDIATION*.md

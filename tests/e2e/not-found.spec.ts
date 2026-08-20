@@ -10,21 +10,12 @@
  * (override with COACH_EMAIL / COACH_PASSWORD).
  */
 
-import { test, expect, type Page } from '@playwright/test'
-import { clerk, setupClerkTestingToken } from '@clerk/testing/playwright'
+import { test, expect } from '@playwright/test'
+import { signIn } from '../helpers/clerk-auth'
 
 const COACH_EMAIL = process.env.COACH_EMAIL ?? 'coach+clerk_test@example.com'
 const COACH_PASSWORD = process.env.COACH_PASSWORD ?? 'CoachTest123!'
 
-async function signIn(page: Page, email: string, password: string) {
-  await setupClerkTestingToken({ page })
-  await page.goto('/')
-  await clerk.signOut({ page }).catch(() => {})
-  await clerk.signIn({
-    page,
-    signInParams: { strategy: 'password', identifier: email, password },
-  })
-}
 
 test.describe('Not-found resilience', () => {
   test.skip(
@@ -32,14 +23,25 @@ test.describe('Not-found resilience', () => {
     'Set SUPABASE_LOCAL=true and run with local Supabase to enable full E2E tests'
   )
 
-  test('nonexistent public team slug renders not-found UI, not a crash', async ({ page }) => {
-    const response = await page.goto('/teams/nonexistent-slug-xyz-12345', {
+  /**
+   * This used to request `/teams/<slug>`, a public team page that does not exist in this
+   * app — there is no `teams` route segment anywhere under `app`. clerkMiddleware treated it as a
+   * non-public path and 307'd to `/login`, so the test was really just asserting that
+   * `/login` answers 200, which the last case below already covers on purpose.
+   *
+   * `/sponsor-view/[token]` is the real thing it was reaching for: a genuinely public
+   * dynamic route whose page calls `notFound()` on an unknown token. Status is asserted as
+   * "not a server error" rather than exactly 404 — the segment renders inside a streamed
+   * response, and once the shell has been flushed Next can no longer change the status
+   * code. The user-visible contract is the not-found UI, and that is what is asserted.
+   */
+  test('unknown sponsor-view token renders not-found UI, not a crash', async ({ page }) => {
+    const response = await page.goto('/sponsor-view/nonexistent-token-xyz-12345', {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     })
 
-    // notFound() should produce a 404 response, never a 500.
-    expect(response?.status()).toBe(404)
+    expect(response?.status()).toBeLessThan(500)
 
     // The friendly not-found UI renders (root app/not-found.tsx or closer boundary).
     await expect(

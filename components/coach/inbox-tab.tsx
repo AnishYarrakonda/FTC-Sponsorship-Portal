@@ -63,7 +63,7 @@ function NotificationCard({
         <button
           onClick={(e) => { e.stopPropagation(); onMarkRead(n.id) }}
           aria-label={`Mark "${n.title}" as read`}
-          className="text-xs font-medium text-primary hover:text-primary/90 bg-primary/5 hover:bg-primary/10 px-2.5 py-1.5 rounded-md transition-colors whitespace-nowrap shrink-0 border border-primary/10"
+          className="text-xs font-medium text-primary bg-primary/5 hover:bg-primary/10 px-2.5 py-1.5 rounded-md transition-colors whitespace-nowrap shrink-0 border border-primary/10"
         >
           Mark as read
         </button>

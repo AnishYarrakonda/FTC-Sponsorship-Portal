@@ -15,7 +15,7 @@ export function EngineeringBlock({ technicalSummary, githubLink }: Props) {
   return (
     <section className="grid gap-x-12 gap-y-4 md:grid-cols-12">
       <div className="md:col-span-4">
-        <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground/70">Robot &amp; Engineering</span>
+        <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Robot &amp; Engineering</span>
       </div>
       <div className="md:col-span-8 md:col-start-5 space-y-3">
         {technicalSummary && (

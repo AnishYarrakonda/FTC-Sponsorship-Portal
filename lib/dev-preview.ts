@@ -13,6 +13,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from './supabase/types'
+import { PREVIEW_PLACEHOLDER_IMAGE } from './dev-placeholder-image'
 
 export const SPONSOR_PREVIEW =
   process.env.NODE_ENV !== 'production' &&
@@ -28,6 +29,7 @@ const TEAM_ID_C = 'preview-team-c'
 
 const sponsor = {
   id: SPONSOR_ID,
+  clerk_org_id: 'org_preview',
   company_name: 'Helix Robotics Foundation',
   contact_email: 'partnerships@helix.example',
   contact_name: 'Jordan Avery',
@@ -36,6 +38,7 @@ const sponsor = {
   updated_at: '2026-06-01T15:00:00.000Z',
   funding_cap_cents: 5_000_000, // $50,000 seasonal cap
   funding_used_cents: 1_850_000, // $18,500 committed
+  approval_required_above_cents: 500_000, // $5,000 — so both above/below-threshold pitches exercise the flow
   geo_states: ['CA', 'TX', 'NY'],
   industry: 'Industrial Automation',
   logo_url: null,
@@ -320,7 +323,228 @@ const transactions = [
 ]
 
 const fulfillments = [
-  { id: 'f-1', sponsor_id: SPONSOR_ID, submission_id: 'preview-sub-4', team_id: TEAM_ID_A, amount_cents: 500_000, status: 'payment_received', pledged_at: '2026-04-15T11:00:00.000Z', payment_sent_at: '2026-04-17T11:00:00.000Z', payment_received_at: '2026-04-20T11:00:00.000Z', teams: { team_name: 'Quantum Foxes' } },
+  { id: 'f-1', sponsor_id: SPONSOR_ID, submission_id: 'preview-sub-4', team_id: TEAM_ID_A, amount_cents: 500_000, status: 'receipted', receipt_number: 'PF-2026-000001', pledged_at: '2026-04-15T11:00:00.000Z', payment_sent_at: '2026-04-17T11:00:00.000Z', payment_received_at: '2026-04-20T11:00:00.000Z', teams: { team_name: 'Quantum Foxes' } },
+]
+
+const receipts = [
+  {
+    id: 'rec-1',
+    receipt_number: 'PF-2026-000001',
+    fulfillment_id: 'f-1',
+    transaction_id: 'txn-1',
+    sponsor_id: SPONSOR_ID,
+    team_id: TEAM_ID_A,
+    amount_cents: 500_000,
+    contribution_date: '2026-04-20',
+    variant: 'charitable_501c3',
+    payee_legal_name: 'Quantum Foxes Robotics Booster Club Inc.',
+    payee_ein_last4: '1234',
+    payee_tax_classification: '501c3_org',
+    sponsor_legal_name: 'Helix Robotics Foundation',
+    sponsor_contact_email: 'partnerships@helix.example',
+    document_html: '<div style="padding: 24px;"><h1>Contribution acknowledgment</h1><p>Quantum Foxes Robotics Booster Club Inc. (EIN 12-3456789) acknowledges receipt of $5,000.00 from Helix Robotics Foundation on 2026-04-20.</p><p><strong>No goods or services were provided by Quantum Foxes Robotics Booster Club Inc. in exchange for this contribution.</strong></p></div>',
+    document_sha256: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+    copy_version: '2026-08-v1',
+    copy_reviewed_at: null,
+    status: 'issued',
+    issued_at: '2026-04-20T12:00:00.000Z',
+    emailed_at: '2026-04-20T12:01:00.000Z',
+    teams: { team_name: 'Quantum Foxes' }
+  },
+  {
+    id: 'rec-voided',
+    receipt_number: 'PF-2026-000000',
+    fulfillment_id: 'f-1',
+    transaction_id: 'txn-1',
+    sponsor_id: SPONSOR_ID,
+    team_id: TEAM_ID_A,
+    amount_cents: 500_000,
+    contribution_date: '2026-04-20',
+    variant: 'charitable_501c3',
+    payee_legal_name: 'Quantum Foxes Robotics Team',
+    payee_ein_last4: '1234',
+    sponsor_legal_name: 'Helix Robotics Foundation',
+    document_html: '<div style="padding: 24px;"><h1>Contribution acknowledgment</h1><p>Draft receipt superseded by PF-2026-000001.</p></div>',
+    document_sha256: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+    copy_version: '2026-08-v1',
+    copy_reviewed_at: null,
+    status: 'voided',
+    issued_at: '2026-04-19T12:00:00.000Z',
+    voided_at: '2026-04-20T11:59:00.000Z',
+    voided_reason: 'Payee legal name updated from team name to booster club legal entity name.',
+    superseded_by_receipt_id: 'rec-1',
+    teams: { team_name: 'Quantum Foxes' }
+  }
+]
+
+const MEMBER_PROFILE_ID = 'preview-member-profile'
+
+const sponsorMembers = [
+  {
+    id: 'preview-sm-1',
+    sponsor_id: SPONSOR_ID,
+    profile_id: PROFILE_ID,
+    clerk_org_id: 'org_preview',
+    clerk_membership_id: 'orgmem_preview_1',
+    role: 'org_admin',
+    invited_by: null,
+    invited_at: '2026-01-12T15:00:00.000Z',
+    joined_at: '2026-01-12T15:00:00.000Z',
+    created_at: '2026-01-12T15:00:00.000Z',
+    updated_at: '2026-01-12T15:00:00.000Z',
+    profiles: { id: PROFILE_ID, full_name: profile.full_name, email: profile.email },
+  },
+  {
+    id: 'preview-sm-2',
+    sponsor_id: SPONSOR_ID,
+    profile_id: MEMBER_PROFILE_ID,
+    clerk_org_id: 'org_preview',
+    clerk_membership_id: 'orgmem_preview_2',
+    role: 'submitter',
+    invited_by: PROFILE_ID,
+    invited_at: '2026-02-01T15:00:00.000Z',
+    joined_at: '2026-02-02T15:00:00.000Z',
+    created_at: '2026-02-01T15:00:00.000Z',
+    updated_at: '2026-02-02T15:00:00.000Z',
+    profiles: { id: MEMBER_PROFILE_ID, full_name: 'Sam Rivera', email: 'sam@preview.local' },
+  },
+  {
+    id: 'preview-sm-3',
+    sponsor_id: SPONSOR_ID,
+    profile_id: 'preview-viewer-profile',
+    clerk_org_id: 'org_preview',
+    clerk_membership_id: 'orgmem_preview_3',
+    role: 'viewer',
+    invited_by: PROFILE_ID,
+    invited_at: '2026-03-01T15:00:00.000Z',
+    joined_at: '2026-03-02T15:00:00.000Z',
+    created_at: '2026-03-01T15:00:00.000Z',
+    updated_at: '2026-03-02T15:00:00.000Z',
+    profiles: { id: 'preview-viewer-profile', full_name: 'Casey Lin', email: 'casey@preview.local' },
+  },
+]
+
+// A pending proposal on Iron Aviators (below the sponsor's $5,000 threshold pitches
+// settle immediately; this one is above it) plus one closed proposal, so
+// /sponsor/approvals has both an actionable row and a "recently closed" row in preview.
+const sponsorDecisionProposals = [
+  {
+    id: 'preview-proposal-1',
+    submission_id: 'preview-sub-2',
+    sponsor_id: SPONSOR_ID,
+    decision: 'approved',
+    amount_cents: 600_000,
+    feedback: 'Approving the full amount — great alignment with our automation focus.',
+    status: 'pending',
+    origin: 'portal',
+    proposed_by: MEMBER_PROFILE_ID,
+    proposed_at: '2026-06-05T10:00:00.000Z',
+    decided_by: null,
+    decided_at: null,
+    decision_note: null,
+    closed_reason: null,
+    settled_amount_cents: null,
+    expires_at: '2026-06-12T10:00:00.000Z',
+    created_at: '2026-06-05T10:00:00.000Z',
+    updated_at: '2026-06-05T10:00:00.000Z',
+    submissions: { id: 'preview-sub-2', teams: { team_name: 'Iron Aviators', ftc_team_number: 18420 } },
+    proposer: { full_name: 'Sam Rivera', email: 'sam@preview.local' },
+    approver: null,
+  },
+  {
+    id: 'preview-proposal-2',
+    submission_id: 'preview-sub-4',
+    sponsor_id: SPONSOR_ID,
+    decision: 'approved',
+    amount_cents: 500_000,
+    feedback: null,
+    status: 'confirmed',
+    origin: 'portal',
+    proposed_by: MEMBER_PROFILE_ID,
+    proposed_at: '2026-04-14T09:00:00.000Z',
+    decided_by: PROFILE_ID,
+    decided_at: '2026-04-15T11:00:00.000Z',
+    decision_note: 'Confirmed — matches the outreach kit budget.',
+    closed_reason: null,
+    settled_amount_cents: 500_000,
+    expires_at: '2026-04-21T09:00:00.000Z',
+    created_at: '2026-04-14T09:00:00.000Z',
+    updated_at: '2026-04-15T11:00:00.000Z',
+    submissions: { id: 'preview-sub-4', teams: { team_name: 'Quantum Foxes', ftc_team_number: 31579 } },
+    proposer: { full_name: 'Sam Rivera', email: 'sam@preview.local' },
+    approver: { full_name: profile.full_name, email: profile.email },
+  },
+]
+
+const agreementSignatures = [
+  {
+    id: '00000000-0000-4000-8000-000000000101',
+    template_id: 'agr-1',
+    template_key: 'sponsorship_agreement',
+    template_version: 1,
+    signer_profile_id: PROFILE_ID,
+    signer_role: 'sponsor',
+    signer_legal_name: profile.full_name,
+    signer_email: profile.email,
+    submission_id: 'preview-sub-4',
+    sponsor_id: SPONSOR_ID,
+    team_id: TEAM_ID_A,
+    entity_snapshot: { team_number: teamA.ftc_team_number, team_name: teamA.team_name, team_organization: teamA.organization, sponsor_company_name: sponsor.company_name, amount_cents: 500_000 },
+    typed_name: profile.full_name,
+    signed_at: '2026-04-15T11:02:00.000Z',
+    ip_address: '203.0.113.10',
+    user_agent: 'Mozilla/5.0 (dev preview)',
+    document_hash: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+    document_storage_path: 'preview/sig-sponsor-1.html',
+    consent_text_version: 1,
+    consent_text_hash: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+    created_at: '2026-04-15T11:02:00.000Z',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000102',
+    template_id: 'agr-1',
+    template_key: 'sponsorship_agreement',
+    template_version: 1,
+    signer_profile_id: 'preview-coach',
+    signer_role: 'coach',
+    signer_legal_name: 'Preview Coach',
+    signer_email: 'coach@preview.local',
+    submission_id: 'preview-sub-4',
+    sponsor_id: SPONSOR_ID,
+    team_id: TEAM_ID_A,
+    entity_snapshot: { team_number: teamA.ftc_team_number, team_name: teamA.team_name, team_organization: teamA.organization, sponsor_company_name: sponsor.company_name, amount_cents: 500_000 },
+    typed_name: 'Preview Coach',
+    signed_at: '2026-04-16T09:30:00.000Z',
+    ip_address: '203.0.113.42',
+    user_agent: 'Mozilla/5.0 (dev preview)',
+    document_hash: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+    document_storage_path: 'preview/sig-coach-1.html',
+    consent_text_version: 1,
+    consent_text_hash: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+    created_at: '2026-04-16T09:30:00.000Z',
+  },
+]
+
+// Q&A thread (0085). Only RELEASED coach messages appear here: a sponsor must never see a
+// reply that is still in review, and the preview should not model a state the real policies
+// forbid. The sponsor's own question is here too, which is what the composer produces.
+const submissionMessages = [
+  {
+    id: 'msg-1', submission_id: 'preview-sub-2', author_role: 'sponsor',
+    author_profile_id: PROFILE_ID, author_token_id: null,
+    author_label: 'Dana Cole', status: 'released',
+    body: 'Is the 501(c)(3) the school district, or a separate booster club? Our grants team needs the payee EIN to match.',
+    released_at: '2026-06-04T10:02:00.000Z', released_by: null, rejected_reason: null,
+    flagged_at: null, flagged_by: null, created_at: '2026-06-04T10:02:00.000Z',
+  },
+  {
+    id: 'msg-2', submission_id: 'preview-sub-2', author_role: 'coach',
+    author_profile_id: 'preview-coach-1', author_token_id: null,
+    author_label: 'Maria Gomez', status: 'released',
+    body: 'A separate booster club — Iron Aviators Booster Club. I can send the determination letter to whichever address your grants team prefers.',
+    released_at: '2026-06-05T15:40:00.000Z', released_by: null, rejected_reason: null,
+    flagged_at: null, flagged_by: null, created_at: '2026-06-05T09:18:00.000Z',
+  },
 ]
 
 const FIXTURES: Record<string, unknown[]> = {
@@ -331,6 +555,113 @@ const FIXTURES: Record<string, unknown[]> = {
   notifications,
   transactions_ledger: transactions,
   funding_fulfillments: fulfillments,
+  funding_receipts: receipts,
+  agreement_signatures: agreementSignatures,
+  sponsor_members: sponsorMembers,
+  sponsor_decision_proposals: sponsorDecisionProposals,
+  submission_messages: submissionMessages,
+  // Sponsors see no appeals — appeals have no sponsor RLS policy (0086). The key exists so
+  // the mock client returns [] rather than undefined.
+  appeals: [],
+  // One award seen from the sponsor's side: one benefit delivered with proof, one still
+  // outstanding so the "Not needed" waive control is browsable.
+  sponsor_recognition_awards: [
+    {
+      id: 'award-preview-s1',
+      fulfillment_id: 'ff-preview-s1',
+      sponsor_id: sponsor.id,
+      team_id: teamA.id,
+      amount_cents: 300000,
+      tier_id: 'tier-silver',
+      tier_name_snapshot: 'Silver',
+      tier_rank_snapshot: 2,
+      tier_min_amount_cents_snapshot: 250000,
+      benefits_snapshot: ['logo_on_website', 'social_media_mention'],
+      awarded_at: '2026-06-20T15:00:00.000Z',
+      created_at: '2026-06-20T15:00:00.000Z',
+      updated_at: '2026-07-05T15:00:00.000Z',
+      teams: { team_name: teamA.team_name },
+      recognition_benefit_deliveries: [
+        {
+          id: 'del-preview-s1', award_id: 'award-preview-s1', benefit_type: 'logo_on_website',
+          status: 'delivered',
+          proof_url: PREVIEW_PLACEHOLDER_IMAGE,
+          proof_uploaded_at: '2026-07-05T15:00:00.000Z',
+          delivered_at: '2026-07-05T15:00:00.000Z',
+        },
+        {
+          id: 'del-preview-s2', award_id: 'award-preview-s1', benefit_type: 'social_media_mention',
+          status: 'promised',
+          proof_url: null, proof_uploaded_at: null, delivered_at: null,
+        },
+      ],
+    },
+  ],
+  recognition_benefit_deliveries: [],
+  // One open and one closed year, so the index's Open/Final chips and the print view are
+  // both browsable without a database.
+  impact_report_snapshots: [
+    {
+      id: 'snap-2026', scope: 'sponsor', sponsor_id: sponsor.id, report_year: 2026,
+      status: 'open', payload_schema_version: 1,
+      generated_at: '2026-08-01T06:00:00.000Z', closed_at: null,
+      payload: {
+        schema_version: 1, year: 2026, generated_at: '2026-08-01T06:00:00.000Z',
+        sponsor: { company_name: sponsor.company_name, logo_url: null },
+        totals: {
+          pledged_cents: 300000, received_cents: 100000, outstanding_cents: 200000,
+          teams_supported: 1, students_reached: 1200, events_hosted: 8,
+          volunteer_hours: 340, benefits_promised: 2, benefits_delivered: 1,
+        },
+        teams: [
+          {
+            team: {
+              ftc_team_number: 31579, team_name: teamA.team_name, organization: 'Plano East Senior High',
+              city: 'Plano', state: 'TX', tax_status: '501c3', founded_year: 2019,
+              seasons_competed: 6, team_size: 22, students_reached: 1200, events_hosted: 8,
+              volunteer_hours: 340, tagline: 'Engineering the next generation.',
+              mission_statement: 'We build robots and community.',
+              outreach_summary: 'Summer camps and library demos.', logo_url: null,
+              media_urls: [],
+            },
+            achievements: [{ season: '2025-26', event_name: 'North Texas Regional', award: 'Inspire Award', description: null }],
+            fulfillments: [{ amount_cents: 300000, status: 'payment_sent', pledged_at: '2026-03-01T00:00:00.000Z', payment_received_at: null, receipted_at: null }],
+            recognition: {
+              tier_name: 'Silver',
+              benefits: [
+                { benefit_type: 'logo_on_website', status: 'delivered', delivered_at: '2026-07-05T00:00:00.000Z', proof_url: null },
+                { benefit_type: 'social_media_mention', status: 'promised', delivered_at: null, proof_url: null },
+              ],
+            },
+          },
+        ],
+        footnotes: ['The platform never handles funds.'],
+      },
+    },
+    {
+      id: 'snap-2025', scope: 'sponsor', sponsor_id: sponsor.id, report_year: 2025,
+      status: 'closed', payload_schema_version: 1,
+      generated_at: '2026-01-02T04:00:00.000Z', closed_at: '2026-01-02T04:00:00.000Z',
+      payload: {
+        schema_version: 1, year: 2025, generated_at: '2026-01-02T04:00:00.000Z',
+        sponsor: { company_name: sponsor.company_name, logo_url: null },
+        totals: {
+          pledged_cents: 150000, received_cents: 150000, outstanding_cents: 0,
+          teams_supported: 1, students_reached: 800, events_hosted: 5,
+          volunteer_hours: 210, benefits_promised: 1, benefits_delivered: 1,
+        },
+        teams: [],
+        footnotes: ['The platform never handles funds.'],
+      },
+    },
+  ],
+  public_platform_stats: [
+    {
+      id: true, teams_supported: 12, sponsors_active: 5, dollars_pledged_cents: 4200000,
+      dollars_received_cents: 2600000, students_reached: 9400, events_hosted: 61,
+      volunteer_hours: 3100, refreshed_at: '2026-08-13T04:00:00.000Z',
+    },
+  ],
   team_achievements: [
     ...teamA.team_achievements,
     ...teamB.team_achievements as any[],

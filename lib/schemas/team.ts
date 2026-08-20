@@ -223,3 +223,14 @@ export const teamOnboardingSchema = teamOnboardingBaseSchema.superRefine((data, 
 })
 
 export type TeamOnboardingInput = z.infer<typeof teamOnboardingSchema>
+
+export const teamVerificationOverrideSchema = z.object({
+  recordId: z.string().uuid(),
+  reason: z
+    .string()
+    .trim()
+    .min(20, 'Give a reason of at least 20 characters')
+    .max(LIMITS.feedback, 'Reason must be 2000 characters or fewer'),
+})
+
+export type TeamVerificationOverrideInput = z.infer<typeof teamVerificationOverrideSchema>

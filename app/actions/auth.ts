@@ -1,7 +1,10 @@
 'use server'
 
 import { auth, clerkClient } from '@clerk/nextjs/server'
+import { checkBotId } from 'botid/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { checkSponsorEmailDomain } from '@/lib/sponsor-domain-gate'
+import { compareDomains, emailDomain, websiteDomain } from '@/lib/email-domain'
 import {
   signupSchema,
   coachProfileDataSchema,
@@ -20,6 +23,43 @@ import {
   sendSponsorApplicationAlert,
   createInAppNotification,
 } from '@/lib/notify'
+
+// ---------------------------------------------------------------------------
+// Vercel BotID (Basic mode)
+// ---------------------------------------------------------------------------
+
+const BOT_REJECTION =
+  'We could not verify this request. Please refresh the page and try again.'
+
+/**
+ * Invisible bot check for the three unauthenticated-ish write surfaces (sponsor
+ * application + both coach signup entry points). The matching client-side challenge is
+ * armed in `instrumentation-client.ts`; the page paths listed there and the actions that
+ * call this must stay in sync.
+ *
+ * Called ONCE at the top of an action, before the throttle and before any database work —
+ * never inside a Promise.all with the throttle, because the throttle must not burn a
+ * bucket for a request already identified as a bot.
+ *
+ * FAILS OPEN, deliberately: a BotID outage must not close the only sponsor-acquisition
+ * funnel the product has, nor the coach signup path. The failure is written to
+ * console.error as well as Sentry, because Sentry has no DSN in any Vercel environment
+ * today and a Sentry-only report would make this silent.
+ *
+ * `checkBotId()` returns HUMAN in development by default, so `npm run dev` and the local
+ * Playwright suite are unaffected. If the E2E suite is ever pointed at a preview URL, add
+ * a Vercel WAF bypass rule for the runner rather than building a code-level bypass.
+ */
+async function isBotRequest(context: string): Promise<boolean> {
+  try {
+    const verification = await checkBotId()
+    return verification.isBot
+  } catch (e) {
+    console.error(`[${context}] checkBotId threw (failing OPEN)`, e)
+    Sentry.captureException(e)
+    return false
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Shared credential-file validation (also used by app/actions/credentials.ts)
@@ -157,6 +197,10 @@ async function provisionCoachProfile(
 export async function createCoachProfile(
   formData: FormData
 ): Promise<{ error?: string } | void> {
+  // Bot protection only. The corporate-domain gate is deliberately NOT applied anywhere on
+  // the coach path — volunteers legitimately sign up with personal addresses.
+  if (await isBotRequest('createCoachProfile')) return { error: BOT_REJECTION }
+
   const { userId: clerkUserId } = await auth()
   if (!clerkUserId) return { error: 'Not authenticated' }
 
@@ -194,6 +238,9 @@ export async function createCoachProfile(
 export async function completeCoachProfile(
   formData: FormData
 ): Promise<{ error?: string } | void> {
+  // Bot protection only — no domain gating on the coach path. See createCoachProfile.
+  if (await isBotRequest('completeCoachProfile')) return { error: BOT_REJECTION }
+
   const { userId: clerkUserId } = await auth()
   if (!clerkUserId) return { error: 'Not authenticated' }
 
@@ -251,6 +298,8 @@ export async function completeCoachProfile(
 export async function createSponsorApplication(
   data: SponsorSignupInput
 ): Promise<{ error?: string } | void> {
+  if (await isBotRequest('createSponsorApplication')) return { error: BOT_REJECTION }
+
   const result = sponsorSignupSchema.safeParse(data)
   if (!result.success) {
     return { error: 'Validation failed: ' + result.error.issues.map((i) => i.message).join(', ') }
@@ -320,6 +369,41 @@ export async function createSponsorApplication(
         `separate account — sign out first, then apply.`,
     }
   }
+
+  // Corporate email domain gating — SPONSOR ONLY (the coach path never calls this).
+  //
+  // Checks the CLERK SESSION email, never payload.email: the two are already refused when
+  // they differ, and the session address is the one that lands in profiles.email and that
+  // approveSponsorApplication links companies by.
+  //
+  // Runs before the throttle so a refused applicant does not also burn a throttle bucket,
+  // and it FAILS OPEN internally (see lib/sponsor-domain-gate.ts).
+  const gate = await checkSponsorEmailDomain(sessionEmail)
+  const applicantEmailDomain = emailDomain(sessionEmail)
+
+  if (!gate.allowed) {
+    // Log the DOMAIN and the category, never the full address: audit_log is admin-readable
+    // but it is also what /api/admin/export dumps to CSV.
+    await adminClient.from('audit_log').insert({
+      actor_id: existingProfile?.id ?? null,
+      action: 'sponsor_application_blocked',
+      entity_type: 'sponsor_applications',
+      entity_id: null,
+      metadata: { email_domain: applicantEmailDomain, rule_category: gate.reason },
+    })
+    return { error: gate.message }
+  }
+
+  // Advisory domain-match verdict for the admin reviewer. NEVER a rejection.
+  //
+  // An allowlisted applicant is, in practice, someone on a free-mail domain an admin
+  // waved through, so their email host says nothing about the company they represent —
+  // 'unknown' is honest, where compareDomains would report a guaranteed 'mismatch'.
+  const applicantWebsiteDomain = websiteDomain(payload.website)
+  const domainMatch =
+    gate.reason === 'allowlisted'
+      ? 'unknown'
+      : compareDomains(applicantEmailDomain, applicantWebsiteDomain, payload.companyName)
 
   // Abuse throttle. This flow runs post-Clerk-signup (semi-authenticated), but
   // account creation is cheap, so cap applications per IP and per email. The
@@ -423,6 +507,12 @@ export async function createSponsorApplication(
       contact_email: sessionEmail,
       proposed_cap_cents: payload.proposedCapCents,
       message: payload.sponsorshipReason,
+      // The wizard has always collected `website` and this insert always dropped it, so
+      // no reviewer could compare a domain the row was never given.
+      website: payload.website,
+      email_domain: applicantEmailDomain,
+      website_domain: applicantWebsiteDomain,
+      domain_match: domainMatch,
     })
 
     // Previously console.error only, then fell through to `return` with no error —
@@ -443,6 +533,11 @@ export async function createSponsorApplication(
         contact_name: payload.fullName,
         proposed_cap_cents: payload.proposedCapCents,
         message: payload.sponsorshipReason,
+        // A re-application must refresh the verdict, not keep a stale one.
+        website: payload.website,
+        email_domain: applicantEmailDomain,
+        website_domain: applicantWebsiteDomain,
+        domain_match: domainMatch,
         status: 'pending',
         reviewed_by: null,
         reviewed_at: null,
@@ -480,7 +575,15 @@ export async function createSponsorApplication(
       payload.proposedCapCents
     )
 
-    // Alert to admins (In-App)
+    // Alert to admins (In-App). A domain mismatch is appended to the SAME notification —
+    // it is a heads-up for a human reviewer, not a new notification type (and
+    // notifications.type is a CHECK-constrained column where 'general' already covers it).
+    const mismatchNote =
+      domainMatch === 'mismatch'
+        ? ` Heads up: the applicant's email domain (${applicantEmailDomain}) does not match ` +
+          `the company website they gave (${applicantWebsiteDomain}).`
+        : ''
+
     const { data: admins } = await adminClient.from('profiles').select('id').eq('role', 'admin')
     if (admins) {
       await Promise.all(
@@ -490,7 +593,9 @@ export async function createSponsorApplication(
             recipientId: admin.id,
             type: 'general',
             title: 'New Sponsor Application',
-            body: `${payload.companyName} (${payload.fullName}) has applied to become a sponsor.`,
+            body:
+              `${payload.companyName} (${payload.fullName}) has applied to become a sponsor.` +
+              mismatchNote,
           })
         )
       )

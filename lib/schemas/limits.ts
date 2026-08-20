@@ -9,6 +9,8 @@ export const LIMITS = {
   budgetItemLabel: 120,
   customPitchAlignment: 1500,
   specificNeeds: 1500,
+  submissionMessage: 2000,
+  appealStatement: 3000,
   localConnection: 1000,
   feedback: 2000,
   sponsorshipReason: 2000,
@@ -30,6 +32,17 @@ export const LIMITS = {
   mailingCity: 120,
   remittanceEmail: 254,
   payoutRejectionReason: 1000,
+  agreementTitle: 200,
+  agreementBody: 60000,
+  agreementConsentText: 4000,
+  agreementReviewerNote: 1000,
+  proposalNote: 1000,
+  // These four must match the CHECK (char_length(...) <= n) values in
+  // supabase/migrations/0087_recognition_tiers.sql exactly.
+  recognitionTierName: 60,
+  recognitionTierDescription: 500,
+  recognitionDeliveryNote: 1000,
+  recognitionVoidReason: 500,
 } as const
 
 export type LimitKey = keyof typeof LIMITS

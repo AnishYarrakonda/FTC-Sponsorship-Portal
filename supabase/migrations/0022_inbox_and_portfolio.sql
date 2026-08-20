@@ -11,9 +11,11 @@ CREATE TABLE IF NOT EXISTS notifications (
 
 -- RLS: coaches can only read their own notifications
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "coaches_read_own_notifications" ON notifications;
 CREATE POLICY "coaches_read_own_notifications"
   ON notifications FOR SELECT
   USING (recipient_id = auth.uid());
+DROP POLICY IF EXISTS "service_insert_notifications" ON notifications;
 CREATE POLICY "service_insert_notifications"
   ON notifications FOR INSERT
   WITH CHECK (true); -- service role only inserts; RLS bypassed by admin client

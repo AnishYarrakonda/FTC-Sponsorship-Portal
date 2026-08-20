@@ -229,3 +229,31 @@ describe('fulfillment UI invariants', () => {
   })
 })
 
+/**
+ * Prompt 04 — Funding Receipts Migration & Policy Invariants
+ */
+describe('funding receipts migration invariants', () => {
+  it('0078_funding_receipts.sql contains REVOKE EXECUTE for both new functions and no occurrence of auth.uid()', () => {
+    const root = process.cwd()
+    const sqlPath = path.join(root, 'supabase/migrations/0078_funding_receipts.sql')
+    const sqlContent = fs.readFileSync(sqlPath, 'utf-8')
+
+    expect(sqlContent).not.toContain('auth.uid()')
+    expect(sqlContent).toContain('REVOKE EXECUTE ON FUNCTION issue_funding_receipt')
+    expect(sqlContent).toContain('REVOKE EXECUTE ON FUNCTION void_funding_receipt')
+    expect(sqlContent).toContain('GRANT  EXECUTE ON FUNCTION issue_funding_receipt')
+    expect(sqlContent).toContain('GRANT  EXECUTE ON FUNCTION void_funding_receipt')
+  })
+
+  it('funding_receipts has no FOR UPDATE, FOR INSERT, or FOR DELETE policies', () => {
+    const root = process.cwd()
+    const sqlPath = path.join(root, 'supabase/migrations/0078_funding_receipts.sql')
+    const sqlContent = fs.readFileSync(sqlPath, 'utf-8')
+
+    expect(sqlContent).not.toMatch(/CREATE\s+POLICY.*FOR\s+UPDATE/i)
+    expect(sqlContent).not.toMatch(/CREATE\s+POLICY.*FOR\s+INSERT/i)
+    expect(sqlContent).not.toMatch(/CREATE\s+POLICY.*FOR\s+DELETE/i)
+  })
+})
+
+

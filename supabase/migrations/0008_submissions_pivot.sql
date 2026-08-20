@@ -1,14 +1,25 @@
 -- 0008_submissions_pivot.sql
 
 -- 1. Create tax_status enum and add to teams
-CREATE TYPE tax_status_type AS ENUM ('501c3', 'School', 'None');
-ALTER TABLE teams ADD COLUMN tax_status tax_status_type NOT NULL DEFAULT 'None';
+DO $tax$ BEGIN
+  CREATE TYPE tax_status_type AS ENUM ('501c3', 'School', 'None');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $tax$;
 
--- Migrate existing boolean to enum (optional but safe)
-UPDATE teams SET tax_status = '501c3' WHERE is_501c3 = true;
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS tax_status tax_status_type NOT NULL DEFAULT 'None';
 
--- Drop old boolean
-ALTER TABLE teams DROP COLUMN is_501c3;
+-- Migrate the old boolean to the enum, then retire it. Guarded on the column still
+-- being present so a replay over an already-migrated database is a no-op rather than
+-- an "is_501c3 does not exist" abort.
+DO $b501c3$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'teams' AND column_name = 'is_501c3'
+  ) THEN
+    UPDATE teams SET tax_status = '501c3' WHERE is_501c3 = true;
+    ALTER TABLE teams DROP COLUMN is_501c3;
+  END IF;
+END $b501c3$;
 
 -- 2. Clean up old pitch architecture
 DROP VIEW IF EXISTS v_pitch_summary;
@@ -24,9 +35,12 @@ DROP TYPE IF EXISTS pitch_status CASCADE;
 -- declared up front so this migration's policies (which reference
 -- 'changes_requested') apply cleanly to a fresh database. The later ALTER TYPE
 -- ... ADD VALUE statements are IF NOT EXISTS and become no-ops.
-CREATE TYPE submission_status AS ENUM ('draft', 'pending', 'approved', 'declined', 'changes_requested', 'opened', 'bounced', 'delivered', 'expired', 'dispatched');
+DO $substatus$ BEGIN
+  CREATE TYPE submission_status AS ENUM ('draft', 'pending', 'approved', 'declined', 'changes_requested', 'opened', 'bounced', 'delivered', 'expired', 'dispatched');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $substatus$;
 
-CREATE TABLE submissions (
+CREATE TABLE IF NOT EXISTS submissions (
     id                          uuid                PRIMARY KEY DEFAULT gen_random_uuid(),
     team_id                     uuid                NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
     sponsor_id                  uuid                NOT NULL REFERENCES sponsors(id) ON DELETE CASCADE,
@@ -40,18 +54,20 @@ CREATE TABLE submissions (
 );
 
 -- Triggers for updated_at
+DROP TRIGGER IF EXISTS set_updated_at_submissions ON submissions;
 CREATE TRIGGER set_updated_at_submissions
     BEFORE UPDATE ON submissions
     FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
 
 -- Indexes
-CREATE INDEX idx_submissions_team_id ON submissions(team_id);
-CREATE INDEX idx_submissions_sponsor_id ON submissions(sponsor_id);
-CREATE INDEX idx_submissions_status ON submissions(status);
+CREATE INDEX IF NOT EXISTS idx_submissions_team_id ON submissions(team_id);
+CREATE INDEX IF NOT EXISTS idx_submissions_sponsor_id ON submissions(sponsor_id);
+CREATE INDEX IF NOT EXISTS idx_submissions_status ON submissions(status);
 
 -- RLS
 ALTER TABLE submissions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "submissions_select" ON submissions;
 CREATE POLICY "submissions_select" ON submissions FOR SELECT
     USING (
         EXISTS (
@@ -60,6 +76,7 @@ CREATE POLICY "submissions_select" ON submissions FOR SELECT
         )
     );
 
+DROP POLICY IF EXISTS "submissions_insert" ON submissions;
 CREATE POLICY "submissions_insert" ON submissions FOR INSERT
     WITH CHECK (
         EXISTS (
@@ -69,6 +86,7 @@ CREATE POLICY "submissions_insert" ON submissions FOR INSERT
         AND is_coach_verified()
     );
 
+DROP POLICY IF EXISTS "submissions_update_coach" ON submissions;
 CREATE POLICY "submissions_update_coach" ON submissions FOR UPDATE
     USING (
         EXISTS (SELECT 1 FROM teams t WHERE t.id = team_id AND t.owner_id = auth.uid())
@@ -78,9 +96,11 @@ CREATE POLICY "submissions_update_coach" ON submissions FOR UPDATE
         status IN ('draft', 'pending')
     );
 
+DROP POLICY IF EXISTS "submissions_update_admin" ON submissions;
 CREATE POLICY "submissions_update_admin" ON submissions FOR UPDATE
     USING (is_admin());
 
+DROP POLICY IF EXISTS "submissions_delete" ON submissions;
 CREATE POLICY "submissions_delete" ON submissions FOR DELETE
     USING (
         is_admin() OR

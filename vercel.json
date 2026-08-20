@@ -7,6 +7,14 @@
     {
       "path": "/api/cron/nudge-fulfillments",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-ftc-roster",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/impact-rollup",
+      "schedule": "0 4 * * *"
     }
   ]
 }

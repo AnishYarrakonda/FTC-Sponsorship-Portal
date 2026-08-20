@@ -1,5 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
+import { BOTID_PROXY_PREFIX } from '@/lib/botid-paths'
 
 // Routes reachable without an authenticated session.
 const isPublicRoute = createRouteMatcher([
@@ -15,6 +16,13 @@ const isPublicRoute = createRouteMatcher([
   '/api/webhooks(.*)',
   '/api/cron(.*)',
   '/api/health',
+  // Vercel BotID's same-origin challenge + proxy paths. `withBotId` rewrites this fixed
+  // prefix to api.vercel.com (see BOTID_PROXY_PREFIX in lib/botid-paths.ts). The challenge
+  // script itself ends in `.js` and is already excluded by the matcher below, but the
+  // SDK's proxy POSTs are not — without this they 307 to /login for the exact users the
+  // challenge exists to verify (anonymous visitors on /sponsors/apply and /signup), and
+  // checkBotId() then classifies every real human as a bot.
+  `${BOTID_PROXY_PREFIX}(.*)`,
 ])
 
 // Auth pages: authenticated users should never see these.

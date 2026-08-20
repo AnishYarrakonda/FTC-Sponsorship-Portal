@@ -1,20 +1,22 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import Link from 'next/link'
 import { isAwaitingSponsor, isTerminal } from '@/lib/submission-status'
 import { statusLabel } from '@/components/ui/status-badge'
 import { useRouter } from 'next/navigation'
-import { 
-  Building2, 
-  MapPin, 
-  Target, 
-  Award, 
+import {
+  Building2,
+  MapPin,
+  Target,
+  Award,
   ChevronLeft,
   CheckCircle2,
   XCircle,
   MessageSquare,
   ExternalLink,
-  History
+  History,
+  ShieldCheck,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
@@ -24,6 +26,9 @@ import { Label } from '@/components/ui/label'
 import { cn, htmlToPlainText } from '@/lib/utils'
 import { sponsorUpdateSubmissionStatus } from '@/app/actions/sponsor-decision'
 import { toast } from 'sonner'
+import { hasSponsorRole, requiresApproval, type SponsorRole } from '@/lib/sponsor-roles'
+import { SponsorThreadPanel } from '@/components/messages/thread-panels'
+import type { ThreadMessage } from '@/components/messages/thread'
 
 type SponsorSubmission = {
   id: string
@@ -77,14 +82,34 @@ function safeHttpUrl(url: unknown): string | null {
   }
 }
 
-export function SponsorReviewShell({ submission, team }: { submission: any; team: any }) {
+export function SponsorReviewShell({
+  submission,
+  team,
+  memberRole = 'org_admin',
+  approvalThresholdCents = null,
+  pendingProposal = null,
+  threadMessages = [],
+  threadCanCompose = false,
+}: {
+  submission: any
+  team: any
+  memberRole?: SponsorRole
+  approvalThresholdCents?: number | null
+  pendingProposal?: { id: string; amount_cents: number; status: string } | null
+  threadMessages?: ThreadMessage[]
+  threadCanCompose?: boolean
+}) {
   const submissionData = submission as SponsorSubmission
   const teamData = team as SponsorTeam
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [feedback, setFeedback] = useState('')
   const [showConfirm, setShowConfirm] = useState<'approved' | 'declined' | 'changes_requested' | null>(null)
+  const [pendingApprovalResult, setPendingApprovalResult] = useState<{ amountCents?: number } | null>(null)
   const sponsorCompany = submissionData?.sponsors?.company_name || 'your company'
+
+  const amountCents = submissionData?.requested_amount_cents ?? 0
+  const willNeedApproval = requiresApproval(amountCents, approvalThresholdCents)
 
   const achievements = teamData?.team_achievements ?? []
   const pastSponsors = teamData?.past_sponsors ?? []
@@ -112,6 +137,18 @@ export function SponsorReviewShell({ submission, team }: { submission: any; team
       )
 
       if ('success' in result && result.success) {
+        // The submitter merely PROPOSED a commitment — it has not been approved yet.
+        // Telling them it succeeded the same way a real approval does is exactly the
+        // failure mode this slice exists to prevent, so this branch never navigates away
+        // or reuses the "approved" toast copy.
+        if ('pendingApproval' in result && result.pendingApproval) {
+          setShowConfirm(null)
+          setPendingApprovalResult({ amountCents: 'amountCents' in result ? result.amountCents : undefined })
+          toast.success('Sent to your approvers.')
+          if ('warning' in result && result.warning) toast.warning(result.warning, { duration: 12000 })
+          return
+        }
+
         // P0-11: the decision COMMITTED but a confirmation email failed. Navigating away
         // on a green toast is what made this class of failure invisible; hold the sponsor
         // here long enough to actually read it.
@@ -310,7 +347,28 @@ export function SponsorReviewShell({ submission, team }: { submission: any; team
               an allowlist: the console renders only for states a decision can actually be
               recorded against.
             */}
-            {!isAwaitingSponsor(submissionData.status) ? (
+            {pendingProposal ? (
+              <Card className="border-primary/30 bg-primary/5 shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-primary" />Awaiting approval</CardTitle>
+                  <CardDescription className="text-[13px]">
+                    A funding request for ${(pendingProposal.amount_cents / 100).toLocaleString()} is waiting for a second
+                    approver to confirm. <Link href="/sponsor/approvals" className="text-primary hover:underline">View it in Approvals →</Link>
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+            ) : pendingApprovalResult ? (
+              <Card className="border-primary/30 bg-primary/5 shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-primary" />Sent for approval</CardTitle>
+                  <CardDescription className="text-[13px]">
+                    This commitment needs a second approver at your company to confirm before it settles. We&apos;ve
+                    notified them; you&apos;ll be notified when it&apos;s decided.{' '}
+                    <Link href="/sponsor/approvals" className="text-primary hover:underline">View it in Approvals →</Link>
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+            ) : !isAwaitingSponsor(submissionData.status) ? (
               <Card className="border-border bg-card shadow-sm">
                 <CardHeader>
                   <CardTitle className="text-lg">
@@ -329,6 +387,15 @@ export function SponsorReviewShell({ submission, team }: { submission: any; team
                   </CardDescription>
                 </CardHeader>
               </Card>
+            ) : memberRole === 'viewer' ? (
+              <Card className="border-border bg-card shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-lg">View-only</CardTitle>
+                  <CardDescription className="text-[13px]">
+                    Your role is view-only. Ask an Approver at {sponsorCompany} to act on this.
+                  </CardDescription>
+                </CardHeader>
+              </Card>
             ) : (
               <Card className="border-border bg-card shadow-md">
                 <CardHeader className="pb-4">
@@ -339,7 +406,7 @@ export function SponsorReviewShell({ submission, team }: { submission: any; team
                   <div className="space-y-5">
                     <div className="space-y-2">
                       <Label htmlFor="feedback" className="text-[13px] text-muted-foreground">Internal/External Feedback</Label>
-                      <Textarea 
+                      <Textarea
                         id="feedback"
                         placeholder="Add a message for the team or internal notes..."
                         value={feedback}
@@ -351,18 +418,22 @@ export function SponsorReviewShell({ submission, team }: { submission: any; team
                   </div>
 
                   <div className="grid grid-cols-1 gap-3 pt-6 border-t border-border">
-                    <Button 
-                      variant="default" 
-                      className="w-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
+                    <Button
+                      variant="default"
+                      className="w-full bg-primary hover:bg-primary-hover text-primary-foreground shadow-sm"
                       disabled={isPending}
                       onClick={() => setShowConfirm('approved')}
                     >
-                      <CheckCircle2 className="mr-2 h-4 w-4" />
-                      Approve Sponsorship
+                      {willNeedApproval && !hasSponsorRole(memberRole, 'approver') ? (
+                        <ShieldCheck className="mr-2 h-4 w-4" />
+                      ) : (
+                        <CheckCircle2 className="mr-2 h-4 w-4" />
+                      )}
+                      {willNeedApproval ? 'Send for approval' : 'Approve Sponsorship'}
                     </Button>
                     <div className="grid grid-cols-2 gap-3">
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        variant="outline"
                         className="border-border hover:bg-accent text-foreground"
                         disabled={isPending}
                         onClick={() => setShowConfirm('changes_requested')}
@@ -370,8 +441,8 @@ export function SponsorReviewShell({ submission, team }: { submission: any; team
                         <History className="mr-2 h-4 w-4" />
                         More Info
                       </Button>
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        variant="outline"
                         className="border-rose-500/20 text-status-danger hover:bg-rose-500/10"
                         disabled={isPending}
                         onClick={() => setShowConfirm('declined')}
@@ -388,14 +459,19 @@ export function SponsorReviewShell({ submission, team }: { submission: any; team
             {/* Confirmation Dialog (Simple Inline Overlay) */}
             <AnimatePresence>
               {showConfirm && (
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
                   className="p-5 rounded-xl border border-border bg-card space-y-5 shadow-lg"
                 >
                   <p className="text-[14px] leading-relaxed text-center text-foreground">
-                    Are you sure you want to <span className="font-semibold uppercase tracking-wider">{showConfirm.replace('_', ' ')}</span> this submission?
+                    {showConfirm === 'approved' && willNeedApproval ? (
+                      <>This will send a ${(amountCents / 100).toLocaleString()} commitment to your organization&apos;s
+                      Approvers for a second signature — it will not settle until one of them confirms.</>
+                    ) : (
+                      <>Are you sure you want to <span className="font-semibold uppercase tracking-wider">{showConfirm.replace('_', ' ')}</span> this submission?</>
+                    )}
                   </p>
                   <div className="flex gap-3">
                     <Button variant="ghost" className="flex-1 text-[13px]" onClick={() => setShowConfirm(null)}>Cancel</Button>
@@ -403,7 +479,7 @@ export function SponsorReviewShell({ submission, team }: { submission: any; team
                       variant="default" 
                       className={cn(
                         "flex-1 text-[13px] shadow-sm",
-                        showConfirm === 'approved' ? 'bg-primary hover:bg-primary/90' : showConfirm === 'declined' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-amber-600 hover:bg-amber-700'
+                        showConfirm === 'approved' ? 'bg-primary hover:bg-primary-hover' : showConfirm === 'declined' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-amber-600 hover:bg-amber-700'
                       )}
                       onClick={() => handleDecision(showConfirm)}
                       disabled={isPending}
@@ -429,6 +505,17 @@ export function SponsorReviewShell({ submission, team }: { submission: any; team
           </div>
         </div>
       </div>
+
+      {/* Q&A — placed below the decision console on purpose: a sponsor should be able to
+          read the coach's answer before they commit capacity. */}
+      <section className="max-w-3xl">
+        <SponsorThreadPanel
+          submissionId={submissionData.id}
+          messages={threadMessages}
+          canCompose={threadCanCompose}
+          teamName={teamData?.team_name ?? 'this team'}
+        />
+      </section>
     </div>
   )
 }

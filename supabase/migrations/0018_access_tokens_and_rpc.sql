@@ -10,9 +10,9 @@ CREATE TABLE IF NOT EXISTS submission_access_tokens (
   created_at     timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_sat_submission  ON submission_access_tokens(submission_id);
-CREATE INDEX idx_sat_token_hash  ON submission_access_tokens(token_hash);
-CREATE INDEX idx_sat_expires_at  ON submission_access_tokens(expires_at);
+CREATE INDEX IF NOT EXISTS idx_sat_submission  ON submission_access_tokens(submission_id);
+CREATE INDEX IF NOT EXISTS idx_sat_token_hash  ON submission_access_tokens(token_hash);
+CREATE INDEX IF NOT EXISTS idx_sat_expires_at  ON submission_access_tokens(expires_at);
 
 ALTER TABLE submission_access_tokens ENABLE ROW LEVEL SECURITY;
 -- No SELECT/INSERT/UPDATE/DELETE policies — all access via service-role client.
@@ -28,6 +28,7 @@ ALTER TABLE submission_access_tokens ENABLE ROW LEVEL SECURITY;
 -- Returns: { ok, error, token }
 -- ---------------------------------------------------------------------------
 
+DROP FUNCTION IF EXISTS approve_submission_atomic(uuid, uuid, bigint);
 CREATE OR REPLACE FUNCTION approve_submission_atomic(
   p_submission_id  uuid,
   p_admin_id       uuid,

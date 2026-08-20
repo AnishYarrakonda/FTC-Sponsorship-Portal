@@ -18,7 +18,6 @@ test.describe.serial('Payout Profiles & W-9 Security Boundaries (E2E)', () => {
   let teamYId: string
   let coachXProfileId: string
   let coachYProfileId: string
-  let sponsorId: string
 
   test.beforeAll(async () => {
     adminClient = createClient<Database>(SUPABASE_URL, SERVICE_ROLE_KEY)
@@ -34,8 +33,6 @@ test.describe.serial('Payout Profiles & W-9 Security Boundaries (E2E)', () => {
     const { data: teamY } = await adminClient.from('teams').select('id').eq('owner_id', coachYProfileId).limit(1).single()
     teamYId = teamY?.id ?? 'team-y'
 
-    const { data: sponsor } = await adminClient.from('sponsors').select('id').limit(1).single()
-    sponsorId = sponsor?.id ?? 'sponsor-1'
   })
 
   test('Coach saves payout profile -> row created, EIN encrypted, ein_last4 set', async () => {

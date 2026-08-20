@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
   Search, Plus, ArrowUpRight, Sparkles, Building2, AlertCircle,
-  ChevronDown, ChevronUp, Bell, CheckCircle2, FileText,
+  ChevronDown, ChevronUp, Bell, CheckCircle2, FileText, MessageSquare, Scale,
 } from 'lucide-react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { FadeUp } from '@/components/motion/fade-up'
@@ -31,16 +31,30 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { PortfolioTab } from './portfolio-tab'
 import { InboxTab } from './inbox-tab'
 import { FundingTab } from './funding-tab'
+import { RecognitionTab, type CoachRecognitionAward } from './recognition-tab'
 import { AccountSettings } from '@/components/account/account-settings'
-import { updateTeam } from '@/app/actions/team'
+import { updateTeam, requestTeamVerificationReview } from '@/app/actions/team'
 import { toast } from 'sonner'
 import type { Team, Notification, Submission, Sponsor, TeamAchievement, SubmissionSummary } from '@/lib/supabase/types'
+
+/**
+ * The dashboard projection (app/(coach)/dashboard/page.tsx) carries one field the
+ * v_submission_summary view does not: how many sponsor questions are on this pitch's
+ * thread, so a coach can see there is something to answer without opening every row.
+ */
+type CoachSubmissionSummary = SubmissionSummary & {
+  question_count?: number
+  /** Set by the dashboard projection when this decline is still inside its 30-day window. */
+  appealable?: boolean
+  appeal_status?: string | null
+}
 
 const TABS = [
   { id: 'overview', label: 'Dashboard' },
   { id: 'portfolio', label: 'Portfolio' },
   { id: 'pitches', label: 'Pitches' },
   { id: 'sponsors', label: 'Sponsors' },
+  { id: 'recognition', label: 'Recognition' },
   { id: 'inbox', label: 'Inbox' },
   { id: 'funding', label: 'Funding' },
   { id: 'settings', label: 'Settings' },
@@ -66,16 +80,18 @@ export function DashboardShell({
   achievements,
   fulfillments = [],
   payoutProfiles = [],
+  recognitionAwards = [],
 }: {
   team: Team
   profile: any
   sponsors: Sponsor[]
   notifications: Notification[]
   unreadCount: number
-  submissions: SubmissionSummary[]
+  submissions: CoachSubmissionSummary[]
   achievements: TeamAchievement[]
   fulfillments?: any[]
   payoutProfiles?: any[]
+  recognitionAwards?: CoachRecognitionAward[]
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -141,6 +157,7 @@ export function DashboardShell({
           {tab === 'portfolio' && <PortfolioTab team={team} achievements={achievements} />}
           {tab === 'pitches' && <SubmissionsTab submissions={submissions} onNewPitch={() => setTab('sponsors')} />}
           {tab === 'sponsors' && <FindSponsorsTab sponsors={sponsors} submissions={submissions} />}
+          {tab === 'recognition' && <RecognitionTab awards={recognitionAwards} />}
           {tab === 'inbox' && <InboxTab notifications={notifications} switchTab={setTab} />}
           {tab === 'funding' && <FundingTab teams={[team]} fulfillments={fulfillments} payoutProfiles={payoutProfiles} />}
           {tab === 'settings' && (
@@ -165,7 +182,7 @@ function OverviewTab({
   submissionsCount: number
   totalFunded: number
   portfolioAsk: number
-  submissions: SubmissionSummary[]
+  submissions: CoachSubmissionSummary[]
   unreadCount: number
 }) {
   const needsAttention = submissions.filter(s => s.status === 'declined' || s.status === 'changes_requested')
@@ -181,6 +198,9 @@ function OverviewTab({
   const [gradNumber, setGradNumber] = useState('')
   const [gradName, setGradName] = useState(team.team_name)
   const [isGraduating, startGraduation] = useTransition()
+  const [rejection, setRejection] = useState<{ claimedTeamName: string; officialTeamName: string | null } | null>(null)
+  const [isRequestingReview, startReviewRequest] = useTransition()
+  const [reviewRequested, setReviewRequested] = useState(false)
 
   const handleGraduate = () => {
     const num = parseInt(gradNumber)
@@ -201,13 +221,34 @@ function OverviewTab({
           ftcTeamNumber: num,
           teamName: gradName.trim() || team.team_name,
         })
-        if (res?.error) toast.error(res.error)
-        else {
+        if (res?.error) {
+          // A verification rejection carries structured fields so this can be shown
+          // inline (official vs. entered name) rather than only as a toast — the coach
+          // needs to actually compare the two, not just be told "something's wrong."
+          if ('verificationRejected' in res && res.verificationRejected) {
+            setRejection({ claimedTeamName: res.claimedTeamName, officialTeamName: res.officialTeamName })
+            setShowGraduation(false)
+          } else {
+            toast.error(res.error)
+          }
+        } else {
+          setRejection(null)
           toast.success('Congratulations! You are now an official Existing Team.')
           window.location.reload()
         }
       } catch (e) {
         toast.error(describeActionError(e, 'updateTeam.graduate'))
+      }
+    })
+  }
+
+  const handleRequestReview = () => {
+    startReviewRequest(async () => {
+      const res = await requestTeamVerificationReview(team.id)
+      if (res?.error) toast.error(res.error)
+      else {
+        setReviewRequested(true)
+        toast.success('An admin has been notified to review your team number.')
       }
     })
   }
@@ -232,7 +273,7 @@ function OverviewTab({
 
             <Dialog open={showGraduation} onOpenChange={setShowGraduation}>
               <DialogTrigger
-                className="inline-flex items-center justify-center whitespace-nowrap rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
+                className="inline-flex items-center justify-center whitespace-nowrap rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary-hover focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
               >
                 I have a team now
               </DialogTrigger>
@@ -248,8 +289,11 @@ function OverviewTab({
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="space-y-2">
-                    <Label className="text-foreground">New FTC Team Number</Label>
+                    {/* htmlFor/id pair: without it the label is decorative markup — a screen
+                        reader announces an unlabelled number box, and getByLabel finds nothing. */}
+                    <Label htmlFor="grad-team-number" className="text-foreground">New FTC Team Number</Label>
                     <Input
+                      id="grad-team-number"
                       type="number"
                       placeholder="e.g. 12345"
                       className="bg-background border-input text-foreground placeholder:text-muted-foreground focus:ring-primary"
@@ -258,8 +302,9 @@ function OverviewTab({
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-foreground">Official Team Name</Label>
+                    <Label htmlFor="grad-team-name" className="text-foreground">Official Team Name</Label>
                     <Input
+                      id="grad-team-name"
                       placeholder="Enter official team name"
                       className="bg-background border-input text-foreground placeholder:text-muted-foreground focus:ring-primary"
                       value={gradName}
@@ -278,13 +323,57 @@ function OverviewTab({
                   <Button
                     onClick={handleGraduate}
                     disabled={isGraduating || !gradNumber}
-                    className="bg-primary text-primary-foreground hover:bg-primary/90"
+                    className="bg-primary text-primary-foreground hover:bg-primary-hover"
                   >
                     {isGraduating ? 'Upgrading...' : 'Graduate Team'}
                   </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
+          </div>
+        </FadeUp>
+      )}
+
+      {/* Graduation verification rejection — not silently swallowed into a toast */}
+      {rejection && (
+        <FadeUp>
+          <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-5 space-y-3">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 shrink-0 text-status-danger" />
+              <div className="flex-1 space-y-2">
+                <h4 className="text-[15px] font-semibold text-status-danger">Team number could not be verified</h4>
+                <p className="text-sm text-muted-foreground">
+                  The name you entered doesn&apos;t match the official FIRST roster record for that team number.
+                </p>
+                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <dt className="text-muted-foreground uppercase tracking-wide">You entered</dt>
+                    <dd className="mt-0.5 font-medium text-foreground">{rejection.claimedTeamName}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground uppercase tracking-wide">Official record</dt>
+                    <dd className="mt-0.5 font-medium text-foreground">{rejection.officialTeamName ?? 'Unknown'}</dd>
+                  </div>
+                </dl>
+                <div className="flex items-center gap-3 pt-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={isRequestingReview || reviewRequested}
+                    onClick={handleRequestReview}
+                    className="border-rose-500/30 text-status-danger hover:bg-rose-500/10"
+                  >
+                    {reviewRequested ? 'Review requested' : isRequestingReview ? 'Requesting…' : 'Request admin review'}
+                  </Button>
+                  <button
+                    onClick={() => setRejection(null)}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </FadeUp>
       )}
@@ -501,7 +590,7 @@ function SponsorInitials({ name, logoUrl }: { name: string; logoUrl?: string | n
   )
 }
 
-function FindSponsorsTab({ sponsors, submissions }: { sponsors: Sponsor[], submissions: SubmissionSummary[] }) {
+function FindSponsorsTab({ sponsors, submissions }: { sponsors: Sponsor[], submissions: CoachSubmissionSummary[] }) {
   const [query, setQuery] = useState('')
   const [industry, setIndustry] = useState('all')
   const [fundingRange, setFundingRange] = useState(0) // index into FUNDING_RANGES
@@ -665,8 +754,8 @@ function FindSponsorsTab({ sponsors, submissions }: { sponsors: Sponsor[], submi
                         className={cn(
                           'flex items-center justify-center gap-1.5 py-3 text-xs font-semibold transition-colors',
                           s.website
-                            ? 'text-primary hover:bg-primary/5 hover:text-primary/90'
-                            : 'col-span-2 text-primary hover:bg-primary/5 hover:text-primary/90',
+                            ? 'text-primary hover:bg-primary/5'
+                            : 'col-span-2 text-primary hover:bg-primary/5',
                         )}
                       >
                         <Plus className="h-3.5 w-3.5" /> Pitch this sponsor
@@ -716,7 +805,7 @@ const SUBMISSION_FILTERS: { id: SubmissionFilter; label: string }[] = [
   { id: 'draft', label: 'Drafts' },
 ]
 
-function SubmissionsTab({ submissions, onNewPitch }: { submissions: SubmissionSummary[], onNewPitch: () => void }) {
+function SubmissionsTab({ submissions, onNewPitch }: { submissions: CoachSubmissionSummary[], onNewPitch: () => void }) {
   const [filter, setFilter] = useState<SubmissionFilter>('all')
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
@@ -755,7 +844,7 @@ function SubmissionsTab({ submissions, onNewPitch }: { submissions: SubmissionSu
           )
         })}
         </div>
-        <Button onClick={onNewPitch} className="gap-2 shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm">
+        <Button onClick={onNewPitch} className="gap-2 shrink-0 bg-primary text-primary-foreground hover:bg-primary-hover shadow-sm">
           <Plus className="h-4 w-4" /> New Pitch
         </Button>
       </div>
@@ -795,12 +884,43 @@ function SubmissionsTab({ submissions, onNewPitch }: { submissions: SubmissionSu
                       Edit
                     </Link>
                   ) : (
+                    // A locked pitch has nothing to edit — send them to the detail page,
+                    // which is where the sponsor Q&A thread lives.
                     <Link
-                      href={`/submissions/${s.id}/edit`}
+                      href={`/submissions/${s.id}`}
                       onClick={e => e.stopPropagation()}
                       className="text-xs uppercase tracking-wider px-3 py-1.5 bg-background border border-border rounded-md hover:bg-accent text-foreground font-semibold transition-colors shadow-sm"
                     >
                       View
+                    </Link>
+                  )}
+                  {s.appeal_status ? (
+                    <Link
+                      href="/appeals"
+                      onClick={e => e.stopPropagation()}
+                      className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider px-3 py-1.5 rounded-md border border-border bg-background text-muted-foreground font-semibold transition-colors hover:bg-accent"
+                    >
+                      <Scale className="h-3.5 w-3.5" />
+                      Appeal {s.appeal_status.replace('_', ' ')}
+                    </Link>
+                  ) : s.appealable ? (
+                    <Link
+                      href="/appeals"
+                      onClick={e => e.stopPropagation()}
+                      className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider px-3 py-1.5 rounded-md border border-border bg-background text-foreground font-semibold transition-colors hover:bg-accent shadow-sm"
+                    >
+                      <Scale className="h-3.5 w-3.5" />
+                      Appeal
+                    </Link>
+                  ) : null}
+                  {(s.question_count ?? 0) > 0 && (
+                    <Link
+                      href={`/submissions/${s.id}`}
+                      onClick={e => e.stopPropagation()}
+                      className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider px-3 py-1.5 rounded-md border border-amber-300 bg-amber-50 text-amber-900 font-semibold transition-colors hover:bg-amber-100 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200"
+                    >
+                      <MessageSquare className="h-3.5 w-3.5" />
+                      {s.question_count} question{s.question_count === 1 ? '' : 's'}
                     </Link>
                   )}
                   <span className="text-muted-foreground/50">

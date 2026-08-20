@@ -13,6 +13,7 @@
 // (mirrors the existing SPONSOR_PREVIEW pattern in lib/dev-preview.ts)
 //
 import type { Database } from './supabase/types'
+import { PREVIEW_PLACEHOLDER_IMAGE } from './dev-placeholder-image'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
@@ -154,6 +155,67 @@ const submissions = [
     status: 'draft', sponsor_id: 'sp1', requested_amount_cents: 90_000,
     updated_at: iso(8), sponsors: { company_name: 'Acme Robotics' },
   }),
+  // Live with a sponsor — the only state in which the Q&A composer is open, so the
+  // preview needs one or the thread can never be exercised (0085).
+  makeSubmission('preview-sub-5', {
+    status: 'dispatched', sponsor_id: 'sp4', requested_amount_cents: 140_000,
+    reserved_amount_cents: 140_000, sent_at: iso(5),
+    expires_at: new Date(Date.now() + 9 * 864e5).toISOString(),
+    updated_at: iso(5), sponsors: { company_name: 'Quantum Dynamics' },
+  }),
+]
+
+// ── Appeals (0086) ───────────────────────────────────────────────────────────
+// One resolved appeal so the coach-side list, status pill and resolution card all render.
+const coachAppeals = [
+  {
+    id: 'apl-c1', subject_type: 'submission', subject_id: 'preview-sub-3',
+    appellant_profile_id: COACH_ID,
+    statement: 'The travel budget was flagged as unclear, but the itemised quote was attached. Please take another look.',
+    status: 'under_review', decision_at: iso(3), original_decider_id: null,
+    assigned_reviewer_id: null, assigned_at: iso(1), override_reason: null,
+    resolution_notes: null, resolved_by: null, resolved_at: null,
+    created_at: iso(2), updated_at: iso(1),
+  },
+]
+
+// ── Q&A thread (0085) ────────────────────────────────────────────────────────
+// One answered exchange, one reply still in review, and one rejection the coach can see
+// the reason for — the three states the coach-side thread has to render.
+const submissionMessages = [
+  {
+    id: 'msg-1', submission_id: 'preview-sub-5', author_role: 'sponsor',
+    author_profile_id: 'preview-sponsor-sp4', author_token_id: null,
+    author_label: 'Lena Vogt', status: 'released',
+    body: 'Does the $1,400 include the regional entry fee, or is that separate?',
+    released_at: iso(4), released_by: null, rejected_reason: null,
+    flagged_at: null, flagged_by: null, created_at: iso(4),
+  },
+  {
+    id: 'msg-2', submission_id: 'preview-sub-5', author_role: 'coach',
+    author_profile_id: COACH_ID, author_token_id: null,
+    author_label: mockCoachProfile.full_name, status: 'released',
+    body: 'Separate — the entry fee is covered by our district. The $1,400 is materials and travel only.',
+    released_at: iso(3), released_by: null, rejected_reason: null,
+    flagged_at: null, flagged_by: null, created_at: iso(3),
+  },
+  {
+    id: 'msg-3', submission_id: 'preview-sub-5', author_role: 'coach',
+    author_profile_id: COACH_ID, author_token_id: null,
+    author_label: mockCoachProfile.full_name, status: 'pending',
+    body: 'One more thing — we can send over the full parts list if that helps your team decide.',
+    released_at: null, released_by: null, rejected_reason: null,
+    flagged_at: null, flagged_by: null, created_at: iso(1),
+  },
+  {
+    id: 'msg-4', submission_id: 'preview-sub-5', author_role: 'coach',
+    author_profile_id: COACH_ID, author_token_id: null,
+    author_label: mockCoachProfile.full_name, status: 'rejected',
+    body: 'Our driver and programmer would both love to meet your engineers.',
+    released_at: iso(2), released_by: null,
+    rejected_reason: 'This identifies students by role. Please rewrite without referring to individual team members.',
+    flagged_at: null, flagged_by: null, created_at: iso(2),
+  },
 ]
 
 // ── Notifications (in-app inbox) ─────────────────────────────────────────────
@@ -174,7 +236,119 @@ const payoutProfiles = [
 ]
 
 const fulfillments = [
-  { id: 'f-1', sponsor_id: 'sp1', submission_id: 'preview-sub-1', team_id: TEAM_ID, amount_cents: 250_000, status: 'payment_sent', pledged_at: iso(10), payment_sent_at: iso(2), payment_method: 'check', sponsors: { company_name: 'Acme Robotics' } }
+  { id: 'f-1', sponsor_id: 'sp1', submission_id: 'preview-sub-1', team_id: TEAM_ID, amount_cents: 250_000, status: 'payment_sent', pledged_at: iso(10), payment_sent_at: iso(2), payment_method: 'check', sponsors: { company_name: 'Acme Robotics' } },
+  { id: 'f-2', sponsor_id: 'sp2', submission_id: 'preview-sub-2', team_id: TEAM_ID, amount_cents: 180_000, status: 'receipted', receipt_number: 'PF-2026-000002', pledged_at: iso(30), payment_sent_at: iso(20), payment_received_at: iso(15), sponsors: { company_name: 'TechNova' } },
+]
+
+const receipts = [
+  {
+    id: 'rec-2',
+    receipt_number: 'PF-2026-000002',
+    fulfillment_id: 'f-2',
+    transaction_id: 'txn-2',
+    sponsor_id: 'sp2',
+    team_id: TEAM_ID,
+    amount_cents: 180_000,
+    contribution_date: iso(15).split('T')[0],
+    variant: 'charitable_501c3',
+    payee_legal_name: 'Exodius Robotics Inc.',
+    payee_ein_last4: '5678',
+    payee_tax_classification: '501c3_org',
+    sponsor_legal_name: 'TechNova',
+    document_html: '<div style="padding: 24px;"><h1>Contribution acknowledgment</h1><p>Exodius Robotics Inc. (EIN 98-7654321) acknowledges receipt of $1,800.00 from TechNova.</p><p><strong>No goods or services were provided by Exodius Robotics Inc. in exchange for this contribution.</strong></p></div>',
+    document_sha256: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+    copy_version: '2026-08-v1',
+    copy_reviewed_at: null,
+    status: 'issued',
+    issued_at: iso(15),
+    teams: { team_name: 'Exodius' }
+  }
+]
+
+function makeSignature(id: string, submissionId: string, role: 'sponsor' | 'coach', over: Record<string, unknown>) {
+  return {
+    id,
+    template_id: 'agr-1',
+    template_key: 'sponsorship_agreement',
+    template_version: 1,
+    signer_role: role,
+    submission_id: submissionId,
+    team_id: TEAM_ID,
+    entity_snapshot: { team_number: team.ftc_team_number, team_name: team.team_name, team_organization: team.organization, sponsor_company_name: 'Acme Robotics', amount_cents: 250_000 },
+    typed_name: role === 'coach' ? mockCoachProfile.full_name : 'Dana Cole',
+    signed_at: iso(role === 'coach' ? 1 : 2),
+    ip_address: role === 'coach' ? '203.0.113.42' : '203.0.113.10',
+    user_agent: 'Mozilla/5.0 (dev preview)',
+    document_hash: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+    document_storage_path: `preview/${id}.html`,
+    consent_text_version: 1,
+    consent_text_hash: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+    created_at: iso(role === 'coach' ? 1 : 2),
+    ...over,
+  }
+}
+
+const agreementSignatures = [
+  makeSignature('00000000-0000-4000-8000-000000000201', 'preview-sub-1', 'sponsor', { sponsor_id: 'sp1', signer_profile_id: 'preview-sponsor-sp1', signer_legal_name: 'Dana Cole', signer_email: 'dana@acmerobotics.com' }),
+  makeSignature('00000000-0000-4000-8000-000000000202', 'preview-sub-1', 'coach', { sponsor_id: 'sp1', signer_profile_id: COACH_ID, signer_legal_name: mockCoachProfile.full_name, signer_email: mockCoachProfile.email }),
+  makeSignature('00000000-0000-4000-8000-000000000203', 'preview-sub-2', 'sponsor', { sponsor_id: 'sp2', signer_profile_id: 'preview-sponsor-sp2', signer_legal_name: 'Wei Chen', signer_email: 'wei@technova.io' }),
+  makeSignature('00000000-0000-4000-8000-000000000204', 'preview-sub-2', 'coach', { sponsor_id: 'sp2', signer_profile_id: COACH_ID, signer_legal_name: mockCoachProfile.full_name, signer_email: mockCoachProfile.email }),
+]
+
+const teamVerificationRecords = [
+  {
+    id: 'tvr-preview-1', team_id: TEAM_ID, profile_id: COACH_ID, ftc_team_number: team.ftc_team_number,
+    claimed_team_name: team.team_name, claimed_organization: team.organization,
+    official_team_name: team.team_name, official_organization: team.organization,
+    source: 'first_api', name_score: 1, organization_score: 1, confidence: 1,
+    outcome: 'auto_pass', override_reason: null, overridden_by: null, overridden_at: null,
+    checked_at: iso(2),
+  },
+]
+
+// One Silver award with three benefits: one delivered with proof, one voided by an admin
+// (so the re-upload state is browsable), one still promised.
+const recognitionAwards = [
+  {
+    id: 'award-preview-1',
+    fulfillment_id: 'ff-preview-1',
+    sponsor_id: sponsors[0].id,
+    team_id: TEAM_ID,
+    amount_cents: 300000,
+    tier_id: 'tier-silver',
+    tier_name_snapshot: 'Silver',
+    tier_rank_snapshot: 2,
+    tier_min_amount_cents_snapshot: 250000,
+    benefits_snapshot: ['logo_on_website', 'social_media_mention', 'logo_on_team_shirt'],
+    awarded_at: iso(18),
+    created_at: iso(18),
+    updated_at: iso(3),
+    recognition_benefit_deliveries: [
+      {
+        id: 'del-preview-1', award_id: 'award-preview-1', benefit_type: 'logo_on_website',
+        status: 'delivered',
+        proof_url: PREVIEW_PLACEHOLDER_IMAGE,
+        proof_uploaded_at: iso(3), no_minors_confirmed_at: iso(3), delivered_at: iso(3),
+        coach_note: null, admin_voided_at: null, admin_void_reason: null,
+        created_at: iso(18), updated_at: iso(3),
+      },
+      {
+        id: 'del-preview-2', award_id: 'award-preview-1', benefit_type: 'logo_on_team_shirt',
+        status: 'in_progress',
+        proof_url: null, proof_uploaded_at: null, no_minors_confirmed_at: null, delivered_at: null,
+        coach_note: null, admin_voided_at: iso(1),
+        admin_void_reason: 'A student was visible in the background. Please reshoot the shirt on its own.',
+        created_at: iso(18), updated_at: iso(1),
+      },
+      {
+        id: 'del-preview-3', award_id: 'award-preview-1', benefit_type: 'social_media_mention',
+        status: 'promised',
+        proof_url: null, proof_uploaded_at: null, no_minors_confirmed_at: null, delivered_at: null,
+        coach_note: null, admin_voided_at: null, admin_void_reason: null,
+        created_at: iso(18), updated_at: iso(18),
+      },
+    ],
+  },
 ]
 
 const DATA: Record<string, any[]> = {
@@ -187,6 +361,15 @@ const DATA: Record<string, any[]> = {
   team_achievements: teamAchievements,
   team_payout_profiles: payoutProfiles,
   funding_fulfillments: fulfillments,
+  funding_receipts: receipts,
+  agreement_signatures: agreementSignatures,
+  team_verification_records: teamVerificationRecords,
+  submission_messages: submissionMessages,
+  appeals: coachAppeals,
+  sponsor_recognition_awards: recognitionAwards,
+  recognition_benefit_deliveries: recognitionAwards.flatMap(
+    (a: any) => a.recognition_benefit_deliveries
+  ),
   audit_log: [],
 }
 

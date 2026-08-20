@@ -57,9 +57,11 @@ import {
   sendCoachSignupWelcomeEmail,
   sendCoachDenialEmail,
   sendHandshakeEmail,
+  sendSponsorApplicationConfirmation,
   sendSubmissionDecisionEmail,
   sendWelcomeInAppNotification,
 } from '@/lib/notify'
+import { SUPPORT_EMAIL } from '@/lib/site-config'
 
 const SEND_OK = { data: { id: 'email-1' }, error: null }
 
@@ -101,6 +103,22 @@ describe('notify return contract', () => {
     expect(result.success).toBe(false)
     expect(mocks.sendMock).not.toHaveBeenCalled()
     expect(mocks.captureMock).toHaveBeenCalled()
+  })
+})
+
+// ── replyTo: emails that invite a reply must not reply into the noreply@ void ──
+
+describe('replyTo wiring', () => {
+  it('sendCoachDenialEmail replies to the support inbox', async () => {
+    mocks.sendMock.mockResolvedValue(SEND_OK)
+    await sendCoachDenialEmail('coach@test.dev', 'Coach', 'blurry ID')
+    expect(mocks.sendMock.mock.calls[0][0].replyTo).toBe(SUPPORT_EMAIL)
+  })
+
+  it('sendSponsorApplicationConfirmation replies to the support inbox', async () => {
+    mocks.sendMock.mockResolvedValue(SEND_OK)
+    await sendSponsorApplicationConfirmation('Acme', 'sponsor@test.dev', 'Sponsor', 500000)
+    expect(mocks.sendMock.mock.calls[0][0].replyTo).toBe(SUPPORT_EMAIL)
   })
 })
 

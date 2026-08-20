@@ -3,7 +3,7 @@ import { htmlToPlainText } from '@/lib/utils'
 
 // Pitch fields are plain text. Any HTML a coach pastes (or legacy TipTap markup) is flattened
 // to readable text on input, so nothing is stored or displayed as raw `<p>…</p>` markup.
-function plainTextField(min: number, max: number, minMsg: string, maxMsg: string) {
+export function plainTextField(min: number, max: number, minMsg: string, maxMsg: string) {
   return z
     .string()
     .trim()

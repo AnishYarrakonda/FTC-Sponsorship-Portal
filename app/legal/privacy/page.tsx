@@ -51,12 +51,29 @@ export default function PrivacyPolicyPage() {
         </p>
         <p>
           Deleting your account removes your profile and every file you have uploaded, including your team logo
-          and any pitch images.
+          and any pitch images — with one exception: agreement and signature records, described in Section 7
+          below, are retained even after account deletion.
         </p>
 
         <h2>6. Data Security</h2>
         <p>
           We employ industry-standard security measures, including Row-Level Security (RLS) in our database, to ensure that team and sponsor data is isolated and protected.
+        </p>
+
+        {/* ATTORNEY REVIEW REQUIRED */}
+        <h2>7. Agreement and Signature Records</h2>
+        <p>
+          When you sign a document through the platform (for example, a Sponsorship Agreement), we
+          record the typed name you entered, the email address on your account, the UTC timestamp of
+          signing, the IP address the signature was submitted from, the browser user-agent string,
+          and a cryptographic hash of the exact document you were shown at the moment of signing.
+        </p>
+        <p>
+          We retain the executed document and this audit trail for seven years as a business record
+          required to support enforceability under the U.S. Electronic Signatures in Global and
+          National Commerce Act (ESIGN) and applicable state UETA law.{' '}
+          <strong>This record survives deletion of your account</strong> — it is the one category of
+          data exempted from the deletion described in Section 5 above.
         </p>
       </div>
     </div>

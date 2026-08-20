@@ -70,6 +70,54 @@ const ACCOUNTS = {
     fullName: 'Dev Sponsor',
     role: 'sponsor',
   },
+  // Second member of the "dev testing" org (0082/0083 sponsor_members security-boundary
+  // tests need multiple org members at different ladder ranks, plus a second, wholly
+  // separate org). sponsor_members.role for this one is 'submitter'.
+  sponsorMember: {
+    email: 'sponsor-member+clerk_test@example.com',
+    password: 'SponsorMemberTest123!',
+    fullName: 'Dev Sponsor Teammate',
+    role: 'sponsor',
+  },
+  // 0083 — a read-only member of "dev testing" (sponsor_members.role = 'viewer').
+  sponsorViewer: {
+    email: 'sponsor-viewer+clerk_test@example.com',
+    password: 'SponsorViewerTest123!',
+    fullName: 'Dev Sponsor Viewer',
+    role: 'sponsor',
+  },
+  // 0083 — a second signature for "dev testing" (sponsor_members.role = 'approver'), so
+  // approvals can be turned on (the two-approver floor: sponsor + this account).
+  sponsorApprover: {
+    email: 'sponsor-approver+clerk_test@example.com',
+    password: 'SponsorApproverTest123!',
+    fullName: 'Dev Sponsor Approver',
+    role: 'sponsor',
+  },
+  // 0084 backfills every pre-existing admin to super_admin, so admin-levels.spec.ts had
+  // no reviewer to sign in as and skipped its whole "Reviewer boundaries" describe. This is
+  // that reviewer: a real second admin, pinned to admin_level 'reviewer'.
+  reviewer: {
+    email: 'reviewer+clerk_test@example.com',
+    password: 'ReviewerTest123!',
+    fullName: 'Dev Reviewer',
+    role: 'admin',
+  },
+  // denial-flow.spec.ts needs a coach sitting in the "Awaiting Verification" queue —
+  // unverified WITH credentials uploaded. The main coach is verified, and the spec denies
+  // whoever it is pointed at, so it must not be reused.
+  denialCoach: {
+    email: 'denial-coach+clerk_test@example.com',
+    password: 'DenialCoachTest123!',
+    fullName: 'Dev Denial Coach',
+    role: 'coach',
+  },
+  sponsor2: {
+    email: 'sponsor2+clerk_test@example.com',
+    password: 'Sponsor2Test123!',
+    fullName: 'Dev Sponsor Two',
+    role: 'sponsor',
+  },
 }
 
 const ALL_EMAILS = Object.values(ACCOUNTS).map(a => a.email)
@@ -87,6 +135,19 @@ async function wipeUsers() {
   // Order matters: children before parents. Supabase .delete() returns an error
   // object rather than throwing, so we check `error` directly.
   const tablesToClear = [
+    // Fulfillment / money trail (0076-0080, 0087-0088) — added because the original list
+    // predates them. Their FKs to profiles/teams/submissions made the `profiles` delete fail,
+    // and that failure was only a warning, so every re-run silently ADDED another copy of
+    // each account. `.single()` lookups later in this script then blew up on multiple rows.
+    'agreement_signatures',
+    'funding_fulfillment_events',
+    'funding_receipts',
+    'funding_fulfillments',
+    'sponsor_decision_proposals',
+    'sponsor_recognition_awards',
+    'impact_report_snapshots',
+    'submission_messages',
+    'appeals',
     'transactions_ledger',
     'notifications',
     'submission_access_tokens',
@@ -94,13 +155,32 @@ async function wipeUsers() {
     'submissions',
     'pitches',
     'team_achievements',
+    'team_payout_profiles',
+    'team_verification_records',
     'teams',
+    'sponsor_members',
     'profiles',
   ]
   for (const table of tablesToClear) {
-    const { error } = await admin.from(table).delete().filter('id', 'not.is', null)
-    if (error) warn(`Could not clear ${table}: ${error.message}`)
-    else log(`Cleared ${table}`)
+    /**
+     * Admin profiles survive this pass on purpose. 0084 installs a deferred constraint
+     * trigger that refuses any transaction ENDING with zero super admins, and PostgREST
+     * commits each request on its own — so "delete every profile" can never succeed. The
+     * stale admins are removed later by pruneStaleAdmins(), once the new one exists.
+     */
+    const query = admin.from(table).delete()
+    const { error } =
+      table === 'profiles'
+        ? await query.neq('role', 'admin')
+        : await query.filter('id', 'not.is', null)
+    // A table that does not exist in this database is fine (older schema); anything else
+    // leaves the seed inconsistent, and `profiles` in particular must be empty.
+    if (error && !/does not exist|schema cache/i.test(error.message)) {
+      if (table === 'profiles') throw new Error(`Could not clear profiles: ${error.message}`)
+      warn(`Could not clear ${table}: ${error.message}`)
+    } else {
+      log(`Cleared ${table}`)
+    }
   }
 
   // Delete only the seeded test users from Clerk (matched by email), not every
@@ -133,6 +213,50 @@ async function createUser(email, password, fullName) {
   return user.id
 }
 
+// ─── Clerk Organizations ─────────────────────────────────────────────────────
+// `sponsors.clerk_org_id` and `sponsor_members.clerk_membership_id` used to be seeded with
+// invented strings ('org_seed_dev_testing_a'). Anything that calls Clerk with those ids —
+// inviting a teammate, listing pending invitations, reading enterprise connections — got a
+// 404 from Clerk and failed in a way that looked like a product bug. These create the real
+// organizations so the org surfaces are exercisable end to end.
+
+/** Delete any org with this name, then create it fresh. Returns the Clerk org id. */
+async function createOrg(name, createdByClerkUserId) {
+  const existing = await clerk.organizations.getOrganizationList({ query: name, limit: 20 })
+  for (const org of existing.data ?? []) {
+    if (org.name === name) await clerk.organizations.deleteOrganization(org.id)
+  }
+  const org = await clerk.organizations.createOrganization({
+    name,
+    createdBy: createdByClerkUserId,
+  })
+  log(`Created Clerk organization "${name}"  [id: ${org.id}]`)
+  return org.id
+}
+
+/**
+ * Add a member. `createOrganization` already makes the creator an org:admin, so that one is
+ * looked up rather than re-added. Clerk only knows two roles here; the portal's four-rung
+ * ladder (org_admin / approver / submitter / viewer) lives in `sponsor_members.role`.
+ */
+async function addOrgMember(orgId, clerkUserId, clerkRole) {
+  try {
+    const m = await clerk.organizations.createOrganizationMembership({
+      organizationId: orgId,
+      userId: clerkUserId,
+      role: clerkRole,
+    })
+    return m.id
+  } catch {
+    const list = await clerk.organizations.getOrganizationMembershipList({
+      organizationId: orgId,
+      limit: 100,
+    })
+    const found = (list.data ?? []).find((m) => m.publicUserData?.userId === clerkUserId)
+    return found?.id ?? null
+  }
+}
+
 // ─── Step 3: Upsert the matching profile row (links clerk_user_id → role) ─────
 // Profile rows are normally created by the app at runtime; the seeder writes them
 // directly via the service-role client (bypasses RLS).
@@ -155,6 +279,24 @@ async function upsertProfile(clerkUserId, email, fullName, patch) {
   return data.id
 }
 
+// ─── Storage: a stand-in credential image ─────────────────────────────────────
+// /coaches mints a 30-minute signed URL for everyone in the review queue. A row whose
+// coach_credentials_url points at nothing still renders (the page tolerates a null URL),
+// but the reviewer's document viewer would be empty, so put a real object behind it.
+// The path's first segment must be the Clerk user id — storage RLS partitions on it.
+const PLACEHOLDER_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64'
+)
+
+async function uploadPlaceholderCredential(path) {
+  const { error } = await admin.storage
+    .from('coach-credentials')
+    .upload(path, PLACEHOLDER_PNG, { contentType: 'image/png', upsert: true })
+  if (error) warn(`Could not upload placeholder credential to ${path}: ${error.message}`)
+  else log(`Uploaded placeholder credential  [${path}]`)
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
   console.log('\n🚀  FTC Portal — test account seeder (Clerk)\n')
@@ -167,6 +309,8 @@ async function main() {
   const coachClerkId   = await createUser(ACCOUNTS.coach.email,   ACCOUNTS.coach.password,   ACCOUNTS.coach.fullName)
   const adminClerkId   = await createUser(ACCOUNTS.admin.email,   ACCOUNTS.admin.password,   ACCOUNTS.admin.fullName)
   const sponsorClerkId = await createUser(ACCOUNTS.sponsor.email, ACCOUNTS.sponsor.password, ACCOUNTS.sponsor.fullName)
+  const reviewerClerkId     = await createUser(ACCOUNTS.reviewer.email,     ACCOUNTS.reviewer.password,     ACCOUNTS.reviewer.fullName)
+  const denialCoachClerkId  = await createUser(ACCOUNTS.denialCoach.email,  ACCOUNTS.denialCoach.password,  ACCOUNTS.denialCoach.fullName)
 
   // 3. Upsert profiles with roles (no DB trigger — write them directly)
   section('Creating profiles & configuring roles')
@@ -176,11 +320,51 @@ async function main() {
     coppa_acknowledged: true,
     tos_accepted: true,
   })
-  await upsertProfile(adminClerkId, ACCOUNTS.admin.email, ACCOUNTS.admin.fullName, {
+  const adminProfileId = await upsertProfile(
+    adminClerkId, ACCOUNTS.admin.email, ACCOUNTS.admin.fullName,
+    {
+      role: 'admin',
+      admin_level: 'super_admin',
+      coppa_acknowledged: true,
+      tos_accepted: true,
+    }
+  )
+
+  // Now that a fresh super admin exists, the ones the wipe had to spare can go. Without
+  // this, every run left the previous admin behind and duplicate emails accumulated until
+  // `.single()` lookups elsewhere in this script started failing on multiple rows.
+  const { error: pruneErr } = await admin
+    .from('profiles')
+    .delete()
+    .eq('role', 'admin')
+    .neq('id', adminProfileId)
+  if (pruneErr) warn(`Could not prune stale admin profiles: ${pruneErr.message}`)
+  else log('Pruned stale admin profiles')
+
+  // The reviewer has to be created AFTER the prune above, which deletes every admin that
+  // is not `adminProfileId` — building it earlier would just delete it again.
+  await upsertProfile(reviewerClerkId, ACCOUNTS.reviewer.email, ACCOUNTS.reviewer.fullName, {
     role: 'admin',
+    admin_level: 'reviewer',
     coppa_acknowledged: true,
     tos_accepted: true,
   })
+
+  // Unverified, but WITH a credentials object, which is exactly the predicate
+  // /coaches uses to put a coach in the "Awaiting Verification" queue
+  // (!coach_verified && !!coach_credentials_url). denied_at/denial_reason stay null so
+  // each run starts from an undecided application.
+  const denialCredentialsPath = `${denialCoachClerkId}/dev-denial-coach-id.png`
+  await upsertProfile(denialCoachClerkId, ACCOUNTS.denialCoach.email, ACCOUNTS.denialCoach.fullName, {
+    role: 'coach',
+    coach_verified: false,
+    coach_credentials_url: denialCredentialsPath,
+    denial_reason: null,
+    denied_at: null,
+    coppa_acknowledged: true,
+    tos_accepted: true,
+  })
+  await uploadPlaceholderCredential(denialCredentialsPath)
 
   // 4. Create "dev testing" sponsor company.
   // `sponsors` has no unique constraint on company_name, so ON CONFLICT can't be
@@ -227,6 +411,108 @@ async function main() {
     if (error && !error.message.includes('unique')) warn(`sponsor_applications insert: ${error.message}`)
     else log('Created sponsor_applications record (approved)')
   })
+
+  // 6b. Sponsor Organizations (0082) fixtures — a second member of "dev testing" plus a
+  // wholly separate second sponsor company, both needed by the cross-org RLS
+  // security-boundary tests (tests/e2e/sponsor-organizations.spec.ts). clerk_org_id /
+  // clerk_membership_id here are seeder-only placeholders — this script writes DB state
+  // directly rather than driving the real Clerk Organizations API, since the tests only
+  // need two distinct orgs with real RLS-scoped rows, not a live invite flow.
+  section('Creating sponsor organization fixtures (0082/0083)')
+  const sponsorMemberClerkId = await createUser(
+    ACCOUNTS.sponsorMember.email, ACCOUNTS.sponsorMember.password, ACCOUNTS.sponsorMember.fullName
+  )
+  const sponsorViewerClerkId = await createUser(
+    ACCOUNTS.sponsorViewer.email, ACCOUNTS.sponsorViewer.password, ACCOUNTS.sponsorViewer.fullName
+  )
+  const sponsorApproverClerkId = await createUser(
+    ACCOUNTS.sponsorApprover.email, ACCOUNTS.sponsorApprover.password, ACCOUNTS.sponsorApprover.fullName
+  )
+  const sponsor2ClerkId = await createUser(
+    ACCOUNTS.sponsor2.email, ACCOUNTS.sponsor2.password, ACCOUNTS.sponsor2.fullName
+  )
+
+  const ORG_A_CLERK_ID = await createOrg('dev testing', sponsorClerkId)
+
+  await admin.from('sponsors').update({ clerk_org_id: ORG_A_CLERK_ID }).eq('id', sponsorRow.id)
+
+  const sponsorMemberProfileId = await upsertProfile(
+    sponsorMemberClerkId, ACCOUNTS.sponsorMember.email, ACCOUNTS.sponsorMember.fullName,
+    { role: 'sponsor', sponsor_id: sponsorRow.id, coppa_acknowledged: true, tos_accepted: true }
+  )
+  const sponsorViewerProfileId = await upsertProfile(
+    sponsorViewerClerkId, ACCOUNTS.sponsorViewer.email, ACCOUNTS.sponsorViewer.fullName,
+    { role: 'sponsor', coppa_acknowledged: true, tos_accepted: true }
+  )
+  const sponsorApproverProfileId = await upsertProfile(
+    sponsorApproverClerkId, ACCOUNTS.sponsorApprover.email, ACCOUNTS.sponsorApprover.fullName,
+    { role: 'sponsor', coppa_acknowledged: true, tos_accepted: true }
+  )
+
+  const { data: sponsorProfile } = await admin
+    .from('profiles').select('id').eq('email', ACCOUNTS.sponsor.email).single()
+
+  // Role ladder for "dev testing": org_admin (owner), submitter, viewer, approver. Two
+  // members at rank >= approver (org_admin + approver) so the two-approver floor lets
+  // updateOrgApprovalSettings turn approvals on for manual QA.
+  await admin.from('sponsor_members').insert([
+    {
+      sponsor_id: sponsorRow.id, profile_id: sponsorProfile.id, clerk_org_id: ORG_A_CLERK_ID,
+      clerk_membership_id: await addOrgMember(ORG_A_CLERK_ID, sponsorClerkId, 'org:admin'),
+      role: 'org_admin', joined_at: new Date().toISOString(),
+    },
+    {
+      sponsor_id: sponsorRow.id, profile_id: sponsorMemberProfileId, clerk_org_id: ORG_A_CLERK_ID,
+      clerk_membership_id: await addOrgMember(ORG_A_CLERK_ID, sponsorMemberClerkId, 'org:member'),
+      role: 'submitter', invited_by: sponsorProfile.id,
+      invited_at: new Date().toISOString(), joined_at: new Date().toISOString(),
+    },
+    {
+      sponsor_id: sponsorRow.id, profile_id: sponsorViewerProfileId, clerk_org_id: ORG_A_CLERK_ID,
+      clerk_membership_id: await addOrgMember(ORG_A_CLERK_ID, sponsorViewerClerkId, 'org:member'),
+      role: 'viewer', invited_by: sponsorProfile.id,
+      invited_at: new Date().toISOString(), joined_at: new Date().toISOString(),
+    },
+    {
+      sponsor_id: sponsorRow.id, profile_id: sponsorApproverProfileId, clerk_org_id: ORG_A_CLERK_ID,
+      clerk_membership_id: await addOrgMember(ORG_A_CLERK_ID, sponsorApproverClerkId, 'org:member'),
+      role: 'approver', invited_by: sponsorProfile.id,
+      invited_at: new Date().toISOString(), joined_at: new Date().toISOString(),
+    },
+  ])
+  log(`Linked submitter/viewer/approver teammates of "dev testing"  [profile ids: ${sponsorMemberProfileId}, ${sponsorViewerProfileId}, ${sponsorApproverProfileId}]`)
+
+  await admin.from('sponsor_applications').delete().eq('company_name', 'dev testing 2')
+  await admin.from('sponsors').delete().eq('company_name', 'dev testing 2')
+
+  const ORG_B_CLERK_ID = await createOrg('dev testing 2', sponsor2ClerkId)
+
+  const { data: sponsor2Row, error: sponsor2Err } = await admin
+    .from('sponsors')
+    .insert({
+      company_name: 'dev testing 2',
+      contact_name: ACCOUNTS.sponsor2.fullName,
+      contact_email: ACCOUNTS.sponsor2.email,
+      funding_cap_cents: 500000,
+      status: 'active',
+      source: 'admin_added',
+      clerk_org_id: ORG_B_CLERK_ID,
+    })
+    .select('id')
+    .single()
+  if (sponsor2Err) throw new Error(`sponsors (dev testing 2) insert failed: ${sponsor2Err.message}`)
+
+  const sponsor2ProfileId = await upsertProfile(
+    sponsor2ClerkId, ACCOUNTS.sponsor2.email, ACCOUNTS.sponsor2.fullName,
+    { role: 'sponsor', sponsor_id: sponsor2Row.id, coppa_acknowledged: true, tos_accepted: true }
+  )
+
+  await admin.from('sponsor_members').insert({
+    sponsor_id: sponsor2Row.id, profile_id: sponsor2ProfileId, clerk_org_id: ORG_B_CLERK_ID,
+    clerk_membership_id: await addOrgMember(ORG_B_CLERK_ID, sponsor2ClerkId, 'org:admin'),
+    role: 'org_admin', joined_at: new Date().toISOString(),
+  })
+  log(`Created second sponsor company "dev testing 2"  [id: ${sponsor2Row.id}]`)
 
   // 7. Create a starter team for the coach so they can immediately build a portfolio
   section('Creating starter team for coach')
@@ -281,10 +567,34 @@ async function main() {
 ║    Email:    admin+clerk_test@example.com                    ║
 ║    Password: AdminTest123!                                    ║
 ╠══════════════════════════════════════════════════════════════╣
-║  SPONSOR                                                      ║
+║  SPONSOR (org_admin of "dev testing")                         ║
 ║    Email:    sponsor+clerk_test@example.com                  ║
 ║    Password: SponsorTest123!                                  ║
 ║    Company:  dev testing  ($5,000 cap, active)               ║
+╠══════════════════════════════════════════════════════════════╣
+║  SPONSOR SUBMITTER (submitter of "dev testing")                ║
+║    Email:    sponsor-member+clerk_test@example.com            ║
+║    Password: SponsorMemberTest123!                             ║
+╠══════════════════════════════════════════════════════════════╣
+║  SPONSOR VIEWER (viewer of "dev testing")                     ║
+║    Email:    sponsor-viewer+clerk_test@example.com             ║
+║    Password: SponsorViewerTest123!                              ║
+╠══════════════════════════════════════════════════════════════╣
+║  SPONSOR APPROVER (approver of "dev testing")                 ║
+║    Email:    sponsor-approver+clerk_test@example.com           ║
+║    Password: SponsorApproverTest123!                             ║
+╠══════════════════════════════════════════════════════════════╣
+║  SPONSOR 2 (org_admin of "dev testing 2" — separate org)      ║
+║    Email:    sponsor2+clerk_test@example.com                  ║
+║    Password: Sponsor2Test123!                                  ║
+╠══════════════════════════════════════════════════════════════╣
+║  REVIEWER (admin, admin_level = reviewer)                     ║
+║    Email:    reviewer+clerk_test@example.com                  ║
+║    Password: ReviewerTest123!                                  ║
+╠══════════════════════════════════════════════════════════════╣
+║  DENIAL COACH (unverified, credentials uploaded)              ║
+║    Email:    denial-coach+clerk_test@example.com              ║
+║    Password: DenialCoachTest123!                               ║
 ╚══════════════════════════════════════════════════════════════╝
 
 Email verification (if prompted): use the Clerk test code 424242.

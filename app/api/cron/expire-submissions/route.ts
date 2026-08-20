@@ -88,6 +88,41 @@ export async function GET(req: Request) {
       )
     }
 
+    // Same idiom as the submissions expiry above: select the pending-and-overdue
+    // proposals BEFORE running the RPC — afterwards they no longer match the pending
+    // filter and there is no way to find them again to notify their proposer.
+    const { data: expiringProposals } = await supabase
+      .from('sponsor_decision_proposals')
+      .select('id, submission_id, proposed_by')
+      .eq('status', 'pending')
+      .lt('expires_at', new Date().toISOString())
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: proposalExpireResult, error: proposalExpireError } = await (supabase as any).rpc(
+      'expire_stale_decision_proposals'
+    )
+    if (proposalExpireError) {
+      console.error('[cron] expire-decision-proposals error', proposalExpireError)
+      Sentry.captureException(proposalExpireError)
+    }
+    const proposalsExpiredCount = (proposalExpireResult as { expired?: number } | null)?.expired ?? 0
+
+    for (const row of expiringProposals ?? []) {
+      if (!row.proposed_by) continue
+      try {
+        await createInAppNotification({
+          recipientId: row.proposed_by,
+          type: 'general',
+          title: 'Your funding proposal expired',
+          body: 'Nobody confirmed this funding request within the approval window, so it has closed. You can propose it again from the submission.',
+          submissionId: row.submission_id,
+        })
+      } catch (notifyError) {
+        console.error('[cron] failed to notify proposer of proposal expiry', row.id, notifyError)
+        Sentry.captureException(notifyError)
+      }
+    }
+
     // Tell the humans. Coach first — they are the one waiting on an answer.
     for (const row of expiring ?? []) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -129,6 +164,7 @@ export async function GET(req: Request) {
         credentials_purge_failed: retention.failed,
         w9_renewal_notices: w9Retention.notified,
         w9_renewal_notices_failed: w9Retention.failed,
+        proposals_expired: proposalsExpiredCount,
       },
     })
     if (auditError) {
@@ -136,8 +172,50 @@ export async function GET(req: Request) {
       Sentry.captureException(auditError)
     }
 
-    console.log(`[cron] Expired ${expiredCount} submissions`)
-    return NextResponse.json({ expired: expiredCount })
+    // Nightly capacity-invariant check (0084). funding_used_cents must equal open
+    // reservations plus the settled ledger; detect_capacity_drift() returns one row per
+    // sponsor where it does not. Reports only — never repairs, because silent repair
+    // would erase the evidence of whatever caused the drift.
+    //
+    // Wrapped in its own try/catch on purpose: a drift finding, or a failure OF the drift
+    // check, must never fail the expiry sweep that already succeeded above.
+    let driftCount = 0
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: drift, error: driftError } = await (supabase as any).rpc('detect_capacity_drift')
+      if (driftError) throw driftError
+
+      const rows = (drift ?? []) as Record<string, unknown>[]
+      driftCount = rows.length
+
+      if (driftCount > 0) {
+        Sentry.captureException(
+          new Error(`[cron] capacity drift detected across ${driftCount} sponsor(s)`),
+          { extra: { rows } }
+        )
+        const { error: driftAuditError } = await supabase.from('audit_log').insert({
+          actor_id: null,
+          action: 'capacity_drift_detected',
+          entity_type: 'sponsors',
+          entity_id: null,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          metadata: { count: driftCount, rows } as any,
+        })
+        if (driftAuditError) {
+          console.error('[cron] failed to write drift audit row', driftAuditError)
+        }
+      }
+    } catch (driftErr) {
+      console.error('[cron] capacity drift check failed', driftErr)
+      Sentry.captureException(driftErr instanceof Error ? driftErr : new Error(String(driftErr)))
+    }
+
+    console.log(`[cron] Expired ${expiredCount} submissions, ${proposalsExpiredCount} proposals`)
+    return NextResponse.json({
+      expired: expiredCount,
+      proposalsExpired: proposalsExpiredCount,
+      drift: driftCount,
+    })
   } catch (err) {
     console.error('[cron] unhandled error', err)
     Sentry.captureException(err)

@@ -62,6 +62,35 @@ inside a session.
 
 ---
 
+## Progress
+
+| Status | Prompts |
+|---|---|
+| ✅ Shipped | `01` fulfillment machine · `02` payout profiles + W-9 · `03` fulfillment UI · `04` receipts & acknowledgment letters · `05` sponsorship agreement templates · `06` e-sign capture flow · `07` official FIRST team verification · `08` sponsor organizations · `09` org roles & approver workflow · `10` enterprise SSO · `11` admin roles & capacity audit · `12` moderated sponsor↔coach Q&A · `13` coach appeals path · `14` sponsor recognition tiers · `15` CSR/ESG impact report export |
+| 🚧 Partial | `07` — code/migration/tests shipped and deployed, but `FIRST_API_USERNAME` / `FIRST_API_TOKEN` are **not yet set in Vercel** (nobody has registered at ftc-events.firstinspires.org/services/API). The system runs correctly on the FTCScout fallback in the meantime; set both vars whenever the credentials arrive — no code changes needed. |
+| 🚧 Partial | `10` — the code half (least-privilege JIT provisioning, idempotent role reconciliation, the read-only SSO panel, `docs/enterprise-sso-runbook.md`) is shipped. **No enterprise connection has been created in Clerk**, because none has been asked for and the Clerk plan gate (Pro/Business on production) is unconfirmed. Follow the runbook when the first sponsor's IT team asks. |
+| ✅ Shipped | `11` — reviewer/super-admin split, `requireSuperAdmin()`, admin team + capacity pages, drift detector. Migration `0084` **is applied**; `detect_capacity_drift()` returns zero rows against production. (This row said "0084 has NOT been applied" long after it had — trust `ls supabase/migrations` and the database, not this table.) Roll the code back BEFORE the migration if you ever revert: dropping `admin_level` while `requireSuperAdmin()` is deployed fails every super-admin action. |
+| ✅ Shipped | `16` BotID + corporate email gating · `18` accessibility (WCAG 2.2 AA) — see `docs/accessibility-audit.md` |
+| 🚧 Partial | `17` — the code half is shipped (Resend `email.complained` handling, `noreply@` trap in `lib/env.ts`, `docs/email-deliverability.md`). **DMARC is still unpublished** at `_dmarc.exodiusftc.com`, and the Resend webhook is not yet subscribed to `email.complained`. Both are registrar/dashboard actions — records to paste are in §3.1 of that doc. |
+
+Migrations applied so far: `0076`–`0095`. That includes `0084`, the three fixes
+`0091`/`0092`/`0093` (production 2026-08-15), `0094` (production 2026-08-19, the
+`sponsor_ids_for_profile` fix to `record_fulfillment_transition`), and `0095`
+(production 2026-08-20, capacity release on fulfillment cancellation — audit finding F-01).
+Prompt `10` added no migration. Real head is always `ls supabase/migrations | tail -3` —
+trust that over this table, which has been wrong before.
+
+**All 18 prompts are implemented.** What remains is not a prompt: it is `17`'s registrar and
+dashboard half, `07`'s FIRST API credentials, `10`'s Clerk enterprise connection, and legal
+review of the receipt/agreement copy. See `prompts/_AUDIT-11-18.md` for the verification
+sweep over `11`–`18`, and `prompts/_AUDIT-01-10.md` for the earlier one.
+
+**Do not re-run `01`–`11`.** Their "Current state (verified)" sections were regenerated after
+the implementations landed, so they now describe finished work rather than the gap they were
+written to close.
+
+---
+
 ## The 18 prompts
 
 Migration numbers are **reserved** — each prompt tells the agent to confirm the number is
@@ -92,18 +121,18 @@ still free before writing.
 ### Governance & engagement
 | # | Prompt | Needs | Migration |
 |---|---|---|---|
-| 11 | [Admin roles + capacity-integrity audit](11-admin-roles-and-capacity-audit.md) | — | `0084` |
-| 12 | [Moderated sponsor↔coach Q&A](12-sponsor-coach-qa-thread.md) | — | `0085` |
-| 13 | [Coach appeals path](13-coach-appeals-path.md) | 11 | `0086` |
+| 11 | [Admin roles + capacity-integrity audit](11-admin-roles-and-capacity-audit.md) ✅ | — | `0084` (applied) |
+| 12 | [Moderated sponsor↔coach Q&A](12-sponsor-coach-qa-thread.md) ✅ | — | `0085` (applied) |
+| 13 | [Coach appeals path](13-coach-appeals-path.md) ✅ | 11 | `0086` (applied) |
 
 ### Value & polish
 | # | Prompt | Needs | Migration |
 |---|---|---|---|
-| 14 | [Sponsor recognition tiers](14-sponsor-recognition-tiers.md) | 01 | `0087` |
-| 15 | [CSR/ESG impact report export](15-csr-impact-report-export.md) | 01, 14 | `0088` |
-| 16 | [BotID + corporate email gating](16-botid-and-corporate-email-gating.md) | — | `0089` |
-| 17 | [Email deliverability (SPF/DKIM/DMARC)](17-email-deliverability.md) | — | — |
-| 18 | [Accessibility — WCAG 2.2 AA](18-accessibility-wcag-aa.md) | — | — |
+| 14 | [Sponsor recognition tiers](14-sponsor-recognition-tiers.md) ✅ | 01 | `0087` (applied) |
+| 15 | [CSR/ESG impact report export](15-csr-impact-report-export.md) ✅ | 01, 14 | `0088` (applied) |
+| 16 | [BotID + corporate email gating](16-botid-and-corporate-email-gating.md) ✅ | — | `0089` (applied) |
+| 17 | [Email deliverability (SPF/DKIM/DMARC)](17-email-deliverability.md) 🚧 | — | — |
+| 18 | [Accessibility — WCAG 2.2 AA](18-accessibility-wcag-aa.md) ✅ | — | — |
 
 **08 is the riskiest prompt in the pack.** It rewrites how a sponsor is resolved in RLS —
 today that is `profiles.sponsor_id`, written in exactly one place. Run it when you have time

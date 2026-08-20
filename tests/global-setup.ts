@@ -19,7 +19,68 @@
  */
 
 import { chromium, type FullConfig } from '@playwright/test'
-import { clerk, clerkSetup } from '@clerk/testing/playwright'
+import { clerkSetup } from '@clerk/testing/playwright'
+import { establishSession } from './helpers/clerk-auth'
+
+/**
+ * Start every local run from zero capacity drift.
+ *
+ * `appeals` and `recognition-tiers` both assert `detect_capacity_drift()` returns nothing —
+ * a genuinely valuable global invariant, and the reason a capacity bug would be caught at
+ * all. But a suite that crashes part-way leaves a `transactions_ledger` row behind, and
+ * `transactions_ledger.submission_id` is `ON DELETE SET NULL`, so deleting the submission
+ * orphans the row instead of removing it. The next run then opens with real drift and those
+ * two tests fail while pointing at the product rather than at the debris.
+ *
+ * Only ORPHANS are removed here — rows whose submission is already gone. Anything still
+ * attached to a live submission is left alone, so this cannot paper over a real leak.
+ */
+async function clearOrphanedFixtureMoney(supabaseUrl: string) {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!serviceKey) return
+
+  const headers = {
+    apikey: serviceKey,
+    Authorization: `Bearer ${serviceKey}`,
+    'Content-Type': 'application/json',
+    Prefer: 'return=representation',
+  }
+  const rest = (path: string, init: RequestInit = {}) =>
+    fetch(`${supabaseUrl}/rest/v1${path}`, { ...init, headers })
+
+  const orphanFulfillments = (await (
+    await rest('/funding_fulfillments?submission_id=is.null&select=id')
+  ).json()) as Array<{ id: string }>
+  for (const f of orphanFulfillments) {
+    await rest(`/funding_fulfillment_events?fulfillment_id=eq.${f.id}`, { method: 'DELETE' })
+  }
+  await rest('/funding_fulfillments?submission_id=is.null', { method: 'DELETE' })
+  await rest('/transactions_ledger?submission_id=is.null', { method: 'DELETE' })
+
+  // Re-sync every sponsor's counter with what the ledger and open reservations now say.
+  const sponsors = (await (await rest('/sponsors?select=id')).json()) as Array<{ id: string }>
+  for (const s of sponsors) {
+    const settled = (await (
+      await rest(`/transactions_ledger?sponsor_id=eq.${s.id}&select=amount_cents`)
+    ).json()) as Array<{ amount_cents: number }>
+    const reserved = (await (
+      await rest(
+        `/submissions?sponsor_id=eq.${s.id}&status=in.(dispatched,changes_requested)&select=reserved_amount_cents`
+      )
+    ).json()) as Array<{ reserved_amount_cents: number | null }>
+
+    const total =
+      settled.reduce((n, r) => n + (r.amount_cents ?? 0), 0) +
+      reserved.reduce((n, r) => n + (r.reserved_amount_cents ?? 0), 0)
+
+    await rest(`/sponsors?id=eq.${s.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ funding_used_cents: total }),
+    })
+  }
+
+  console.log('✓ Capacity bookkeeping re-synced (orphaned fixture rows cleared)')
+}
 
 async function globalSetup(config: FullConfig) {
   // Bootstrap Clerk testing for the whole run (loads keys, provisions Testing Tokens).
@@ -45,23 +106,19 @@ async function globalSetup(config: FullConfig) {
     }
 
     console.log('✓ Local Supabase reachable')
+    await clearOrphanedFixtureMoney(supabaseUrl)
   }
 
   // Save an authenticated admin Clerk session to disk so individual tests can reuse
   // it without re-driving the login UI (speeds up the suite significantly).
-  // `clerk.signIn` with `emailAddress` mints a server-side token and bypasses all
-  // verification steps, so no password is needed here.
+  // Sign-in goes through the shared ticket helper: a password attempt on this Clerk
+  // instance stalls at `needs_client_trust` and never completes. See tests/helpers/clerk-auth.ts.
   if (process.env.ADMIN_EMAIL) {
     const baseURL = config.projects[0].use.baseURL ?? 'http://localhost:3000'
     const browser = await chromium.launch()
     const page = await browser.newPage({ baseURL })
 
-    // Clerk needs the app loaded (so window.Clerk is available) before signing in.
-    await page.goto('/')
-    await clerk.signIn({
-      page,
-      signInParams: { strategy: 'password', identifier: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD ?? '' },
-    })
+    await establishSession(page, process.env.ADMIN_EMAIL)
 
     // Land on an admin-only page to confirm the session took.
     await page.goto('/moderation')
