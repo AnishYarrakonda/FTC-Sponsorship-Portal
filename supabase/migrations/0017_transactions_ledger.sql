@@ -13,13 +13,14 @@ CREATE TABLE IF NOT EXISTS transactions_ledger (
   -- No updated_at: this table is append-only
 );
 
-CREATE INDEX idx_transactions_sponsor ON transactions_ledger(sponsor_id);
-CREATE INDEX idx_transactions_team    ON transactions_ledger(team_id);
-CREATE INDEX idx_transactions_submission ON transactions_ledger(submission_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_sponsor ON transactions_ledger(sponsor_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_team    ON transactions_ledger(team_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_submission ON transactions_ledger(submission_id);
 
 ALTER TABLE transactions_ledger ENABLE ROW LEVEL SECURITY;
 
 -- Admins can read; no one can UPDATE or DELETE (no policies = denied by RLS)
+DROP POLICY IF EXISTS "ledger_select_admin" ON transactions_ledger;
 CREATE POLICY "ledger_select_admin" ON transactions_ledger FOR SELECT
   USING (is_admin());
 

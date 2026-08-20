@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS ftc_teams_cache (
 ALTER TABLE ftc_teams_cache ENABLE ROW LEVEL SECURITY;
 
 -- Allow verified coaches and admins to read the cache
+DROP POLICY IF EXISTS "cache_select" ON ftc_teams_cache;
 CREATE POLICY "cache_select" ON ftc_teams_cache FOR SELECT
   USING (auth.uid() IS NOT NULL);
 

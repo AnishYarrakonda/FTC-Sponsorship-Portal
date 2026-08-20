@@ -15,6 +15,7 @@ FROM teams t
 WHERE s.team_id = t.id AND s.requested_amount_cents = 0;
 
 -- 3. Sponsor Applications Uniqueness
+ALTER TABLE sponsor_applications DROP CONSTRAINT IF EXISTS sponsor_apps_email_unique;
 ALTER TABLE sponsor_applications ADD CONSTRAINT sponsor_apps_email_unique UNIQUE (contact_email);
 
 -- 4. Update approve_submission_atomic to use 'dispatched' and snapshot amount

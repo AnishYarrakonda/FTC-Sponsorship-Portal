@@ -2,6 +2,7 @@
 -- Approval should only validate capacity, mark the submission approved,
 -- write the moderation audit event, and mint the sponsor-view access token.
 
+DROP FUNCTION IF EXISTS approve_submission_atomic(uuid, uuid, bigint);
 CREATE OR REPLACE FUNCTION approve_submission_atomic(
   p_submission_id  uuid,
   p_admin_id       uuid,
