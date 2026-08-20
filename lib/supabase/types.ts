@@ -1810,6 +1810,89 @@ export type Database = {
           },
         ]
       }
+      funding_capacity_releases: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          fulfillment_id: string
+          id: string
+          reason: string | null
+          released_by: string | null
+          sponsor_id: string
+          submission_id: string | null
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          fulfillment_id: string
+          id?: string
+          reason?: string | null
+          released_by?: string | null
+          sponsor_id: string
+          submission_id?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          fulfillment_id?: string
+          id?: string
+          reason?: string | null
+          released_by?: string | null
+          sponsor_id?: string
+          submission_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funding_capacity_releases_fulfillment_id_fkey"
+            columns: ["fulfillment_id"]
+            isOneToOne: true
+            referencedRelation: "funding_fulfillments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funding_capacity_releases_released_by_fkey"
+            columns: ["released_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funding_capacity_releases_sponsor_id_fkey"
+            columns: ["sponsor_id"]
+            isOneToOne: false
+            referencedRelation: "sponsors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funding_capacity_releases_sponsor_id_fkey"
+            columns: ["sponsor_id"]
+            isOneToOne: false
+            referencedRelation: "v_sponsor_capacity"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funding_capacity_releases_sponsor_id_fkey"
+            columns: ["sponsor_id"]
+            isOneToOne: false
+            referencedRelation: "v_sponsors_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funding_capacity_releases_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "submissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funding_capacity_releases_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "v_submission_summary"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
           funding_fulfillment_events: {
                       Row: {
                         actor_profile_id: string | null
@@ -2337,6 +2420,7 @@ export type Database = {
           funding_used_cents: number
           open_reservations_cents: number
           settled_ledger_cents: number
+          released_capacity_cents: number
           expected_used_cents: number
           drift_cents: number
         }[]
