@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import {
   requireAdmin,
   requireSponsor,
+  requireSponsorRole,
   requireVerifiedCoach,
 } from '@/lib/actions-utils'
 import { createInAppNotification } from '@/lib/notify'
@@ -302,9 +303,16 @@ export async function waiveBenefit(input: {
     return { error: 'Validation failed: ' + parsed.error.issues.map((i) => i.message).join(', ') }
   }
 
+  // requireSponsor() admits ANY member regardless of rank, and record_benefit_delivery
+  // classifies the actor only as sponsor/coach/admin — it never checks member rank — so
+  // before this a `viewer` could waive a benefit. Waiving permanently discharges something
+  // the team owes the sponsor, which is an act, and the ladder already puts acts at
+  // `submitter` (messages.ts:125-128 makes the same argument for asking a question, which is
+  // strictly less consequential). Legacy single-seat sponsors are unaffected:
+  // LEGACY_MEMBER_ROLE is org_admin.
   let user, sponsorIds, adminClient
   try {
-    ;({ user, sponsorIds, adminClient } = await requireSponsor())
+    ;({ user, sponsorIds, adminClient } = await requireSponsorRole('submitter'))
   } catch (e: any) {
     return { error: e.message }
   }
