@@ -12,6 +12,11 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Local Supabase CLI scratch dirs. Already in .gitignore (41-43), but eslint has its
+    // own ignore list: `supabase start` writes a bundled edge-runtime `index.ts` here, and
+    // linting that vendored file put 182 errors on the gate that no project change can fix.
+    "supabase/.temp/**",
+    "supabase/.branches/**",
   ]),
   {
     // Pre-existing strictness/style + React-Compiler migration rules are downgraded
