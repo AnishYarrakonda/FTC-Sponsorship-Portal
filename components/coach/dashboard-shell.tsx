@@ -454,7 +454,7 @@ function OverviewTab({
                 <p className="text-sm text-muted-foreground mb-3">No pitches yet.</p>
                 <button
                   onClick={() => switchTab('sponsors')}
-                  className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:opacity-80 transition-opacity"
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:text-primary-hover transition-colors"
                 >
                   <Plus className="h-3.5 w-3.5" /> Start your first pitch
                 </button>
