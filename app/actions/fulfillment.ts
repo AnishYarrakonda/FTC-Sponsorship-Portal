@@ -1,9 +1,10 @@
 'use server'
 
 import { z } from 'zod'
-import { requireAdmin, requireSponsorRole, requireVerifiedCoach } from '@/lib/actions-utils'
+import { requireAdmin, requireSponsorRole, requireSuperAdmin, requireVerifiedCoach } from '@/lib/actions-utils'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createInAppNotification } from '@/lib/notify'
+import { sponsorRecipientIds } from '@/lib/sponsor-recipients'
 import { generateAndStoreReceipt } from '@/lib/receipts'
 import { revalidatePath } from 'next/cache'
 import {
@@ -144,19 +145,16 @@ export async function confirmPaymentReceived(data: z.input<typeof confirmPayment
     }
   })
 
-  // notify every profile with role='sponsor' and sponsor_id = fulfillment.sponsor_id
-  const { data: sponsorsToNotify } = await localAdminClient
-    .from('profiles')
-    .select('id')
-    .eq('role', 'sponsor')
-    .eq('sponsor_id', fulfillment.sponsor_id)
+  // Legacy profiles.sponsor_id holders UNIONed with sponsor_members. A profiles-only read
+  // reaches nobody for a sponsor whose seats were filled by invitation (0082/0094).
+  const sponsorsToNotify = await sponsorRecipientIds(localAdminClient, fulfillment.sponsor_id)
 
   const teamName = (fulfillment.teams as any)?.team_name || 'A team'
 
   if (sponsorsToNotify) {
-    for (const sponsorUser of sponsorsToNotify) {
+    for (const recipientId of sponsorsToNotify) {
       await createInAppNotification({
-        recipientId: sponsorUser.id,
+        recipientId,
         type: 'general',
         title: `${teamName} received your payment`,
         body: `The coach for ${teamName} has confirmed receipt of your sponsorship payment.`
@@ -185,9 +183,16 @@ export async function adminOverrideFulfillmentStatus(data: z.input<typeof adminO
     return { error: 'Validation failed: ' + parsed.error.issues.map(i => i.message).join(', ') }
   }
 
+  // Cancelling is the one override that MOVES MONEY. Since 0095 the cancelled transition
+  // decrements sponsors.funding_used_cents and writes a funding_capacity_releases row, which
+  // puts it in the same class as editing a funding cap — and that is requireSuperAdmin
+  // (sponsor.ts:18,64). requireSuperAdmin's own contract says it "gates the acts that move
+  // money". Every other override here only relabels a state, so it stays on requireAdmin:
+  // a reviewer is still an admin.
   let user, supabase, adminClient
   try {
-    ({ user, supabase, adminClient } = await requireAdmin())
+    ({ user, supabase, adminClient } =
+      parsed.data.toStatus === 'cancelled' ? await requireSuperAdmin() : await requireAdmin())
   } catch (e: any) {
     return { error: e.message }
   }
@@ -234,17 +239,13 @@ export async function adminOverrideFulfillmentStatus(data: z.input<typeof adminO
       })
     }
     
-    // Notify sponsors
-    const { data: sponsorsToNotify } = await adminClient
-      .from('profiles')
-      .select('id')
-      .eq('role', 'sponsor')
-      .eq('sponsor_id', fulfillment.sponsor_id)
-      
+    // Legacy + sponsor_members, same reason as above.
+    const sponsorsToNotify = await sponsorRecipientIds(adminClient, fulfillment.sponsor_id)
+
     if (sponsorsToNotify) {
-      for (const sponsorUser of sponsorsToNotify) {
+      for (const recipientId of sponsorsToNotify) {
         await createInAppNotification({
-          recipientId: sponsorUser.id,
+          recipientId,
           type: 'general',
           title: 'Status changed on sponsorship payment',
           body: `An administrator updated the payment status to ${parsed.data.toStatus.replace('_', ' ')}. Reason: ${parsed.data.reason}`

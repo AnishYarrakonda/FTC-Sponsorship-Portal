@@ -86,7 +86,12 @@ export async function rejectFundingProposal(data: { proposalId: string; note: st
   if (!proposal) return { error: 'Approval request not found in your organization.' }
   if (proposal.status !== 'pending') return { error: 'This approval request has already been resolved.' }
 
-  const { error: updateError } = await adminClient
+  // The status pre-read above is a TOCTOU window, not a guard: a racing approver can confirm
+  // this proposal — committing the money — between the read and this write. The .eq('status')
+  // filter catches it, but a guarded UPDATE that matches nothing returns ZERO ROWS AND NO
+  // ERROR, so without the rowcount check below we would audit a rejection and tell the
+  // proposer their request was rejected while the funding had in fact just been approved.
+  const { data: rejected, error: updateError } = await adminClient
     .from('sponsor_decision_proposals')
     .update({
       status: 'rejected',
@@ -96,7 +101,11 @@ export async function rejectFundingProposal(data: { proposalId: string; note: st
     })
     .eq('id', proposal.id)
     .eq('status', 'pending')
+    .select('id')
   if (updateError) return { error: mapDbError(updateError, 'rejectFundingProposal.update') }
+  if (!rejected || rejected.length === 0) {
+    return { error: 'This approval request has already been resolved.' }
+  }
 
   await adminClient.from('audit_log').insert({
     actor_id: user.id,
@@ -147,12 +156,17 @@ export async function withdrawFundingProposal(data: { proposalId: string }) {
     return { error: 'Only the person who proposed this request, or an admin, can withdraw it.' }
   }
 
-  const { error: updateError } = await adminClient
+  // Same race as rejectFundingProposal: zero rows matched is not an error in PostgREST.
+  const { data: withdrawn, error: updateError } = await adminClient
     .from('sponsor_decision_proposals')
     .update({ status: 'withdrawn', decided_by: user.id, decided_at: new Date().toISOString() })
     .eq('id', proposal.id)
     .eq('status', 'pending')
+    .select('id')
   if (updateError) return { error: mapDbError(updateError, 'withdrawFundingProposal.update') }
+  if (!withdrawn || withdrawn.length === 0) {
+    return { error: 'This approval request has already been resolved.' }
+  }
 
   await adminClient.from('audit_log').insert({
     actor_id: user.id,
