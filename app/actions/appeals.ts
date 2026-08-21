@@ -18,6 +18,16 @@
  *     won and nothing changed. If the subject write fails we return the error and leave the
  *     appeal `under_review` so it can be retried.
  *
+ *     THE ORDERING CANNOT BE INVERTED to make this atomic: guard_appeal_transitions (0086)
+ *     rejects `overturned -> under_review` as un-resolving a terminal state, so a
+ *     claim-first-then-roll-back scheme is not representable. What makes the retry in rule 2
+ *     actually work is `alreadyApplied` below — each overturn branch re-reads its subject
+ *     when the guarded UPDATE matches nothing, and treats "already in the exact post-state"
+ *     as success rather than as a conflict. Without it, the one interesting failure (subject
+ *     moved, `appeals` UPDATE then failed) was UNRECOVERABLE: the appeal stayed
+ *     `under_review` while the subject had moved, and every retry died on the state guard
+ *     that rule 2 relies on.
+ *
  *  3. NO CAPACITY MOVES, EVER. An admin-stage decline never reserved anything
  *     (approve_submission_atomic is the only RESERVE path and only accepts `pending`), so
  *     there is nothing to release and nothing to re-reserve. detect_capacity_drift() must
@@ -429,10 +439,24 @@ export async function resolveAppeal(data: ResolveAppealInput): Promise<AppealAct
       // check the appeal would be stamped `overturned` while the pitch never moved — the
       // coach told they won and nothing changed, which is rule 2's exact failure mode.
       if (!moved || moved.length === 0) {
-        return {
-          error:
-            'This pitch is no longer in the declined state, so the appeal could not be applied. Refresh and check its current status.',
+        // Zero rows is ambiguous: either the pitch left `declined` by some other route, or
+        // THIS resolution already moved it on an earlier attempt whose `appeals` UPDATE
+        // failed. Re-read and distinguish — a pitch sitting in the exact post-state is the
+        // second case, and refusing it is what made that failure permanent.
+        const { data: current } = await adminClient
+          .from('submissions')
+          .select('status, reviewed_at')
+          .eq('id', appeal.subject_id)
+          .maybeSingle()
+
+        if (!current || current.status !== 'changes_requested' || current.reviewed_at !== null) {
+          return {
+            error:
+              'This pitch is no longer in the declined state, so the appeal could not be applied. Refresh and check its current status.',
+          }
         }
+        // Already applied. Fall through to stamp the appeal and notify — the two steps that
+        // never happened last time.
       }
 
       await adminClient.from('audit_log').insert({
@@ -465,9 +489,19 @@ export async function resolveAppeal(data: ResolveAppealInput): Promise<AppealAct
         return { error: `The appeal could not be applied to the account: ${subjectError.message}` }
       }
       if (!cleared || cleared.length === 0) {
-        return {
-          error:
-            'This account no longer carries a verification denial, so the appeal could not be applied. Refresh and check its current status.',
+        // Same ambiguity as the submission branch, same resolution: a profile already
+        // carrying no denial is the post-state this branch was trying to reach.
+        const { data: current } = await adminClient
+          .from('profiles')
+          .select('denied_at')
+          .eq('id', appeal.subject_id)
+          .maybeSingle()
+
+        if (!current || current.denied_at !== null) {
+          return {
+            error:
+              'This account no longer carries a verification denial, so the appeal could not be applied. Refresh and check its current status.',
+          }
         }
       }
 
@@ -497,7 +531,13 @@ export async function resolveAppeal(data: ResolveAppealInput): Promise<AppealAct
         .eq('id', appeal.subject_id)
         .maybeSingle()
 
-      if (!record || record.outcome !== 'rejected') {
+      // 'overridden' is the post-state this branch produces, so seeing it means an earlier
+      // attempt already ran the override and only the `appeals` UPDATE failed. Skip the
+      // delegate — re-running it would fail its own compare-and-set — and go stamp the
+      // appeal. Any other outcome is a genuine conflict.
+      const alreadyOverridden = record?.outcome === 'overridden'
+
+      if (!record || (record.outcome !== 'rejected' && !alreadyOverridden)) {
         return {
           error:
             'This team number check is no longer in the rejected state, so the appeal could not be applied. Refresh and check its current status.',
@@ -506,7 +546,7 @@ export async function resolveAppeal(data: ResolveAppealInput): Promise<AppealAct
 
       // resolutionNotes is min-20 chars and teamVerificationOverrideSchema wants min-20, so
       // the admin's explanation to the coach IS the override reason. One text, one meaning.
-      const override = await overrideTeamVerification({
+      const override = alreadyOverridden ? null : await overrideTeamVerification({
         recordId: appeal.subject_id,
         reason: resolutionNotes,
         // Compare-and-set: the pre-read above is a friendlier message, not the guard.

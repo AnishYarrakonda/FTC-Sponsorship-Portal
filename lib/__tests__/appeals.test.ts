@@ -418,8 +418,11 @@ describe('resolveAppeal', () => {
   })
 
   it('ACCEPTANCE: a check that is no longer rejected leaves the appeal under_review', async () => {
+    // 'auto_pass', not 'overridden'. 'overridden' IS this branch's own post-state, so it now
+    // means "an earlier attempt already applied this overturn" and converges instead — see
+    // the H-09 retry tests below. Any other outcome is still a real conflict.
     mocks.tables.appeals = { select: underReview({ subject_type: 'team_verification', subject_id: VERIFICATION_ID }) }
-    mocks.tables.team_verification_records = { select: rejectedVerification({ outcome: 'overridden' }) }
+    mocks.tables.team_verification_records = { select: rejectedVerification({ outcome: 'auto_pass' }) }
 
     const r = await resolveAppeal({ appealId: APPEAL_ID, outcome: 'overturned', resolutionNotes: VALID_NOTES })
 
@@ -518,6 +521,64 @@ describe('resolveAppeal', () => {
     expect(row).toBeTruthy()
     expect(row!.payload.entity_type).toBe('profiles')
     expect(row!.payload.entity_id).toBe(COACH_ID)
+  })
+
+  // ── H-09: a partially applied overturn must be retryable ────────────────────
+  //
+  // The dangerous sequence is: subject write SUCCEEDS, `appeals` UPDATE then fails. The
+  // appeal stays under_review while the subject has already moved. Before these three, every
+  // retry died on the guarded UPDATE matching zero rows and the overturn was unrecoverable.
+
+  it('ACCEPTANCE: retrying a submission overturn whose appeal UPDATE failed converges', async () => {
+    mocks.tables.appeals = { select: underReview(), update: [{ id: APPEAL_ID, appellant_profile_id: COACH_ID, subject_type: 'submission' }] }
+    // The pitch is ALREADY in the exact post-state the first attempt put it in.
+    mocks.tables.submissions = { update: [], select: { status: 'changes_requested', reviewed_at: null } }
+
+    const r = await resolveAppeal({ appealId: APPEAL_ID, outcome: 'overturned', resolutionNotes: VALID_NOTES })
+
+    expect(r).toEqual({ success: true })
+    expect(appealUpdates()[0].payload).toMatchObject({ status: 'overturned' })
+    expect(mocks.notifyMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('a submission in some OTHER state is still a conflict, not a converged retry', async () => {
+    mocks.tables.appeals = { select: underReview() }
+    // approved, not changes_requested — somebody else moved it. Not our post-state.
+    mocks.tables.submissions = { update: [], select: { status: 'approved', reviewed_at: daysAgo(1) } }
+
+    const r = await resolveAppeal({ appealId: APPEAL_ID, outcome: 'overturned', resolutionNotes: VALID_NOTES })
+
+    expect(r.error).toMatch(/no longer in the declined state/i)
+    expect(appealUpdates()).toHaveLength(0)
+  })
+
+  it('ACCEPTANCE: retrying a coach_verification overturn whose appeal UPDATE failed converges', async () => {
+    mocks.tables.appeals = {
+      select: underReview({ subject_type: 'coach_verification', subject_id: COACH_ID }),
+      update: [{ id: APPEAL_ID, appellant_profile_id: COACH_ID, subject_type: 'coach_verification' }],
+    }
+    mocks.tables.profiles = { update: [], select: { denied_at: null } }
+
+    const r = await resolveAppeal({ appealId: APPEAL_ID, outcome: 'overturned', resolutionNotes: VALID_NOTES })
+
+    expect(r).toEqual({ success: true })
+    expect(mocks.notifyMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('ACCEPTANCE: retrying a team_verification overturn skips the delegate and stamps the appeal', async () => {
+    mocks.tables.appeals = {
+      select: underReview({ subject_type: 'team_verification', subject_id: VERIFICATION_ID }),
+      update: [{ id: APPEAL_ID, appellant_profile_id: COACH_ID, subject_type: 'team_verification' }],
+    }
+    // Already overridden by the first attempt. Re-running the delegate would fail its own
+    // compare-and-set on outcome='rejected', so it must not be called again.
+    mocks.tables.team_verification_records = { select: rejectedVerification({ outcome: 'overridden' }) }
+
+    const r = await resolveAppeal({ appealId: APPEAL_ID, outcome: 'overturned', resolutionNotes: VALID_NOTES })
+
+    expect(r).toEqual({ success: true })
+    expect(mocks.overrideTeamVerificationMock).not.toHaveBeenCalled()
+    expect(mocks.notifyMock).toHaveBeenCalledTimes(1)
   })
 
   it('refuses an appeal that is not under review', async () => {
