@@ -224,6 +224,14 @@ export const teamOnboardingSchema = teamOnboardingBaseSchema.superRefine((data, 
 
 export type TeamOnboardingInput = z.infer<typeof teamOnboardingSchema>
 
+export const TEAM_VERIFICATION_OUTCOMES = [
+  'auto_pass',
+  'needs_review',
+  'rejected',
+  'overridden',
+  'unavailable',
+] as const
+
 export const teamVerificationOverrideSchema = z.object({
   recordId: z.string().uuid(),
   reason: z
@@ -231,6 +239,19 @@ export const teamVerificationOverrideSchema = z.object({
     .trim()
     .min(20, 'Give a reason of at least 20 characters')
     .max(LIMITS.feedback, 'Reason must be 2000 characters or fewer'),
+  /**
+   * Optional compare-and-set. The admin verification card overrides a `needs_review`
+   * record, resolveAppeal overrides a `rejected` one — so the outcome cannot be filtered
+   * unconditionally inside the action. When supplied, the UPDATE carries the filter and a
+   * rowcount check, which closes the check-then-act window a caller's own pre-read leaves
+   * open.
+   */
+  expectedOutcome: z.enum(TEAM_VERIFICATION_OUTCOMES).optional(),
+  /**
+   * resolveAppeal sends its own "your appeal was successful" message, which says the same
+   * thing. Set false there so one admin action produces one notification, not two.
+   */
+  notifyCoach: z.boolean().optional(),
 })
 
 export type TeamVerificationOverrideInput = z.infer<typeof teamVerificationOverrideSchema>

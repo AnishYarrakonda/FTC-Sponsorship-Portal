@@ -14,6 +14,18 @@ import type { PlatformImpactPayload } from '@/lib/impact-report/build'
  * security model is positional (requireSuperAdmin, then everything below assumes admin and
  * queries with no owner filter), and threading a second scope through it is how a missing
  * .eq() becomes a cross-tenant dump.
+ *
+ * WHY requireAdmin() AND NOT requireSuperAdmin(), given the sibling export is super-admin
+ * only. The two gates protect different things, not different ranks of the same thing.
+ * /api/admin/export emits every sponsor contact email and the full text of every pitch —
+ * super_admin because it is a bulk PII dump. This route emits `impact_report_snapshots`
+ * rows scoped to `platform`, which buildPlatformImpactPayload constructs as counts and
+ * cent totals with no sponsor, team, or person named. Raising it would also be internally
+ * inconsistent: the entire impact feature — /impact (the page), generation, and publishing
+ * (app/actions/impact.ts) — is requireAdmin(), so a reviewer would read the exact same
+ * numbers on screen and be refused the download of them. The exemption is the aggregate
+ * shape of the payload; if a per-sponsor or per-team breakdown is ever added here, this
+ * gate must go to requireSuperAdmin() with it.
  */
 export async function GET(req: Request) {
   let user, adminClient

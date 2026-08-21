@@ -263,7 +263,9 @@ function AppealRow({
               <p className="text-xs text-muted-foreground">
                 {appeal.subject_type === 'submission'
                   ? 'The pitch returns to “changes requested” so the coach can edit and resubmit. Nothing is re-sent to the sponsor, and no sponsor capacity moves.'
-                  : 'The denial is cleared and the coach can upload their ID again. This does NOT mark them verified — the original document was deleted at denial.'}
+                  : appeal.subject_type === 'team_verification'
+                    ? 'Your notes become the override reason on the verification record, the team number is manually confirmed, and an incubator team provisioned by the rejection is reinstated.'
+                    : 'The denial is cleared and the coach can upload their ID again. This does NOT mark them verified — the original document was deleted at denial.'}
               </p>
             )}
           </div>

@@ -102,6 +102,9 @@ let currentProfile: Record<string, unknown> | null = null
 
 const REVIEWER_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const SUPER_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+// A real uuid: adminUpdateSponsor validates its id argument (step 1) before the auth guard
+// (step 2), per the canonical shape — a placeholder string now fails validation first.
+const SPONSOR_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
 
 const REVIEWER = { id: REVIEWER_ID, role: 'admin', admin_level: 'reviewer', full_name: 'Rev' }
 const SUPER = { id: SUPER_ID, role: 'admin', admin_level: 'super_admin', full_name: 'Sup' }
@@ -166,7 +169,7 @@ describe('requireAdmin still admits a reviewer', () => {
 describe('a reviewer cannot edit a funding cap', () => {
   it('adminUpdateSponsor returns Forbidden and performs zero writes', async () => {
     signIn(REVIEWER)
-    const result = await adminUpdateSponsor('sponsor-uuid', VALID_SPONSOR_INPUT)
+    const result = await adminUpdateSponsor(SPONSOR_ID, VALID_SPONSOR_INPUT)
 
     expect(result).toEqual({ error: 'Forbidden' })
     expect(mocks.updateMock).not.toHaveBeenCalled()
@@ -177,7 +180,7 @@ describe('a reviewer cannot edit a funding cap', () => {
 
   it('a super admin gets through to the write', async () => {
     signIn(SUPER)
-    await adminUpdateSponsor('sponsor-uuid', VALID_SPONSOR_INPUT)
+    await adminUpdateSponsor(SPONSOR_ID, VALID_SPONSOR_INPUT)
     expect(mocks.updateMock).toHaveBeenCalledWith(
       expect.objectContaining({ funding_cap_cents: 500_000 })
     )

@@ -24,6 +24,16 @@ export const waiveBenefitSchema = z.object({
   note: z.string().max(LIMITS.recognitionDeliveryNote).optional(),
 })
 
+/**
+ * uploadBenefitProof takes (deliveryId, FormData) rather than one object — a file cannot
+ * cross the server-action boundary inside a plain object — so the id is validated on its
+ * own here. It is not cosmetic: the raw argument was interpolated straight into a Storage
+ * object key, so a caller-supplied string decided a path segment.
+ */
+export const uploadBenefitProofSchema = z.object({
+  deliveryId: z.string().uuid(),
+})
+
 export const adminSetBenefitStatusSchema = z.object({
   deliveryId: z.string().uuid(),
   status: z.enum(['promised', 'in_progress', 'delivered', 'waived', 'not_applicable']),

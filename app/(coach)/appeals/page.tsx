@@ -6,6 +6,7 @@ import { AppealForm } from '@/components/coach/appeal-form'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AppealStatusPill } from '@/components/coach/appeal-status-pill'
 import type { AppealableSubject } from '@/lib/schemas/appeal'
+import { APPEAL_SUBJECT_LABELS, type AppealSubjectType } from '@/lib/schemas/appeal'
 
 export const dynamic = 'force-dynamic'
 
@@ -79,7 +80,7 @@ export default async function CoachAppealsPage() {
                 <li key={a.id} className="flex items-start justify-between gap-4 py-3">
                   <div className="min-w-0">
                     <Link href={`/appeals/${a.id}`} className="text-sm font-medium hover:underline">
-                      {a.subject_type === 'coach_verification' ? 'Coach verification' : 'Declined pitch'}
+                      {APPEAL_SUBJECT_LABELS[a.subject_type as AppealSubjectType] ?? 'Appeal'}
                     </Link>
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       Filed {formatDate(a.created_at)}

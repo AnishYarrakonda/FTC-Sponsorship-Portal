@@ -2404,10 +2404,6 @@ export type Database = {
       }
       expire_stale_decision_proposals: { Args: never; Returns: Json }
       expire_overdue_submissions: { Args: never; Returns: Json }
-      increment_sponsor_funding: {
-        Args: { amount: number; sponsor_uuid: string }
-        Returns: undefined
-      }
       is_admin: { Args: never; Returns: boolean }
       // Hand-added for migration 0084_admin_levels_and_capacity_audit.sql.
       is_super_admin: { Args: never; Returns: boolean }

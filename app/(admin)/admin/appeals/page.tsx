@@ -3,6 +3,7 @@ import { getAuthedProfile } from '@/lib/actions-utils'
 import { PageHeader } from '@/components/page-header'
 import { AppealReviewPanel, type AdminAppeal } from '@/components/admin/appeal-review-panel'
 import { AppealStatusPill } from '@/components/coach/appeal-status-pill'
+import { verificationRejectionReason } from '@/lib/schemas/appeal'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,8 +37,9 @@ export default async function AdminAppealsPage() {
   ) as string[]
   const submissionIds = all.filter((a) => a.subject_type === 'submission').map((a) => a.subject_id)
   const coachSubjectIds = all.filter((a) => a.subject_type === 'coach_verification').map((a) => a.subject_id)
+  const verificationIds = all.filter((a) => a.subject_type === 'team_verification').map((a) => a.subject_id)
 
-  const [{ data: profiles }, { data: submissions }, { data: deniedProfiles }] = await Promise.all([
+  const [{ data: profiles }, { data: submissions }, { data: deniedProfiles }, { data: verifications }] = await Promise.all([
     profileIds.length
       ? supabase.from('profiles').select('id, full_name').in('id', profileIds)
       : Promise.resolve({ data: [] as { id: string; full_name: string | null }[] }),
@@ -50,12 +52,26 @@ export default async function AdminAppealsPage() {
     coachSubjectIds.length
       ? supabase.from('profiles').select('id, denial_reason').in('id', coachSubjectIds)
       : Promise.resolve({ data: [] as { id: string; denial_reason: string | null }[] }),
+    verificationIds.length
+      ? supabase
+          .from('team_verification_records')
+          .select('id, ftc_team_number, claimed_team_name, official_team_name')
+          .in('id', verificationIds)
+      : Promise.resolve({
+          data: [] as {
+            id: string
+            ftc_team_number: number
+            claimed_team_name: string | null
+            official_team_name: string | null
+          }[],
+        }),
   ])
 
   const nameById = new Map((profiles ?? []).map((p) => [p.id, p.full_name]))
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const submissionById = new Map((submissions ?? []).map((s: any) => [s.id, s]))
   const denialById = new Map((deniedProfiles ?? []).map((p) => [p.id, p.denial_reason]))
+  const verificationById = new Map((verifications ?? []).map((v) => [v.id, v]))
 
   const appeals: AdminAppeal[] = all.map((a) => {
     const submission = a.subject_type === 'submission' ? submissionById.get(a.subject_id) : null
@@ -77,11 +93,20 @@ export default async function AdminAppealsPage() {
       original_reason:
         a.subject_type === 'submission'
           ? (submission?.admin_feedback ?? null)
-          : (denialById.get(a.subject_id) ?? null),
+          : a.subject_type === 'team_verification'
+            ? (() => {
+                const v = verificationById.get(a.subject_id)
+                // The matcher writes scores, not prose, so the reason is composed — the same
+                // sentence the coach was shown on the appeal form.
+                return v ? verificationRejectionReason(v) : null
+              })()
+            : (denialById.get(a.subject_id) ?? null),
       subject_label:
         a.subject_type === 'submission'
           ? `pitch to ${submission?.sponsors?.company_name ?? 'a sponsor'}`
-          : 'coach verification',
+          : a.subject_type === 'team_verification'
+            ? `FTC Team #${verificationById.get(a.subject_id)?.ftc_team_number ?? '—'} verification`
+            : 'coach verification',
     }
   })
 

@@ -6,11 +6,54 @@ import { z } from 'zod'
 import { requireAdmin, requireSuperAdmin } from '@/lib/actions-utils'
 import { mapDbError } from '@/lib/errors'
 
+/**
+ * What a sponsor write records in audit_log — the identity of the company and the
+ * capacity-bearing fields, and nothing else.
+ *
+ * Deliberately absent: contact_name / contact_email / contact_title and `notes`. audit_log
+ * is append-only with no expiry and no redaction path, so a contact's details written here
+ * outlive the sponsor row itself and survive any later deletion request. The fields kept
+ * are the ones an auditor actually needs to answer "who changed this company's cap, and to
+ * what" — the current contact details are one join away on `sponsors`.
+ */
+/** The stored row, in the same shape auditFields() takes, so `from` and `to` are comparable. */
+function dbRowToAuditInput(row: {
+  company_name: string
+  industry: string | null
+  website: string | null
+  funding_cap_cents: number
+  status: string
+}) {
+  return {
+    companyName: row.company_name,
+    industry: row.industry,
+    website: row.website,
+    fundingCapCents: row.funding_cap_cents,
+    status: row.status,
+  }
+}
+
+function auditFields(input: {
+  companyName: string
+  industry?: string | null
+  website?: string | null
+  fundingCapCents: number
+  status: string
+}) {
+  return {
+    company_name: input.companyName,
+    industry: input.industry || null,
+    website: input.website || null,
+    funding_cap_cents: input.fundingCapCents,
+    status: input.status,
+  }
+}
+
 // Super admin (0084): creating a sponsor company sets a funding cap.
 export async function adminCreateSponsor(data: SponsorInput) {
   const result = sponsorSchema.safeParse(data)
   if (!result.success) {
-    return { error: 'Invalid data provided' }
+    return { error: 'Validation failed: ' + result.error.issues.map((i) => i.message).join(', ') }
   }
 
   let user, adminClient
@@ -22,7 +65,7 @@ export async function adminCreateSponsor(data: SponsorInput) {
     return { error: e.message }
   }
 
-  const { error } = await adminClient
+  const { data: created, error } = await adminClient
     .from('sponsors')
     .insert({
       company_name: result.data.companyName,
@@ -36,16 +79,22 @@ export async function adminCreateSponsor(data: SponsorInput) {
       notes: result.data.notes || null,
       source: 'admin_added',
     })
+    .select('id')
+    .single()
 
   if (error) {
     return { error: mapDbError(error, 'adminCreateSponsor.insert') }
   }
 
+  // entity_id, not just metadata: without it the create and every later cap change on the
+  // same company cannot be joined in the audit log — which is the one question this trail
+  // exists to answer.
   await adminClient.from('audit_log').insert({
     actor_id: user.id,
     action: 'create_sponsor',
     entity_type: 'sponsors',
-    metadata: result.data as any,
+    entity_id: created.id,
+    metadata: auditFields(result.data),
   })
 
   revalidatePath('/sponsors')
@@ -56,8 +105,12 @@ export async function adminCreateSponsor(data: SponsorInput) {
 export async function adminUpdateSponsor(id: string, data: SponsorInput) {
   const result = sponsorSchema.safeParse(data)
   if (!result.success) {
-    return { error: 'Invalid data provided' }
+    return { error: 'Validation failed: ' + result.error.issues.map((i) => i.message).join(', ') }
   }
+  // The id is a separate positional argument and was never validated; deleteSponsor below
+  // already parses its own.
+  const parsedId = z.string().uuid().safeParse(id)
+  if (!parsedId.success) return { error: 'Invalid sponsor id' }
 
   let user, adminClient
   try {
@@ -68,7 +121,15 @@ export async function adminUpdateSponsor(id: string, data: SponsorInput) {
     return { error: e.message }
   }
 
-  const { error } = await adminClient
+  // Read before write, for the audit row: `sponsors` holds only the current value, so
+  // without this the log can say what the cap became but never what it was.
+  const { data: before } = await adminClient
+    .from('sponsors')
+    .select('company_name, industry, website, funding_cap_cents, status')
+    .eq('id', parsedId.data)
+    .maybeSingle()
+
+  const { data: updated, error } = await adminClient
     .from('sponsors')
     .update({
       company_name: result.data.companyName,
@@ -81,19 +142,25 @@ export async function adminUpdateSponsor(id: string, data: SponsorInput) {
       status: result.data.status,
       notes: result.data.notes || null,
     })
-    .eq('id', id)
+    .eq('id', parsedId.data)
+    .select('id')
 
   if (error) {
     return { error: mapDbError(error, 'adminUpdateSponsor.update') }
   }
+  // A zero-row UPDATE is not an error in PostgREST. Without this the platform's only
+  // funding-cap write path returns success and writes an audit row pointing at a sponsor
+  // that does not exist — the same defect fixed in sponsor-approvals.ts (G-03).
+  if (!updated || updated.length === 0) return { error: 'Sponsor not found' }
 
-  // Write to audit log
+  // parsed output, never the raw `data` argument: audit_log has no expiry and this used to
+  // record whatever a caller sent, unvalidated, including the contact email.
   await adminClient.from('audit_log').insert({
     actor_id: user.id,
     action: 'update_sponsor',
     entity_type: 'sponsors',
-    entity_id: id,
-    metadata: data as any,
+    entity_id: parsedId.data,
+    metadata: { from: before ? auditFields(dbRowToAuditInput(before)) : null, to: auditFields(result.data) },
   })
 
   revalidatePath('/sponsors')

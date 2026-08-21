@@ -9,7 +9,7 @@ import { purgeCoachCredentials } from '@/lib/credentials-retention'
 import { mapDbError } from '@/lib/errors'
 import { deriveTeamSlug, uniquifyTeamSlug } from '@/lib/team-slug'
 import { verifyFTCTeamIdentity } from '@/lib/ftc-roster'
-import { teamVerificationOverrideSchema } from '@/lib/schemas/team'
+import { teamVerificationOverrideSchema, TEAM_VERIFICATION_OUTCOMES } from '@/lib/schemas/team'
 import { emailDomainRuleSchema, type EmailDomainRuleInput } from '@/lib/schemas/sponsor'
 import {
   ADMIN_LEVEL_LABELS,
@@ -698,7 +698,12 @@ export async function rejectSponsorApplication(applicationId: string) {
   return { success: true }
 }
 
-export async function overrideTeamVerification(input: { recordId: string; reason: string }) {
+export async function overrideTeamVerification(input: {
+  recordId: string
+  reason: string
+  expectedOutcome?: (typeof TEAM_VERIFICATION_OUTCOMES)[number]
+  notifyCoach?: boolean
+}) {
   const parsed = teamVerificationOverrideSchema.safeParse(input)
   if (!parsed.success) {
     return { error: 'Validation failed: ' + parsed.error.issues.map((i) => i.message).join(', ') }
@@ -725,7 +730,7 @@ export async function overrideTeamVerification(input: { recordId: string; reason
 
   // team_verification_records has no UPDATE policy (0081) — this write only succeeds
   // because requireAdmin() hands back the service-role admin client.
-  const { error: updateError } = await adminClient
+  let update = adminClient
     .from('team_verification_records')
     .update({
       outcome: 'overridden',
@@ -735,7 +740,17 @@ export async function overrideTeamVerification(input: { recordId: string; reason
     })
     .eq('id', record.id)
 
+  // Compare-and-set when the caller declared what it read. Without it, two admins (or an
+  // appeal resolution racing the verification card) both stamp the record and both flip the
+  // team, each believing it acted on the state it checked.
+  if (parsed.data.expectedOutcome) update = update.eq('outcome', parsed.data.expectedOutcome)
+
+  const { data: updatedRows, error: updateError } = await update.select('id')
+
   if (updateError) return { error: mapDbError(updateError, 'overrideTeamVerification.update') }
+  if (parsed.data.expectedOutcome && (!updatedRows || updatedRows.length === 0)) {
+    return { error: 'This verification record changed while you were working on it. Refresh and try again.' }
+  }
 
   // A rejection provisioned the team as an incubator (verifyCoach's downgrade branch) —
   // reinstate 'existing' now that an admin has manually confirmed the number.
@@ -770,7 +785,7 @@ export async function overrideTeamVerification(input: { recordId: string; reason
   })
 
   const recipientId = teamOwnerId ?? record.profile_id
-  if (recipientId) {
+  if (recipientId && parsed.data.notifyCoach !== false) {
     await createInAppNotification({
       recipientId,
       type: 'general',

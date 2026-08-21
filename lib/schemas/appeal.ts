@@ -2,10 +2,39 @@ import { z } from '@/lib/zod-config'
 import { plainTextField } from './submission'
 import { LIMITS } from './limits'
 
-/** The three appealable subjects. 'team_verification' is declared but refused by the
- *  action until prompt 07's overrideTeamVerification exists — see app/actions/appeals.ts. */
+/** The three appealable subjects. All three are live: 'team_verification' subjects are
+ *  team_verification_records rows with outcome='rejected' (0081), and resolveAppeal applies
+ *  an overturn by delegating to overrideTeamVerification — see app/actions/appeals.ts. */
 export const APPEAL_SUBJECT_TYPES = ['submission', 'coach_verification', 'team_verification'] as const
 export type AppealSubjectType = (typeof APPEAL_SUBJECT_TYPES)[number]
+
+/** One label per subject, so a new subject type cannot be silently mislabelled by a
+ *  two-way ternary in four different files — which is what shipped when
+ *  'team_verification' was inert. */
+export const APPEAL_SUBJECT_LABELS: Record<AppealSubjectType, string> = {
+  submission: 'Declined pitch',
+  coach_verification: 'Coach verification',
+  team_verification: 'FTC team number verification',
+}
+
+/**
+ * Why an FTC number check was rejected, in the coach's words rather than the checker's.
+ * team_verification_records stores scores, not prose — but an appeal form that shows the
+ * coach nothing to answer produces statements that answer nothing.
+ *
+ * Here rather than in app/actions/appeals.ts because a `'use server'` module may only
+ * export async server actions, and the admin queue renders this string too.
+ */
+export function verificationRejectionReason(record: {
+  ftc_team_number: number
+  claimed_team_name?: string | null
+  official_team_name?: string | null
+}): string {
+  if (record.official_team_name) {
+    return `The official FIRST record for Team #${record.ftc_team_number} is “${record.official_team_name}”, which did not match the name you entered${record.claimed_team_name ? ` (“${record.claimed_team_name}”)` : ''}.`
+  }
+  return `No official FIRST record could be matched to Team #${record.ftc_team_number}.`
+}
 
 export const APPEAL_STATUSES = ['open', 'under_review', 'upheld', 'overturned', 'withdrawn'] as const
 export type AppealStatus = (typeof APPEAL_STATUSES)[number]

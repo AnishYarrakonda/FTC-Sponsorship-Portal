@@ -16,6 +16,7 @@ import {
   waiveBenefitSchema,
   adminSetBenefitStatusSchema,
   adminVoidProofSchema,
+  uploadBenefitProofSchema,
   upsertTierSchema,
   archiveTierSchema,
   type RecognitionActionResult,
@@ -37,6 +38,15 @@ import {
  */
 
 const PROOF_MAX_BYTES = 5 * 1024 * 1024
+
+/** Reads inside a sentence, unlike the raw enum value. Admin override copy only. */
+const BENEFIT_STATUS_WORDS: Record<string, string> = {
+  promised: 'promised',
+  in_progress: 'in progress',
+  delivered: 'delivered',
+  waived: 'waived',
+  not_applicable: 'not applicable',
+}
 
 function mapRecognitionError(code: string | undefined): string {
   const messages: Record<string, string> = {
@@ -219,6 +229,13 @@ export async function uploadBenefitProof(
   deliveryId: string,
   formData: FormData
 ): Promise<RecognitionActionResult> {
+  // The id is a raw client argument and it decides a Storage object key below, so it is
+  // parsed before anything else runs — a uuid cannot carry a path separator.
+  const parsed = uploadBenefitProofSchema.safeParse({ deliveryId })
+  if (!parsed.success) {
+    return { error: 'Validation failed: ' + parsed.error.issues.map((i) => i.message).join(', ') }
+  }
+
   let user, clerkUserId, supabase, adminClient
   try {
     ;({ user, clerkUserId, supabase } = await requireVerifiedCoach())
@@ -240,10 +257,21 @@ export async function uploadBenefitProof(
   // Ownership is proven BEFORE anything is written — the exact bug uploadTeamLogo fixed:
   // a zero-row UPDATE is not an error, so a caller-supplied id once wrote a file to
   // storage and still returned success.
-  const delivery = await loadDelivery(adminClient, deliveryId)
+  const delivery = await loadDelivery(adminClient, parsed.data.deliveryId)
   if (!delivery) return { error: 'Benefit not found.' }
   const ownerId = await teamOwnerId(adminClient, delivery.team_id)
   if (!ownerId || ownerId !== user.id) return { error: 'Benefit not found.' }
+
+  // Checked BEFORE the upload, from the row just loaded: pitch-media has no DELETE policy
+  // and 0087 deliberately declined to have the service role delete from it, so anything
+  // written here is permanent and public. A waived benefit is the one RPC rejection a coach
+  // can actually hit, and rejecting it now is the difference between an error and an
+  // orphaned photo nothing references and nobody can remove. A rejection that only the RPC
+  // can see (a concurrent waive, a delete mid-upload) still leaves the object behind; that
+  // is a narrow race, not the ordinary path.
+  if (delivery.status === 'waived') {
+    return { error: mapRecognitionError('already_waived') }
+  }
 
   const validation = await validateUploadedFile(file, {
     allowedMimes: IMAGE_MIMES,
@@ -256,7 +284,7 @@ export async function uploadBenefitProof(
   // The Clerk id MUST be the first path segment or the pitch-media storage policy rejects
   // the insert. upsert:false because the bucket has no UPDATE policy — the timestamp
   // suffix makes every attempt a fresh key.
-  const filePath = `${clerkUserId}/recognition/${deliveryId}-${Date.now()}.${ext}`
+  const filePath = `${clerkUserId}/recognition/${parsed.data.deliveryId}-${Date.now()}.${ext}`
   const { error: uploadError } = await supabase.storage
     .from('pitch-media')
     .upload(filePath, file, { upsert: false, contentType: mime })
@@ -265,7 +293,7 @@ export async function uploadBenefitProof(
   const { data: urlData } = supabase.storage.from('pitch-media').getPublicUrl(filePath)
 
   const { data: result, error: rpcError } = await (adminClient as any).rpc('record_benefit_delivery', {
-    p_delivery_id: deliveryId,
+    p_delivery_id: parsed.data.deliveryId,
     p_actor_profile_id: user.id,
     // Attaching proof does not by itself change the state — the coach ticks "delivered"
     // separately. Passing the current status keeps this a proof-only write.
@@ -282,10 +310,13 @@ export async function uploadBenefitProof(
     actor_id: user.id,
     action: 'upload_benefit_proof',
     entity_type: 'recognition_benefit_deliveries',
-    entity_id: deliveryId,
-    metadata: { delivery_id: deliveryId, benefit_type: delivery.benefit_type },
+    entity_id: parsed.data.deliveryId,
+    metadata: { delivery_id: parsed.data.deliveryId, benefit_type: delivery.benefit_type },
   })
 
+  // NO STEP 5, DELIBERATELY. Attaching proof does not change the benefit's state — the RPC
+  // is passed the CURRENT status — and markBenefitDelivered is what tells the sponsor the
+  // benefit landed. Notifying here would mean two messages for one coach action.
   revalidateRecognition()
   return { success: true, url: urlData.publicUrl }
 }
@@ -398,6 +429,38 @@ export async function adminSetBenefitStatus(input: {
       reason: parsed.data.reason,
     },
   })
+
+  // Both counterparties are told, for the same reason adminVoidBenefitProof tells them:
+  // this write changes what the team still owes AND what the sponsor believes was
+  // delivered, and neither of them made it. The reason is admin moderation copy — the
+  // coach sees it verbatim so the override is answerable, the sponsor does not, because
+  // it may discuss the team's conduct.
+  //
+  // Skipped when the RPC reported `already_in_status`: nothing moved, so announcing a
+  // change would be a lie. That branch is tolerated above, not a success.
+  if (delivery.status !== parsed.data.status && (result as RpcResult)?.error !== 'already_in_status') {
+    const label = benefitLabel(delivery.benefit_type)
+    const name = await teamName(adminClient, delivery.team_id)
+    const statusWord = BENEFIT_STATUS_WORDS[parsed.data.status]
+
+    const ownerId = await teamOwnerId(adminClient, delivery.team_id)
+    if (ownerId) {
+      await createInAppNotification({
+        recipientId: ownerId,
+        type: 'general',
+        title: 'An administrator changed a benefit status',
+        body: `“${label}” is now ${statusWord}. An administrator set this: ${parsed.data.reason}`,
+      })
+    }
+    for (const recipientId of await sponsorRecipients(adminClient, delivery.sponsor_id)) {
+      await createInAppNotification({
+        recipientId,
+        type: 'general',
+        title: 'An administrator changed a benefit status',
+        body: `“${label}” for ${name} is now ${statusWord}. You can review it under Recognition in your portal.`,
+      })
+    }
+  }
 
   revalidateRecognition()
   return { success: true }

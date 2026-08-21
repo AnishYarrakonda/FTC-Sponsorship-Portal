@@ -32,6 +32,7 @@ import {
   withdrawAppealSchema,
   appealDeadline,
   isAppealWindowOpen,
+  verificationRejectionReason,
   type CreateAppealInput,
   type AssignAppealInput,
   type ResolveAppealInput,
@@ -42,6 +43,7 @@ import {
   type AppealStatus,
 } from '@/lib/schemas/appeal'
 import { requireAuth, requireAdmin, requireSuperAdmin } from '@/lib/actions-utils'
+import { overrideTeamVerification } from '@/app/actions/admin'
 import { createInAppNotification } from '@/lib/notify'
 import { mapDbError } from '@/lib/errors'
 import { revalidatePath } from 'next/cache'
@@ -87,14 +89,6 @@ export async function createAppeal(data: CreateAppealInput): Promise<AppealActio
   }
   if (user.role !== 'coach') return { error: 'Only a coach can file an appeal.' }
 
-  if (subjectType === 'team_verification') {
-    // TODO(prompt 07): once team_verification_records and overrideTeamVerification exist,
-    // resolve this subject by calling overrideTeamVerification (requireAdmin per that
-    // prompt's action table) from resolveAppeal. Do NOT stub a fake resolution here — one
-    // that pretends to do something is worse than one that says it cannot.
-    return { error: 'Team verification appeals are not available yet.' }
-  }
-
   const adminClient = createAdminClient()
 
   let decisionAt: string
@@ -131,6 +125,51 @@ export async function createAppeal(data: CreateAppealInput): Promise<AppealActio
     }
     decisionAt = submission.reviewed_at
     originalDeciderId = submission.reviewed_by
+  } else if (subjectType === 'team_verification') {
+    // Prompt 07 shipped team_verification_records and overrideTeamVerification (0081), so
+    // this subject is live. The record is read through the ADMIN client for the same reason
+    // every other branch does — the actor is re-verified here rather than delegated to RLS.
+    const { data: record } = await adminClient
+      .from('team_verification_records')
+      .select('id, team_id, profile_id, ftc_team_number, outcome, checked_at, teams:team_id(owner_id)')
+      .eq('id', subjectId)
+      .maybeSingle()
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const recordTeam = (record as any)?.teams as { owner_id?: string } | null
+    const ownsRecord = record?.profile_id === user.id || recordTeam?.owner_id === user.id
+    if (!record || !ownsRecord) return { error: 'Verification check not found.' }
+
+    // ONLY 'rejected'. 'needs_review' is not a decision — it is a queue, and appealing a
+    // pending item would race the admin about to work it. 'overridden' already went the
+    // coach's way, and 'auto_pass' / 'unavailable' are not adverse.
+    if (record.outcome !== 'rejected') {
+      return { error: 'That team number check was not rejected, so there is nothing to appeal.' }
+    }
+
+    // team_verification_records is APPEND-ONLY: one row per check attempt (0081). A coach
+    // who retried the same number three times has three rejected rows, each with a distinct
+    // id — and uq_appeals_one_per_decision keys on the id, so all three would be
+    // independently appealable and the queue would take three copies of one dispute. Only
+    // the latest check for a given number is a live decision.
+    let latest = adminClient
+      .from('team_verification_records')
+      .select('id')
+      .eq('ftc_team_number', record.ftc_team_number)
+    latest = record.team_id ? latest.eq('team_id', record.team_id) : latest.is('team_id', null)
+    const { data: newest } = await latest.order('checked_at', { ascending: false }).limit(1).maybeSingle()
+
+    if (newest && newest.id !== record.id) {
+      return {
+        error: 'That check has been superseded by a newer one for the same team number. Appeal the most recent result.',
+      }
+    }
+
+    decisionAt = record.checked_at as string
+    // The rejection is produced by the roster matcher, not by a person, so there is no
+    // original decider — which correctly makes the different-reviewer rule a no-op here
+    // instead of blocking every admin from resolving it.
+    originalDeciderId = null
   } else {
     // coach_verification
     if (subjectId !== user.id) return { error: 'You can only appeal your own verification decision.' }
@@ -442,8 +481,43 @@ export async function resolveAppeal(data: ResolveAppealInput): Promise<AppealAct
         entity_id: appeal.subject_id,
         metadata: { appeal_id: appealId, cleared: ['denial_reason', 'denied_at'] },
       })
+    } else if (appeal.subject_type === 'team_verification') {
+      // The subject effect is DELEGATED to overrideTeamVerification rather than re-written
+      // here. That action already stamps outcome/override_reason/overridden_by, reinstates
+      // an incubator team to 'existing' with its number, writes its own audit row and tells
+      // the coach — and a second copy of that logic in this file is exactly how 0093/0094
+      // /0096 lost their fixes. It re-runs requireAdmin(); the caller is already one.
+      //
+      // Guarded first, because that action's UPDATE has no outcome filter: a record that is
+      // no longer 'rejected' would still be stamped 'overridden', which is rule 2's failure
+      // mode with extra steps.
+      const { data: record } = await adminClient
+        .from('team_verification_records')
+        .select('id, outcome')
+        .eq('id', appeal.subject_id)
+        .maybeSingle()
+
+      if (!record || record.outcome !== 'rejected') {
+        return {
+          error:
+            'This team number check is no longer in the rejected state, so the appeal could not be applied. Refresh and check its current status.',
+        }
+      }
+
+      // resolutionNotes is min-20 chars and teamVerificationOverrideSchema wants min-20, so
+      // the admin's explanation to the coach IS the override reason. One text, one meaning.
+      const override = await overrideTeamVerification({
+        recordId: appeal.subject_id,
+        reason: resolutionNotes,
+        // Compare-and-set: the pre-read above is a friendlier message, not the guard.
+        expectedOutcome: 'rejected',
+        // The "your appeal was successful" notification below already says this.
+        notifyCoach: false,
+      })
+      if (override?.error) {
+        return { error: `The appeal could not be applied to the team number check: ${override.error}` }
+      }
     }
-    // No team_verification branch — createAppeal refuses that subject type. See prompt 07.
   }
   // `upheld` deliberately touches NO subject row. That is what upheld means. Do not add a
   // side effect here.
@@ -471,12 +545,17 @@ export async function resolveAppeal(data: ResolveAppealInput): Promise<AppealAct
     metadata: { outcome, subject_type: appeal.subject_type, subject_id: appeal.subject_id },
   })
 
+  const successBody =
+    appeal.subject_type === 'coach_verification'
+      ? 'Your appeal was successful. Upload your photo ID again and an admin will review it — your original document was deleted after the first review.'
+      : appeal.subject_type === 'team_verification'
+        ? 'Your appeal was successful. An administrator has manually confirmed your FTC team number.'
+        : 'Your appeal was successful. Your pitch is editable again and you can resubmit it for review.'
+
   const body =
     outcome === 'upheld'
       ? `Our team reviewed your appeal and the original decision stands.\n\n${resolutionNotes}`
-      : appeal.subject_type === 'coach_verification'
-        ? `Your appeal was successful. Upload your photo ID again and an admin will review it — your original document was deleted after the first review.\n\n${resolutionNotes}`
-        : `Your appeal was successful. Your pitch is editable again and you can resubmit it for review.\n\n${resolutionNotes}`
+      : `${successBody}\n\n${resolutionNotes}`
 
   await createInAppNotification({
     recipientId: appeal.appellant_profile_id,
@@ -562,7 +641,7 @@ export async function listAppealableSubjects(): Promise<
   }
   if (user.role !== 'coach') return { subjects: [] }
 
-  const [{ data: submissions }, { data: profile }, { data: appeals }] = await Promise.all([
+  const [{ data: submissions }, { data: profile }, { data: appeals }, { data: verifications }] = await Promise.all([
     supabase
       .from('submissions')
       .select('id, status, sent_at, reviewed_at, admin_feedback, teams:team_id(owner_id), sponsors:sponsor_id(company_name)')
@@ -578,6 +657,15 @@ export async function listAppealableSubjects(): Promise<
       .from('appeals')
       .select('id, status, subject_type, subject_id')
       .eq('appellant_profile_id', user.id),
+    // tvr_select_own (0081) already scopes this to the caller's own claims and teams, so no
+    // owner filter is written here — the same reason the submissions query above carries
+    // none. Deliberately NOT filtered to outcome='rejected': the table is append-only, and
+    // a rejection that a later check overturned must not still be offered as appealable —
+    // which cannot be seen from the rejected rows alone.
+    supabase
+      .from('team_verification_records')
+      .select('id, team_id, ftc_team_number, claimed_team_name, official_team_name, outcome, checked_at')
+      .order('checked_at', { ascending: false }),
   ])
 
   /**
@@ -610,6 +698,29 @@ export async function listAppealableSubjects(): Promise<
       windowOpen: isAppealWindowOpen(s.reviewed_at),
       originalReason: s.admin_feedback ?? null,
       existingAppeal: liveAppealFor('submission', s.id),
+    })
+  }
+
+  // One live decision per team number: the newest row wins, and it is appealable only if
+  // that newest row is the rejection.
+  type VerificationRow = NonNullable<typeof verifications>[number]
+  const latestVerification = new Map<string, VerificationRow>()
+  for (const v of verifications ?? []) {
+    const key = `${v.team_id ?? 'none'}:${v.ftc_team_number}`
+    // The query is ordered checked_at DESC, so the first row seen for a key is the latest.
+    if (!latestVerification.has(key)) latestVerification.set(key, v)
+  }
+
+  for (const v of Array.from(latestVerification.values()).filter((v) => v.outcome === 'rejected')) {
+    subjects.push({
+      subjectType: 'team_verification',
+      subjectId: v.id,
+      label: `FTC Team #${v.ftc_team_number} verification`,
+      decisionAt: v.checked_at,
+      deadline: appealDeadline(v.checked_at).toISOString(),
+      windowOpen: isAppealWindowOpen(v.checked_at),
+      originalReason: verificationRejectionReason(v),
+      existingAppeal: liveAppealFor('team_verification', v.id),
     })
   }
 

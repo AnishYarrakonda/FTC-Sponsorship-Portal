@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   requireAuthMock: vi.fn(),
   requireAdminMock: vi.fn(),
   requireSuperAdminMock: vi.fn(),
+  overrideTeamVerificationMock: vi.fn(),
 }))
 
 function makeBuilder(table: string) {
@@ -40,7 +41,10 @@ function makeBuilder(table: string) {
       if (!err) mocks.updates.push({ table, payload })
       return Promise.resolve({ data: err ? null : (cfg.update ?? []), error: err })
     }
-    return Promise.resolve({ data: cfg.select ?? null, error: null })
+    // A function lets one table answer successive reads differently — createAppeal reads the
+    // verification record, then reads the latest record for the same team number.
+    const sel = typeof cfg.select === 'function' ? (cfg.select as () => unknown)() : cfg.select
+    return Promise.resolve({ data: sel ?? null, error: null })
   }
 
   const b: Record<string, unknown> = {
@@ -65,6 +69,9 @@ vi.mock('@/lib/actions-utils', () => ({
   requireSuperAdmin: mocks.requireSuperAdminMock,
 }))
 vi.mock('@/lib/notify', () => ({ createInAppNotification: mocks.notifyMock }))
+// resolveAppeal delegates the team_verification subject effect to this action rather than
+// re-implementing the override. Mocked so these stay action-level tests of appeals.ts.
+vi.mock('@/app/actions/admin', () => ({ overrideTeamVerification: mocks.overrideTeamVerificationMock }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 vi.mock('@sentry/nextjs', () => ({ captureException: vi.fn() }))
 
@@ -76,6 +83,8 @@ const SUBMISSION_ID = '22222222-2222-4222-8222-222222222222'
 const APPEAL_ID = '33333333-3333-4333-8333-333333333333'
 const ADMIN_A = '44444444-4444-4444-8444-444444444444'
 const ADMIN_B = '55555555-5555-4555-8555-555555555555'
+
+const VERIFICATION_ID = '66666666-6666-4666-8666-666666666666'
 
 const daysAgo = (n: number) => new Date(Date.now() - n * 864e5).toISOString()
 
@@ -97,6 +106,20 @@ function declinedSubmission(over: Row = {}) {
   }
 }
 
+function rejectedVerification(over: Row = {}) {
+  return {
+    id: VERIFICATION_ID,
+    team_id: null,
+    profile_id: COACH_ID,
+    ftc_team_number: 12345,
+    outcome: 'rejected',
+    checked_at: daysAgo(3),
+    overridden_by: null,
+    teams: null,
+    ...over,
+  }
+}
+
 function appealInserts() { return mocks.inserts.filter((i) => i.table === 'appeals') }
 function appealUpdates() { return mocks.updates.filter((u) => u.table === 'appeals') }
 function submissionUpdates() { return mocks.updates.filter((u) => u.table === 'submissions') }
@@ -113,6 +136,7 @@ beforeEach(() => {
   mocks.requireAuthMock.mockReset().mockResolvedValue({ user: { id: COACH_ID, role: 'coach' } })
   mocks.requireAdminMock.mockReset().mockResolvedValue({ user: { id: ADMIN_B, role: 'admin' }, adminClient })
   mocks.requireSuperAdminMock.mockReset().mockResolvedValue({ user: { id: ADMIN_B }, adminClient })
+  mocks.overrideTeamVerificationMock.mockReset().mockResolvedValue({ success: true })
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
 
@@ -140,9 +164,44 @@ describe('createAppeal — subject eligibility', () => {
     expect(appealInserts()).toHaveLength(0)
   })
 
-  it('rejects team_verification as not yet available', async () => {
-    const r = await createAppeal({ subjectType: 'team_verification', subjectId: SUBMISSION_ID, statement: VALID_STATEMENT })
-    expect(r.error).toBe('Team verification appeals are not available yet.')
+  it('accepts a rejected team number check, stamping checked_at as the decision date', async () => {
+    const checkedAt = daysAgo(3)
+    // Both the record read and the latest-for-this-number read resolve to the same row.
+    mocks.tables.team_verification_records = { select: rejectedVerification({ checked_at: checkedAt }) }
+    const r = await createAppeal({ subjectType: 'team_verification', subjectId: VERIFICATION_ID, statement: VALID_STATEMENT })
+    expect(r.error).toBeUndefined()
+    expect(appealInserts()).toHaveLength(1)
+    expect(appealInserts()[0].payload).toMatchObject({
+      subject_type: 'team_verification',
+      subject_id: VERIFICATION_ID,
+      decision_at: checkedAt,
+      // The matcher rejected it, not a person — so the different-reviewer rule must not
+      // pin the appeal to an admin who never touched it.
+      original_decider_id: null,
+    })
+  })
+
+  it('refuses a rejected check that a NEWER check for the same number has superseded', async () => {
+    const reads = [rejectedVerification(), { id: 'a-newer-record-id' }]
+    mocks.tables.team_verification_records = { select: () => reads.shift() ?? null }
+    const r = await createAppeal({ subjectType: 'team_verification', subjectId: VERIFICATION_ID, statement: VALID_STATEMENT })
+    expect(r.error).toMatch(/superseded/i)
+    expect(appealInserts()).toHaveLength(0)
+  })
+
+  it("rejects another coach's team number check, and writes nothing", async () => {
+    mocks.tables.team_verification_records = {
+      select: rejectedVerification({ profile_id: OTHER_COACH, teams: { owner_id: OTHER_COACH } }),
+    }
+    const r = await createAppeal({ subjectType: 'team_verification', subjectId: VERIFICATION_ID, statement: VALID_STATEMENT })
+    expect(r.error).toBe('Verification check not found.')
+    expect(appealInserts()).toHaveLength(0)
+  })
+
+  it('rejects a check that is needs_review rather than rejected, and writes nothing', async () => {
+    mocks.tables.team_verification_records = { select: rejectedVerification({ outcome: 'needs_review' }) }
+    const r = await createAppeal({ subjectType: 'team_verification', subjectId: VERIFICATION_ID, statement: VALID_STATEMENT })
+    expect(r.error).toMatch(/was not rejected/i)
     expect(appealInserts()).toHaveLength(0)
   })
 
@@ -331,6 +390,53 @@ describe('resolveAppeal', () => {
 
     expect(r.error).toMatch(/could not be applied to the pitch/i)
     // The appeal itself was never marked resolved.
+    expect(appealUpdates()).toHaveLength(0)
+    expect(mocks.notifyMock).not.toHaveBeenCalled()
+  })
+
+  it('overturning team_verification delegates to overrideTeamVerification with the resolution notes', async () => {
+    mocks.tables.appeals = {
+      select: underReview({ subject_type: 'team_verification', subject_id: VERIFICATION_ID }),
+      update: [{ id: APPEAL_ID, appellant_profile_id: COACH_ID, subject_type: 'team_verification' }],
+    }
+    mocks.tables.team_verification_records = { select: rejectedVerification() }
+
+    const r = await resolveAppeal({ appealId: APPEAL_ID, outcome: 'overturned', resolutionNotes: VALID_NOTES })
+
+    expect(r).toEqual({ success: true })
+    expect(mocks.overrideTeamVerificationMock).toHaveBeenCalledWith({
+      recordId: VERIFICATION_ID,
+      reason: VALID_NOTES,
+      // Compare-and-set, so a concurrent override cannot be re-stamped by this one.
+      expectedOutcome: 'rejected',
+      // One admin action, one message: resolveAppeal sends its own.
+      notifyCoach: false,
+    })
+    expect(mocks.notifyMock).toHaveBeenCalledTimes(1)
+    // The override owns the record write; appeals.ts must not shadow it with its own.
+    expect(mocks.updates.filter((u) => u.table === 'team_verification_records')).toHaveLength(0)
+  })
+
+  it('ACCEPTANCE: a check that is no longer rejected leaves the appeal under_review', async () => {
+    mocks.tables.appeals = { select: underReview({ subject_type: 'team_verification', subject_id: VERIFICATION_ID }) }
+    mocks.tables.team_verification_records = { select: rejectedVerification({ outcome: 'overridden' }) }
+
+    const r = await resolveAppeal({ appealId: APPEAL_ID, outcome: 'overturned', resolutionNotes: VALID_NOTES })
+
+    expect(r.error).toMatch(/no longer in the rejected state/i)
+    expect(mocks.overrideTeamVerificationMock).not.toHaveBeenCalled()
+    expect(appealUpdates()).toHaveLength(0)
+    expect(mocks.notifyMock).not.toHaveBeenCalled()
+  })
+
+  it('ACCEPTANCE: a failed override leaves the appeal under_review and returns an error', async () => {
+    mocks.tables.appeals = { select: underReview({ subject_type: 'team_verification', subject_id: VERIFICATION_ID }) }
+    mocks.tables.team_verification_records = { select: rejectedVerification() }
+    mocks.overrideTeamVerificationMock.mockResolvedValue({ error: 'Verification record not found' })
+
+    const r = await resolveAppeal({ appealId: APPEAL_ID, outcome: 'overturned', resolutionNotes: VALID_NOTES })
+
+    expect(r.error).toMatch(/could not be applied to the team number check/i)
     expect(appealUpdates()).toHaveLength(0)
     expect(mocks.notifyMock).not.toHaveBeenCalled()
   })

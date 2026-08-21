@@ -1,0 +1,66 @@
+name: CI
+
+# F-14 (_AUDIT-11-18.md). Before this workflow existed, `npm run lint` and `npm run test`
+# were only ever run by hand, and a lint break sat red on main until someone measured it.
+#
+# The four checks below are the same gate .claude/rules/workflows.md already requires
+# before a push, run by a machine instead of by memory.
+#
+# NOT here on purpose: the Playwright suite. Every spec is gated behind SUPABASE_LOCAL and
+# needs the Docker Supabase stack plus Clerk test credentials; running it here would need
+# real secrets and would be flaky, which is worse than not running it.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: typecheck · lint · test · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Placeholders, not secrets. lib/env.ts warns instead of throwing during
+    # NEXT_PHASE=phase-production-build, but the Clerk and Supabase SDKs parse their keys at
+    # import time during static rendering, so the shape has to be valid even though the
+    # values are inert. Nothing here reaches a network: no page rendered at build time makes
+    # an authenticated call, and these credentials authenticate nothing if one did.
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-service-role-key
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ZXhhbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk
+      CLERK_SECRET_KEY: sk_test_ci_placeholder
+      NEXT_PUBLIC_APP_URL: https://example.com
+      RESEND_API_KEY: re_ci_placeholder
+      RESEND_FROM_EMAIL: noreply@example.com
+      PAYOUT_ENCRYPTION_KEY: ci_placeholder_payout_encryption_key_32
+      CRON_SECRET: ci-placeholder-cron-secret
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      # `npm ci` and not `npm install`: the jsdom/cssstyle `overrides` in package.json fix a
+      # runtime ERR_REQUIRE_ESM in the serverless bundle, and only the lockfile pins them.
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      # eslint exits non-zero on errors only; the ~340 warnings do not fail the build. Do
+      # not add --max-warnings here without first driving that number down.
+      - run: npm run lint
+
+      - run: npm run test
+
+      - run: npm run build

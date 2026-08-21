@@ -6,6 +6,7 @@ import { AppealStatusPill } from '@/components/coach/appeal-status-pill'
 import { WithdrawAppealButton } from '@/components/coach/withdraw-appeal-button'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { APPEAL_SUBJECT_LABELS, type AppealSubjectType } from '@/lib/schemas/appeal'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,6 +32,7 @@ export default async function CoachAppealDetailPage({ params }: { params: Promis
 
   const isOpen = appeal.status === 'open' || appeal.status === 'under_review'
   const isSubmission = appeal.subject_type === 'submission'
+  const subjectLabel = APPEAL_SUBJECT_LABELS[appeal.subject_type as AppealSubjectType] ?? 'Appeal'
 
   return (
     <div className="container mx-auto max-w-3xl space-y-6 py-8">
@@ -40,7 +42,7 @@ export default async function CoachAppealDetailPage({ params }: { params: Promis
             ← All appeals
           </Link>
           <h1 className="mt-1 text-2xl font-bold">
-            {isSubmission ? 'Appeal — declined pitch' : 'Appeal — coach verification'}
+            {`Appeal — ${subjectLabel.toLowerCase()}`}
           </h1>
           <p className="text-sm text-muted-foreground">Filed {formatDate(appeal.created_at)}</p>
         </div>

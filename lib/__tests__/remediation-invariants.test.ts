@@ -6,6 +6,7 @@ import { sponsorApplicationSchema, sponsorSchema } from '@/lib/schemas/sponsor'
 import { sponsorSignupSchema } from '@/lib/schemas/sponsor-signup'
 import { safeInternalPath, isNextControlFlowError } from '@/lib/client-errors'
 import { isAwaitingSponsor, isTerminal, AWAITING_SPONSOR_STATUSES } from '@/lib/submission-status'
+import { functionBody } from './helpers/source-blocks'
 
 /**
  * `updateTeam` validation (report §15 P1).
@@ -181,9 +182,9 @@ describe('fulfillment UI invariants', () => {
     const cronFile = fs.readFileSync(path.join(root, 'app/api/cron/nudge-fulfillments/route.ts'), 'utf-8')
     const notifyFile = fs.readFileSync(path.join(root, 'lib/notify.ts'), 'utf-8')
 
-    // Extract body of sendFulfillmentNudgeEmail from notify.ts
-    const notifyMatch = notifyFile.match(/export async function sendFulfillmentNudgeEmail[\s\S]*?^}/m)
-    const sendFulfillmentNudgeEmailBody = notifyMatch ? notifyMatch[0] : ''
+    // Brace-counted, not `^}`-anchored: a non-match used to yield '' and pass silently,
+    // and one level of indentation was all it took to produce one.
+    const sendFulfillmentNudgeEmailBody = functionBody(notifyFile, 'sendFulfillmentNudgeEmail')
 
     expect(emailFile).not.toContain('payment_reference')
     expect(emailFile).not.toContain('paymentReference')
