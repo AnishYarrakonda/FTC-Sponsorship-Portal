@@ -8,7 +8,7 @@
  */
 
 import { test, expect, type Page } from '@playwright/test'
-import { signIn } from '../helpers/clerk-auth'
+import { signIn, gotoStable } from '../helpers/clerk-auth'
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'admin+clerk_test@example.com'
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? 'AdminTest123!'
@@ -20,21 +20,21 @@ const SPONSOR_PASSWORD = process.env.SPONSOR_PASSWORD ?? 'SponsorTest123!'
 
 test.describe('Agreements — access boundaries', () => {
   test('unauthenticated GET /agreements redirects to /login', async ({ page }) => {
-    await page.goto('/agreements')
+    await gotoStable(page, '/agreements')
     await expect(page).toHaveURL(/\/login/)
   })
 
   test('signed-in coach is redirected off /agreements', async ({ page }) => {
     test.skip(!process.env.SUPABASE_LOCAL, 'Set SUPABASE_LOCAL=true to enable this test')
     await signIn(page, COACH_EMAIL, COACH_PASSWORD)
-    await page.goto('/agreements')
+    await gotoStable(page, '/agreements')
     await expect(page).toHaveURL(/\/dashboard\?redirected=admin/)
   })
 
   test('signed-in sponsor is redirected off /agreements', async ({ page }) => {
     test.skip(!process.env.SUPABASE_LOCAL, 'Set SUPABASE_LOCAL=true to enable this test')
     await signIn(page, SPONSOR_EMAIL, SPONSOR_PASSWORD)
-    await page.goto('/agreements')
+    await gotoStable(page, '/agreements')
     await expect(page).toHaveURL(/\/sponsor\/dashboard\?redirected=admin/)
   })
 
@@ -61,7 +61,7 @@ test.describe('Agreements — admin draft and publish flow', () => {
 
   test('admin creates a draft, sees the unknown-token warning, fixes it, saves, and publishes', async ({ page }) => {
     await signIn(page, ADMIN_EMAIL, ADMIN_PASSWORD)
-    await page.goto('/agreements/team_participation/edit')
+    await gotoStable(page, '/agreements/team_participation/edit')
 
     /**
      * A published version cannot be deleted (`trg_agreement_template_no_delete` — it is a

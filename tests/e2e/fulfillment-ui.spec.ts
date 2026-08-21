@@ -14,7 +14,7 @@
  */
 
 import { test, expect } from '@playwright/test'
-import { signIn } from '../helpers/clerk-auth'
+import { signIn, gotoStable } from '../helpers/clerk-auth'
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'admin+clerk_test@example.com'
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? 'AdminTest123!'
@@ -31,7 +31,7 @@ test.describe('Fulfillment UI Security & Workflow Boundaries', () => {
 
   test('1 & 5. Sponsor view boundary: only own commitments visible & no coach controls', async ({ page }) => {
     await signIn(page, SPONSOR_EMAIL, SPONSOR_PASSWORD)
-    await page.goto('/sponsor/funding')
+    await gotoStable(page, '/sponsor/funding')
 
     await expect(page.getByRole('heading', { name: /Funding/i }).first()).toBeVisible()
 
@@ -42,7 +42,7 @@ test.describe('Fulfillment UI Security & Workflow Boundaries', () => {
 
   test('3 & 5. Coach view boundary: only own team pledges visible & no sponsor controls', async ({ page }) => {
     await signIn(page, COACH_EMAIL, COACH_PASSWORD)
-    await page.goto('/dashboard?tab=funding')
+    await gotoStable(page, '/dashboard?tab=funding')
 
     // Assert we actually landed on the coach dashboard first — an absence-only assertion
     // passes just as happily on /login, which is how the old version of this file
@@ -55,19 +55,19 @@ test.describe('Fulfillment UI Security & Workflow Boundaries', () => {
 
   test('4a. A coach landing on /reconciliation is redirected away from the admin area', async ({ page }) => {
     await signIn(page, COACH_EMAIL, COACH_PASSWORD)
-    await page.goto('/reconciliation')
+    await gotoStable(page, '/reconciliation')
     await expect(page).toHaveURL(/\/dashboard/)
   })
 
   test('4b. A sponsor landing on /reconciliation is redirected away from the admin area', async ({ page }) => {
     await signIn(page, SPONSOR_EMAIL, SPONSOR_PASSWORD)
-    await page.goto('/reconciliation')
+    await gotoStable(page, '/reconciliation')
     await expect(page).toHaveURL(/\/sponsor/)
   })
 
   test('7. Payment reference masking and client-side toggle', async ({ page }) => {
     await signIn(page, SPONSOR_EMAIL, SPONSOR_PASSWORD)
-    await page.goto('/sponsor/funding')
+    await gotoStable(page, '/sponsor/funding')
     await expect(page).toHaveURL(/\/sponsor\/funding/)
 
     const showButton = page.getByRole('button', { name: /^Show$/ }).first()
@@ -107,7 +107,7 @@ test.describe('Fulfillment UI Security & Workflow Boundaries', () => {
 
   test('11 & 12. Admin reconciliation table and override legal transition bounds', async ({ page }) => {
     await signIn(page, ADMIN_EMAIL, ADMIN_PASSWORD)
-    await page.goto('/reconciliation')
+    await gotoStable(page, '/reconciliation')
 
     await expect(page.getByRole('heading', { name: /Fulfillment Reconciliation/i })).toBeVisible()
 

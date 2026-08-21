@@ -73,10 +73,12 @@ inside a session.
 | ✅ Shipped | `16` BotID + corporate email gating · `18` accessibility (WCAG 2.2 AA) — see `docs/accessibility-audit.md` |
 | 🚧 Partial | `17` — the code half is shipped (Resend `email.complained` handling, `noreply@` trap in `lib/env.ts`, `docs/email-deliverability.md`). **DMARC is still unpublished** at `_dmarc.exodiusftc.com`, and the Resend webhook is not yet subscribed to `email.complained`. Both are registrar/dashboard actions — records to paste are in §3.1 of that doc. |
 
-Migrations applied so far: `0076`–`0095`. That includes `0084`, the three fixes
+Migrations applied so far: `0076`–`0097`. That includes `0084`, the three fixes
 `0091`/`0092`/`0093` (production 2026-08-15), `0094` (production 2026-08-19, the
-`sponsor_ids_for_profile` fix to `record_fulfillment_transition`), and `0095`
-(production 2026-08-20, capacity release on fulfillment cancellation — audit finding F-01).
+`sponsor_ids_for_profile` fix to `record_fulfillment_transition`), `0095`
+(production 2026-08-20, capacity release on fulfillment cancellation — audit finding F-01),
+`0096` (the P0 `prevent_role_elevation` restore) and `0097` (drops the dead capacity
+function, revokes trigger EXECUTE).
 Prompt `10` added no migration. Real head is always `ls supabase/migrations | tail -3` —
 trust that over this table, which has been wrong before.
 
@@ -84,6 +86,16 @@ trust that over this table, which has been wrong before.
 dashboard half, `07`'s FIRST API credentials, `10`'s Clerk enterprise connection, and legal
 review of the receipt/agreement copy. See `prompts/_AUDIT-11-18.md` for the verification
 sweep over `11`–`18`, and `prompts/_AUDIT-01-10.md` for the earlier one.
+
+**The E2E suite is green.** The 22 `SUPABASE_LOCAL`-gated specs — owed since prompt 11 —
+ran clean on 2026-08-20 against the local Docker stack at migration `0097`: **166 passed,
+0 failed, 10 skipped**, reproduced three times (chromium once, firefox twice). WebKit is
+excluded; it cannot reach Clerk's FAPI at all. Getting there required repairing seven harness
+defects — including a sign-in race that produced one failure per run in a different spec each
+time, and a stale password gate that had been silently skipping five reviewer-boundary tests.
+Details in `_AUDIT-11-18.md` → "The owed E2E sweep". **One coverage gap remains open:** the
+eight `qa-thread` tests need a live dispatched submission and skip on a clean DB, so `0085`'s
+database-enforcement coverage has still never executed.
 
 **Do not re-run `01`–`11`.** Their "Current state (verified)" sections were regenerated after
 the implementations landed, so they now describe finished work rather than the gap they were

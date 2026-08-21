@@ -10,7 +10,7 @@
  */
 
 import { test, expect, type Page } from '@playwright/test'
-import { signIn } from '../helpers/clerk-auth'
+import { signIn, gotoStable } from '../helpers/clerk-auth'
 import { pledge, unpledge } from '../helpers/fixtures'
 import { createClient } from '@supabase/supabase-js'
 import { Database } from '../../lib/supabase/types'
@@ -28,7 +28,7 @@ const PLEDGE_CENTS = 100_000
 
 test.describe('Agreement signing — access boundaries', () => {
   test('unauthenticated GET /agreement-records/<id> redirects to /login', async ({ page }) => {
-    await page.goto('/agreement-records/00000000-0000-4000-8000-000000000000')
+    await gotoStable(page, '/agreement-records/00000000-0000-4000-8000-000000000000')
     await expect(page).toHaveURL(/\/login/)
   })
 })
@@ -102,7 +102,37 @@ test.describe.serial('Agreement signing — end to end', () => {
       await adminClient.from('transactions_ledger').delete().eq('submission_id', row.id)
       await adminClient.from('submissions').delete().eq('id', row.id)
     }
-    await adminClient.from('sponsors').update({ funding_used_cents: 0 }).eq('id', sponsorId)
+    /**
+     * Re-derive the counter from what actually survived the cleanup above rather than
+     * force-zeroing it. The cleanup only removes ledger rows for THIS (team, sponsor) pair,
+     * but the counter is sponsor-wide — so a flat zero left every other team's settled
+     * ledger row unaccounted for, and `detect_capacity_drift()` reported the difference.
+     * That surfaced two aisles away: the CAPACITY NON-REGRESSION tests in `appeals` and
+     * `recognition-tiers` assert global zero drift as a precondition, so they failed on
+     * chromium and passed on firefox purely on run order.
+     */
+    const { data: settledRows } = await adminClient
+      .from('transactions_ledger')
+      .select('amount_cents')
+      .eq('sponsor_id', sponsorId)
+    const { data: reservedRows } = await adminClient
+      .from('submissions')
+      .select('reserved_amount_cents')
+      .eq('sponsor_id', sponsorId)
+      .in('status', ['dispatched', 'delivered', 'opened'])
+    const { data: releaseRows } = await adminClient
+      .from('funding_capacity_releases')
+      .select('amount_cents')
+      .eq('sponsor_id', sponsorId)
+    // Mirrors `detect_capacity_drift()` exactly: open reservations + settled ledger
+    // - released capacity. Both terms matter — the reservation statuses are
+    // ('dispatched','delivered','opened'), NOT 'changes_requested', and omitting the
+    // releases term over-counts every sponsor that has ever had a pitch cancelled.
+    const usedCents =
+      (settledRows ?? []).reduce((n, r) => n + (r.amount_cents ?? 0), 0) +
+      (reservedRows ?? []).reduce((n, r) => n + (r.reserved_amount_cents ?? 0), 0) -
+      (releaseRows ?? []).reduce((n, r) => n + (r.amount_cents ?? 0), 0)
+    await adminClient.from('sponsors').update({ funding_used_cents: usedCents }).eq('id', sponsorId)
 
     /**
      * The effective template also merges team_city / team_state / team_organization, and
@@ -168,13 +198,13 @@ test.describe.serial('Agreement signing — end to end', () => {
 
   test('a coach cannot open the sponsor signing page', async ({ page }) => {
     await signIn(page, COACH_EMAIL, COACH_PASSWORD)
-    await page.goto(`/sponsor/submissions/${submissionId}/sign`)
+    await gotoStable(page, `/sponsor/submissions/${submissionId}/sign`)
     await expect(page).toHaveURL(/\/dashboard/)
   })
 
   test('a coach cannot countersign before the sponsor has signed — page shows "waiting"', async ({ page }) => {
     await signIn(page, COACH_EMAIL, COACH_PASSWORD)
-    await page.goto(`/submissions/${submissionId}/sign`)
+    await gotoStable(page, `/submissions/${submissionId}/sign`)
     await expect(page.getByText(/waiting for/i)).toBeVisible({ timeout: 10_000 })
     await expect(page.locator('#typed-name')).toHaveCount(0)
   })
@@ -206,7 +236,7 @@ test.describe.serial('Agreement signing — end to end', () => {
 
   test('controls stay disabled until the document is scrolled to the bottom', async ({ page }) => {
     await signIn(page, SPONSOR_EMAIL, SPONSOR_PASSWORD)
-    await page.goto(`/sponsor/submissions/${submissionId}/sign`)
+    await gotoStable(page, `/sponsor/submissions/${submissionId}/sign`)
     await expect(page.getByLabel(/type your full legal name/i)).toBeVisible({ timeout: 15_000 })
     await expect(page.getByLabel(/type your full legal name/i)).toBeDisabled()
     await expect(page.locator('#consent-checkbox')).toBeDisabled()
@@ -251,7 +281,7 @@ test.describe.serial('Agreement signing — end to end', () => {
 
   test('happy path: sponsor scrolls, consents, types the matching name, and signs', async ({ page }) => {
     await signIn(page, SPONSOR_EMAIL, SPONSOR_PASSWORD)
-    await page.goto(`/sponsor/submissions/${submissionId}/sign`)
+    await gotoStable(page, `/sponsor/submissions/${submissionId}/sign`)
 
     const sentinel = page.getByTestId('agreement-scroll-sentinel')
     await sentinel.scrollIntoViewIfNeeded()
@@ -279,7 +309,7 @@ test.describe.serial('Agreement signing — end to end', () => {
 
   test('reloading the sponsor signing page after signing shows the already-signed card', async ({ page }) => {
     await signIn(page, SPONSOR_EMAIL, SPONSOR_PASSWORD)
-    await page.goto(`/sponsor/submissions/${submissionId}/sign`)
+    await gotoStable(page, `/sponsor/submissions/${submissionId}/sign`)
     await expect(page.getByText(/already signed this agreement/i)).toBeVisible({ timeout: 10_000 })
     await expect(page.locator('#typed-name')).toHaveCount(0)
   })
@@ -293,7 +323,7 @@ test.describe.serial('Agreement signing — end to end', () => {
     expect(notifications?.some((n) => /sign your sponsorship agreement/i.test(n.title))).toBe(true)
 
     await signIn(page, COACH_EMAIL, COACH_PASSWORD)
-    await page.goto(`/submissions/${submissionId}/sign`)
+    await gotoStable(page, `/submissions/${submissionId}/sign`)
 
     const sentinel = page.getByTestId('agreement-scroll-sentinel')
     await sentinel.scrollIntoViewIfNeeded()

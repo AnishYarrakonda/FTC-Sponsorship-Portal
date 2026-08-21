@@ -11,7 +11,7 @@
  */
 
 import { test, expect, type Page } from '@playwright/test'
-import { signIn, evaluateStable } from '../helpers/clerk-auth'
+import { signIn, evaluateStable, gotoStable } from '../helpers/clerk-auth'
 import { createOwnedTeam, deleteOwnedTeam } from '../helpers/fixtures'
 import { createClient } from '@supabase/supabase-js'
 import { Database } from '../../lib/supabase/types'
@@ -122,7 +122,7 @@ test.describe.serial('Org roles & the two-step approver workflow (0083)', () => 
 
   test('org_admin turns two-step approval on at $1,000', async ({ page }) => {
     await signIn(page, SPONSOR_EMAIL, SPONSOR_PASSWORD)
-    await page.goto('/sponsor/settings')
+    await gotoStable(page, '/sponsor/settings')
 
     await expect(page.getByText('Approval policy')).toBeVisible({ timeout: 15_000 })
     await page.getByLabel('Two-step approval').check()
@@ -137,7 +137,7 @@ test.describe.serial('Org roles & the two-step approver workflow (0083)', () => 
   test('a submitter proposing above the threshold sees "Sent for approval", not a success toast', async ({ page }) => {
     const submissionId = await createDispatchedSubmission(sponsorAId, 250_000) // $2,500 > $1,000
     await signIn(page, SUBMITTER_EMAIL, SUBMITTER_PASSWORD)
-    await page.goto(`/sponsor/submissions/${submissionId}`)
+    await gotoStable(page, `/sponsor/submissions/${submissionId}`)
 
     await page.getByRole('button', { name: /send for approval/i }).click()
     await page.getByRole('button', { name: /^confirm$/i }).click()
@@ -154,7 +154,7 @@ test.describe.serial('Org roles & the two-step approver workflow (0083)', () => 
     expect(proposal?.status).toBe('pending')
     expect(proposal?.amount_cents).toBe(250_000)
 
-    await page.goto('/sponsor/approvals')
+    await gotoStable(page, '/sponsor/approvals')
     await expect(page.getByText(teamName)).toBeVisible({ timeout: 15_000 })
 
     await adminClient.from('submissions').delete().eq('id', submissionId)
@@ -164,13 +164,13 @@ test.describe.serial('Org roles & the two-step approver workflow (0083)', () => 
     const submissionId = await createDispatchedSubmission(sponsorAId, 250_000)
     await signIn(page, VIEWER_EMAIL, VIEWER_PASSWORD)
 
-    await page.goto(`/sponsor/submissions/${submissionId}`)
+    await gotoStable(page, `/sponsor/submissions/${submissionId}`)
     // Both the card title and its description say "view-only", so an unanchored match is a
     // strict-mode violation. The title is the element that proves the branch was taken.
     await expect(page.getByText('View-only', { exact: true })).toBeVisible({ timeout: 15_000 })
     await expect(page.getByRole('button', { name: /approve|decline|send for approval/i })).toHaveCount(0)
 
-    await page.goto('/sponsor/approvals')
+    await gotoStable(page, '/sponsor/approvals')
     await expect(page.getByRole('button', { name: /confirm|reject/i })).toHaveCount(0)
 
     await adminClient.from('submissions').delete().eq('id', submissionId)
@@ -188,7 +188,7 @@ test.describe.serial('Org roles & the two-step approver workflow (0083)', () => 
     expect((propose as { ok: boolean }).ok).toBe(true)
 
     await signIn(page, APPROVER_EMAIL, APPROVER_PASSWORD)
-    await page.goto('/sponsor/approvals')
+    await gotoStable(page, '/sponsor/approvals')
     await page.getByRole('button', { name: /^confirm$/i }).first().click()
     await expect(page.getByText(/funding confirmed/i)).toBeVisible({ timeout: 15_000 })
 
@@ -213,7 +213,7 @@ test.describe.serial('Org roles & the two-step approver workflow (0083)', () => 
       const proposalId = (propose as { proposal_id: string }).proposal_id
 
       await signIn(page, VIEWER_EMAIL, VIEWER_PASSWORD)
-      await page.goto('/sponsor/dashboard')
+      await gotoStable(page, '/sponsor/dashboard')
 
       // Database layer: EXECUTE is revoked from `authenticated` entirely.
       const rpcResult = await restAs(page, '/rpc/confirm_sponsor_decision_proposal', {
@@ -247,7 +247,7 @@ test.describe.serial('Org roles & the two-step approver workflow (0083)', () => 
       const proposalId = (propose as { proposal_id: string }).proposal_id
 
       await signIn(page, SUBMITTER_EMAIL, SUBMITTER_PASSWORD)
-      await page.goto('/sponsor/dashboard')
+      await gotoStable(page, '/sponsor/dashboard')
 
       const rpcResult = await restAs(page, '/rpc/confirm_sponsor_decision_proposal', {
         method: 'POST',
@@ -275,7 +275,7 @@ test.describe.serial('Org roles & the two-step approver workflow (0083)', () => 
       const before = await adminClient.from('sponsor_decision_proposals').select('*').eq('id', proposalId).single()
 
       await signIn(page, SPONSOR2_EMAIL, SPONSOR2_PASSWORD)
-      await page.goto('/sponsor/dashboard')
+      await gotoStable(page, '/sponsor/dashboard')
 
       const read = await restAs(page, `/sponsor_decision_proposals?sponsor_id=eq.${sponsorAId}`)
       expect(read.status).toBe(200)
@@ -406,7 +406,7 @@ test.describe.serial('Org roles & the two-step approver workflow (0083)', () => 
     test('sponsor_decision_proposals is not writable by a member', async ({ page }) => {
       const submissionId = await createDispatchedSubmission(sponsorAId, 250_000)
       await signIn(page, SPONSOR_EMAIL, SPONSOR_PASSWORD)
-      await page.goto('/sponsor/dashboard')
+      await gotoStable(page, '/sponsor/dashboard')
 
       const insert = await restAs(page, '/sponsor_decision_proposals', {
         method: 'POST',
@@ -419,7 +419,7 @@ test.describe.serial('Org roles & the two-step approver workflow (0083)', () => 
 
     test('a coach and an anon caller read 0 rows from sponsor_decision_proposals', async ({ page, request }) => {
       await signIn(page, COACH_EMAIL, COACH_PASSWORD)
-      await page.goto('/dashboard')
+      await gotoStable(page, '/dashboard')
       const asCoach = await restAs(page, `/sponsor_decision_proposals?sponsor_id=eq.${sponsorAId}`)
       expect(asCoach.status).toBe(200)
       expect(asCoach.body).toEqual([])
@@ -433,7 +433,7 @@ test.describe.serial('Org roles & the two-step approver workflow (0083)', () => 
 
     test('the last-approver floor: removing the second Approver while approvals are on is refused', async ({ page }) => {
       await signIn(page, SPONSOR_EMAIL, SPONSOR_PASSWORD)
-      await page.goto('/sponsor/members')
+      await gotoStable(page, '/sponsor/members')
 
       const { data: before } = await adminClient
         .from('sponsor_members')

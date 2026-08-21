@@ -22,16 +22,46 @@ test.describe.serial('Payout Profiles & W-9 Security Boundaries (E2E)', () => {
   test.beforeAll(async () => {
     adminClient = createClient<Database>(SUPABASE_URL, SERVICE_ROLE_KEY)
 
-    // Resolve or seed profiles and teams for testing
-    const { data: coaches } = await adminClient.from('profiles').select('id').eq('role', 'coach').limit(2)
-    coachXProfileId = coaches?.[0]?.id ?? 'coach-x'
-    coachYProfileId = coaches?.[1]?.id ?? 'coach-y'
+    // Resolve the fixture TEAM first, then derive its owner.
+    //
+    // This used to read the first two `role = 'coach'` profiles and assume both owned a
+    // team. `select()` without `order()` returns physical row order, and Postgres moves a
+    // row on UPDATE — so as soon as an earlier suite touched a profile, the first coach
+    // became `denial-coach`, who owns no team. `teamXId` then fell back to the literal
+    // 'team-x', which reaches Postgres as `invalid input syntax for type uuid` instead of
+    // failing here with something a reader can act on. Seeding creates exactly one team,
+    // so the team is the reliable anchor, not the coach list.
+    const { data: team } = await adminClient
+      .from('teams')
+      .select('id, owner_id')
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle()
 
-    const { data: teamX } = await adminClient.from('teams').select('id').eq('owner_id', coachXProfileId).limit(1).single()
-    teamXId = teamX?.id ?? 'team-x'
+    expect(team, 'payout-w9 needs at least one seeded team — run the seeder').toBeTruthy()
+    teamXId = team!.id
+    coachXProfileId = team!.owner_id
 
-    const { data: teamY } = await adminClient.from('teams').select('id').eq('owner_id', coachYProfileId).limit(1).single()
-    teamYId = teamY?.id ?? 'team-y'
+    // Coach Y is any OTHER coach; the team-Y assertions are negative (anon must read
+    // nothing), so a well-formed id that owns no payout profile is exactly the case
+    // under test. Keep it a valid uuid so a failure is an authorization result rather
+    // than a parse error.
+    const { data: otherCoach } = await adminClient
+      .from('profiles')
+      .select('id')
+      .eq('role', 'coach')
+      .neq('id', coachXProfileId)
+      .limit(1)
+      .maybeSingle()
+    coachYProfileId = otherCoach?.id ?? coachXProfileId
+
+    const { data: teamY } = await adminClient
+      .from('teams')
+      .select('id')
+      .eq('owner_id', coachYProfileId)
+      .limit(1)
+      .maybeSingle()
+    teamYId = teamY?.id ?? '00000000-0000-0000-0000-000000000000'
 
   })
 

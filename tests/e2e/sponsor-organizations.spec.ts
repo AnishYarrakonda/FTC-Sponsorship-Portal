@@ -13,7 +13,7 @@
  */
 
 import { test, expect, type Page } from '@playwright/test'
-import { signIn, evaluateStable } from '../helpers/clerk-auth'
+import { signIn, evaluateStable, gotoStable } from '../helpers/clerk-auth'
 import { createClient } from '@supabase/supabase-js'
 import { Database } from '../../lib/supabase/types'
 
@@ -129,7 +129,7 @@ test.describe.serial('Sponsor Organizations (0082)', () => {
       await revokePendingInvitations()
 
       await signIn(page, SPONSOR_EMAIL, SPONSOR_PASSWORD)
-      await page.goto('/sponsor/members')
+      await gotoStable(page, '/sponsor/members')
 
       await expect(page.getByText('Dev Sponsor Teammate')).toBeVisible({ timeout: 15_000 })
 
@@ -148,7 +148,7 @@ test.describe.serial('Sponsor Organizations (0082)', () => {
 
     test('the last org_admin cannot be removed or demoted', async ({ page }) => {
       await signIn(page, SPONSOR_EMAIL, SPONSOR_PASSWORD)
-      await page.goto('/sponsor/members')
+      await gotoStable(page, '/sponsor/members')
 
       const adminRow = page.getByRole('row', { name: /dev sponsor\b/i }).first()
       await adminRow.getByRole('button').last().click()
@@ -165,7 +165,7 @@ test.describe.serial('Sponsor Organizations (0082)', () => {
 
     test('a non-admin member sees the roster read-only with no invite button', async ({ page }) => {
       await signIn(page, SPONSOR_MEMBER_EMAIL, SPONSOR_MEMBER_PASSWORD)
-      await page.goto('/sponsor/members')
+      await gotoStable(page, '/sponsor/members')
 
       await expect(page.getByText(/only an admin can invite/i)).toBeVisible({ timeout: 15_000 })
       await expect(page.getByRole('button', { name: /invite teammate/i })).toHaveCount(0)
@@ -175,7 +175,7 @@ test.describe.serial('Sponsor Organizations (0082)', () => {
   test.describe('Security boundaries (RLS, real Clerk-authenticated sessions)', () => {
     test('no sponsor can read another sponsor org\'s data', async ({ page }) => {
       await signIn(page, SPONSOR_EMAIL, SPONSOR_PASSWORD)
-      await page.goto('/sponsor/dashboard')
+      await gotoStable(page, '/sponsor/dashboard')
 
       const sponsors = await restAs(page, `/sponsors?id=eq.${sponsorBId}`)
       expect(sponsors.status).toBe(200)
@@ -196,7 +196,7 @@ test.describe.serial('Sponsor Organizations (0082)', () => {
 
     test('the reverse direction also holds: org B cannot read org A\'s data', async ({ page }) => {
       await signIn(page, SPONSOR2_EMAIL, SPONSOR2_PASSWORD)
-      await page.goto('/sponsor/dashboard')
+      await gotoStable(page, '/sponsor/dashboard')
 
       const sponsors = await restAs(page, `/sponsors?id=eq.${sponsorAId}`)
       expect(sponsors.status).toBe(200)
@@ -213,11 +213,11 @@ test.describe.serial('Sponsor Organizations (0082)', () => {
       const ctx1 = await browser.newContext()
       const page1 = await ctx1.newPage()
       await signIn(page1, SPONSOR_EMAIL, SPONSOR_PASSWORD)
-      await page1.goto('/sponsor/dashboard')
+      await gotoStable(page1, '/sponsor/dashboard')
       const own1 = await restAs(page1, `/sponsors?id=eq.${sponsorAId}`)
 
       await signIn(page, SPONSOR_MEMBER_EMAIL, SPONSOR_MEMBER_PASSWORD)
-      await page.goto('/sponsor/dashboard')
+      await gotoStable(page, '/sponsor/dashboard')
       const own2 = await restAs(page, `/sponsors?id=eq.${sponsorAId}`)
 
       expect(own1.status).toBe(200)
@@ -244,7 +244,7 @@ test.describe.serial('Sponsor Organizations (0082)', () => {
       await adminClient.from('profiles').update({ sponsor_id: null }).eq('id', throwaway!.id)
 
       await signIn(page, SPONSOR_MEMBER_EMAIL, SPONSOR_MEMBER_PASSWORD)
-      await page.goto('/')
+      await gotoStable(page, '/')
 
       const sponsors = await restAs(page, `/sponsors?id=eq.${sponsorAId}`)
       expect(sponsors.status).toBe(200)
@@ -264,7 +264,7 @@ test.describe.serial('Sponsor Organizations (0082)', () => {
 
     test('sponsor_members is not writable by a member', async ({ page }) => {
       await signIn(page, SPONSOR_EMAIL, SPONSOR_PASSWORD)
-      await page.goto('/sponsor/dashboard')
+      await gotoStable(page, '/sponsor/dashboard')
 
       const insert = await restAs(page, '/sponsor_members', {
         method: 'POST',
@@ -311,7 +311,7 @@ test.describe.serial('Sponsor Organizations (0082)', () => {
 
     test('a coach and an unauthenticated caller each read 0 rows from sponsor_members', async ({ page, request }) => {
       await signIn(page, COACH_EMAIL, COACH_PASSWORD)
-      await page.goto('/dashboard')
+      await gotoStable(page, '/dashboard')
 
       const asCoach = await restAs(page, `/sponsor_members?sponsor_id=eq.${sponsorAId}`)
       expect(asCoach.status).toBe(200)
@@ -327,7 +327,7 @@ test.describe.serial('Sponsor Organizations (0082)', () => {
     test('wrong role blocked at the action layer', async ({ page }) => {
       // As a coach: inviteSponsorMember must reject before touching sponsor_members.
       await signIn(page, COACH_EMAIL, COACH_PASSWORD)
-      await page.goto('/dashboard')
+      await gotoStable(page, '/dashboard')
       const coachResult = await page.evaluate(async () => {
         const res = await fetch('/sponsor/members', { method: 'GET' })
         return res.status
@@ -335,14 +335,14 @@ test.describe.serial('Sponsor Organizations (0082)', () => {
       // The members page itself redirects a coach away (role-gated by the layout);
       // confirm they never reach it.
       expect(coachResult).toBeLessThan(500)
-      await page.goto('/sponsor/members')
+      await gotoStable(page, '/sponsor/members')
       await expect(page).not.toHaveURL(/\/sponsor\/members/)
 
       // As a non-admin sponsor member: inviteSponsorMember must return Forbidden and
       // leave the org's member row count unchanged.
       const { data: beforeRows } = await adminClient.from('sponsor_members').select('id').eq('sponsor_id', sponsorAId)
       await signIn(page, SPONSOR_MEMBER_EMAIL, SPONSOR_MEMBER_PASSWORD)
-      await page.goto('/sponsor/members')
+      await gotoStable(page, '/sponsor/members')
       await expect(page.getByRole('button', { name: /invite teammate/i })).toHaveCount(0)
       const { data: afterRows } = await adminClient.from('sponsor_members').select('id').eq('sponsor_id', sponsorAId)
       expect(afterRows?.length).toBe(beforeRows?.length)
@@ -383,7 +383,7 @@ test.describe.serial('Sponsor Organizations (0082)', () => {
 
       try {
         await signIn(page, COACH_EMAIL, COACH_PASSWORD)
-        await page.goto('/dashboard')
+        await gotoStable(page, '/dashboard')
         const result = await restAs(page, `/sponsors?id=eq.${sponsorAId}`)
         expect(result.status).toBe(200)
         expect(result.body).toEqual([])

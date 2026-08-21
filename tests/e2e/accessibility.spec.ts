@@ -22,7 +22,7 @@ import AxeBuilder from '@axe-core/playwright'
 import { createClient } from '@supabase/supabase-js'
 import { createHash, randomBytes } from 'crypto'
 import { Database } from '../../lib/supabase/types'
-import { signIn } from '../helpers/clerk-auth'
+import { signIn, gotoStable } from '../helpers/clerk-auth'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://127.0.0.1:54321'
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
@@ -115,7 +115,7 @@ test.describe('Accessibility — public surfaces (no database required)', () => 
 
   for (const route of PUBLIC_ROUTES) {
     test(`no WCAG 2.2 AA violations on ${route}`, async ({ page }) => {
-      await page.goto(route)
+      await gotoStable(page, route)
       // These routes render Clerk's own <SignIn>/<SignUp> islands and a canvas-based
       // background. Wait for the network to settle so axe does not audit a skeleton and
       // report a pass on markup that is not the markup users get.
@@ -141,7 +141,7 @@ test.describe('Accessibility — public surfaces (no database required)', () => 
 
   test('every page has exactly one h1 and a main landmark', async ({ page }) => {
     for (const route of ['/', '/legal/terms', '/legal/privacy', '/legal/accessibility']) {
-      await page.goto(route)
+      await gotoStable(page, route)
       const h1Count = await page.locator('h1').count()
       expect(h1Count, `${route} should have exactly one h1`).toBe(1)
     }
@@ -150,7 +150,7 @@ test.describe('Accessibility — public surfaces (no database required)', () => 
   test('reduced-motion preference removes animation rather than shortening it', async ({ browser }) => {
     const context = await browser.newContext({ reducedMotion: 'reduce' })
     const page = await context.newPage()
-    await page.goto('/')
+    await gotoStable(page, '/')
 
     /**
      * Reads the COMPUTED duration, not the stylesheet. The globals.css block uses
@@ -243,13 +243,13 @@ test.describe('Accessibility — authenticated journeys', () => {
   })
 
   test('journey 1: /sponsor-view/[token] has no WCAG 2.2 AA violations', async ({ page }) => {
-    await page.goto(`/sponsor-view/${sponsorViewToken}`)
+    await gotoStable(page, `/sponsor-view/${sponsorViewToken}`)
     await expect(page.getByText(/respond to this proposal/i)).toBeVisible()
     await expectNoViolations(page)
   })
 
   test('journey 1: the partial-offer form is labelled and announces its error', async ({ page }) => {
-    await page.goto(`/sponsor-view/${sponsorViewToken}`)
+    await gotoStable(page, `/sponsor-view/${sponsorViewToken}`)
     await page.getByRole('button', { name: /offer partial amount/i }).click()
 
     // getByLabel fails outright when the accessible name is missing, which is the point:
@@ -271,7 +271,7 @@ test.describe('Accessibility — authenticated journeys', () => {
   })
 
   test('journey 1: a sponsor can decline entirely by keyboard, with no mouse events', async ({ page }) => {
-    await page.goto(`/sponsor-view/${sponsorViewToken}`)
+    await gotoStable(page, `/sponsor-view/${sponsorViewToken}`)
     await expect(page.getByRole('button', { name: /decline this proposal/i })).toBeVisible()
 
     /**
@@ -323,7 +323,7 @@ test.describe('Accessibility — authenticated journeys', () => {
   })
 
   test('journey 2: the coach signup wizard has no violations on any step', async ({ page }) => {
-    await page.goto('/signup')
+    await gotoStable(page, '/signup')
     await page.waitForLoadState('networkidle').catch(() => {})
 
     // Step 1 as rendered.
@@ -348,21 +348,21 @@ test.describe('Accessibility — authenticated journeys', () => {
 
   test('journey 3: the pitch submission form has no violations', async ({ page }) => {
     await signIn(page, COACH_EMAIL)
-    await page.goto('/submissions/new')
+    await gotoStable(page, '/submissions/new')
     await expect(page.getByText('Create Submission')).toBeVisible({ timeout: 20_000 })
     await expectNoViolations(page)
   })
 
   test('journey 4: the sponsor review list has no violations', async ({ page }) => {
     await signIn(page, SPONSOR_EMAIL)
-    await page.goto('/sponsor/submissions')
+    await gotoStable(page, '/sponsor/submissions')
     await page.waitForLoadState('networkidle').catch(() => {})
     await expectNoViolations(page)
   })
 
   test('the skip link is the first focusable element and moves focus to main', async ({ page }) => {
     await signIn(page, COACH_EMAIL)
-    await page.goto('/dashboard')
+    await gotoStable(page, '/dashboard')
     await expect(page.locator('main#main-content')).toBeVisible({ timeout: 20_000 })
 
     await page.keyboard.press('Tab')
@@ -382,7 +382,7 @@ test.describe('Accessibility — authenticated journeys', () => {
 
   test('a dialog traps focus, closes on Escape, and returns focus to its trigger', async ({ page }) => {
     await signIn(page, COACH_EMAIL)
-    await page.goto('/dashboard')
+    await gotoStable(page, '/dashboard')
 
     const trigger = page.getByRole('button', { name: /graduate/i }).first()
     test.skip(!(await trigger.isVisible().catch(() => false)), 'no dialog trigger on this dashboard state')

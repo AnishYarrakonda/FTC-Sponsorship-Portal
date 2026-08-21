@@ -144,7 +144,7 @@ async function gotoStable(page: Page, url: string) {
       await page.goto(url)
       return
     } catch (e) {
-      if (!/NS_BINDING_ABORTED|frame was detached/.test((e as Error).message) || attempt === 2) throw e
+      if (!/NS_BINDING_ABORTED|frame was detached|interrupted by another navigation/.test((e as Error).message) || attempt === 2) throw e
       await page.waitForTimeout(750)
     }
   }
@@ -177,6 +177,17 @@ async function signIn(page: Page, email: string) {
   const ticket = await signInTicket(email)
   await requireClerk(page)
   await clerk.signIn({ page, signInParams: { strategy: 'ticket', ticket } })
+  // `clerk.signIn()` resolves a beat before `window.Clerk.session` exists. Navigating in
+  // that window sends a session-less request, which clerkMiddleware redirects to /login.
+  // Mirrors waitForClerkSession() in tests/helpers/clerk-auth.ts.
+  await page.waitForFunction(
+    () => {
+      const w = window as unknown as { Clerk?: { loaded?: boolean; session?: unknown } }
+      return Boolean(w.Clerk?.loaded && w.Clerk?.session)
+    },
+    undefined,
+    { timeout: 20_000 }
+  )
 }
 
 /** Read a table with the signed-in user's OWN Clerk token, so RLS is what answers. */

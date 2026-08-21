@@ -158,14 +158,47 @@ message body, appeal statement, proof URL, payment reference, EIN or student PII
 
 ---
 
+## The owed E2E sweep (2026-08-20)
+
+The 22 `SUPABASE_LOCAL`-gated specs had not run since prompt 11. They now have, against the
+local Docker Supabase stack at migration `0097` — never against production.
+
+**Result: 166 passed · 0 failed · 10 skipped**, reproduced three times — chromium once, then
+firefox twice back to back, because the defect that motivated the repeat run produced exactly
+one failure per run in a *different* spec each time. WebKit is excluded from the sweep: it
+cannot reach Clerk's FAPI at all, so every sign-in in that project fails for a reason that has
+nothing to do with this codebase.
+
+The suite did not simply pass — it had to be repaired first, and the first pass was
+**silently under-reporting**. Seven harness defects, each confirmed before it was touched:
+
+| # | File | Defect | Why it mattered |
+|---|---|---|---|
+| 1 | `admin-levels.spec.ts` | The skip gate required `REVIEWER_PASSWORD`, a credential the sign-in path **cannot use** — sign-in has been ticket-based since the Clerk migration. | Five reviewer-boundary tests had been skipping silently, reported as "skipped", never as missing. |
+| 2 | `helpers/clerk-auth.ts` | `clerk.signIn()` resolves a beat **before** `window.Clerk.session` exists. A `goto` issued in that window carries no session, so `clerkMiddleware` redirected it to `/login` and the test asserted against the login form. | **The root cause of the one-random-failure-per-run pattern.** Both sign-in helpers now await the live session. |
+| 3 | `helpers/clerk-auth.ts` | The `gotoStable` retry regex matched `NS_BINDING_ABORTED` and `frame was detached` but not `interrupted by another navigation` — the same race, a third message. | 22 firefox failures. |
+| 4 | `helpers/clerk-auth.ts` + 11 specs | `gotoStable` returned `void`, so every `const r = await page.goto(...)` site that asserts on status had to bypass it. | It now returns the `Response`; those sites are routed through it. |
+| 5 | `sponsor-domain-gating.spec.ts` | Keeps its **own local copies** of `gotoStable` and `signIn`. | Fixing the shared helper fixed nothing here; both copies needed the same two repairs. |
+| 6 | `payout-w9.spec.ts` | The `beforeAll` fixture resolved a coach first and derived the team, and Postgres reorders rows physically on UPDATE. The fallback produced an all-zeroes uuid. | Order-dependent failures. Now resolves the team first and derives its owner. |
+| 7 | `agreement-signing.spec.ts:105` + `global-setup.ts` | Two independent copies of the capacity re-sync arithmetic, **both wrong**. The spec force-zeroed a *sponsor-wide* counter after a cleanup that only removed ledger rows for one `(team, sponsor)` pair. Global setup re-synced with a formula that counted `changes_requested` as an open reservation (the real statuses are `dispatched`/`delivered`/`opened`) and omitted the `funding_capacity_releases` term entirely. | Either one hands the run a **non-zero starting drift**, and the CAPACITY NON-REGRESSION preconditions in `appeals` and `recognition-tiers` assert *global* zero drift. They failed on chromium and passed on firefox purely on run order. Both now mirror `detect_capacity_drift()`'s body exactly, dumped with `pg_get_functiondef` rather than read off a migration file. Proved in a rolled-back transaction: the old force-zero yields a drift row, the re-derivation yields zero. |
+
+**A coverage gap the green run does not close.** Eight of the ten skips are in `qa-thread`,
+and they are not optional-feature skips — they need a live `dispatched`/`delivered`/`opened`
+submission, and `submissions` is empty on a clean local DB. **The `0085` database-enforcement
+coverage for the Q&A moderation gate has therefore never actually executed**, in this sweep or
+any earlier one. The remaining two skips are legitimate: one dialog-focus a11y test and one
+reviewer funding-cap test. Closing the `qa-thread` gap needs a seeded dispatched submission,
+which is its own change.
+
+**Gate at the close of the sweep:** ✅ typecheck · ✅ lint (0 errors, 340 warnings) ·
+✅ test (419/419) · ✅ build · ✅ e2e (166/0/10 ×3).
+
+---
+
 ## Not verified, and why
 
-- **The E2E suite did not run.** All 22 specs — including `appeals`, `qa-thread`,
-  `recognition-tiers`, `impact-report`, `admin-levels`, `sponsor-domain-gating` and the 17
-  accessibility tests — are gated on `SUPABASE_LOCAL` and need the local Docker stack.
-  Docker is not running and `/System/Volumes/Data` has **~5 GiB free of 460**. That is the
-  same condition that corrupted the 2026-08-19 sweep mid-run, so starting it would produce
-  numbers that cannot be trusted. **A clean full sweep remains owed.**
+- ~~**The E2E suite did not run.**~~ **CLOSED — the sweep ran clean on 2026-08-20.** See
+  "The owed E2E sweep" below for the numbers and the seven harness defects it exposed.
 - **Prompt 17's complaint path stays inert** until the Resend webhook is subscribed to
   `email.complained`. The code is correct and unit-tested; it has never received a real event.
 - **DMARC** is still unpublished at `_dmarc.exodiusftc.com` — the one failing automated check.

@@ -11,7 +11,7 @@
  */
 
 import { test, expect } from '@playwright/test'
-import { signIn } from '../helpers/clerk-auth'
+import { signIn, gotoStable } from '../helpers/clerk-auth'
 
 const COACH_EMAIL = process.env.COACH_EMAIL ?? 'coach+clerk_test@example.com'
 const COACH_PASSWORD = process.env.COACH_PASSWORD ?? 'CoachTest123!'
@@ -55,7 +55,8 @@ test.describe('Not-found resilience', () => {
   test('invalid coach submission id renders pitch not-found UI, not a crash', async ({ page }) => {
     await signIn(page, COACH_EMAIL, COACH_PASSWORD)
 
-    const response = await page.goto(
+    const response = await gotoStable(
+      page,
       '/submissions/00000000-0000-0000-0000-000000000000/edit',
       { waitUntil: 'domcontentloaded', timeout: 30_000 }
     )

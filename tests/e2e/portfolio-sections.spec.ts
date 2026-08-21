@@ -11,7 +11,7 @@
  */
 
 import { test, expect } from '@playwright/test'
-import { signIn } from '../helpers/clerk-auth'
+import { signIn, gotoStable } from '../helpers/clerk-auth'
 
 const COACH_EMAIL = process.env.COACH_EMAIL ?? 'coach+clerk_test@example.com'
 const COACH_PASSWORD = process.env.COACH_PASSWORD ?? 'CoachTest123!'
@@ -37,7 +37,7 @@ test.describe('Coach portfolio — 7 sections', () => {
   test('portfolio tab shows all 7 section headings', async ({ page }) => {
     await signIn(page, COACH_EMAIL, COACH_PASSWORD)
 
-    await page.goto('/dashboard?tab=portfolio', { timeout: 30_000 })
+    await gotoStable(page, '/dashboard?tab=portfolio', { timeout: 30_000 })
 
     // Wait for the tab content to hydrate before asserting on sections.
     await expect(page.getByText(SECTION_HEADINGS[0]).first()).toBeVisible({ timeout: 20_000 })
@@ -55,7 +55,7 @@ test.describe('Coach portfolio — 7 sections', () => {
 
   test('Achievements section renders above Robot & Engineering', async ({ page }) => {
     await signIn(page, COACH_EMAIL, COACH_PASSWORD)
-    await page.goto('/dashboard?tab=portfolio', { timeout: 30_000 })
+    await gotoStable(page, '/dashboard?tab=portfolio', { timeout: 30_000 })
 
     const achievements = page.getByText(/achievements\s*&\s*awards/i).first()
     const robot = page.getByText(/robot\s*&\s*engineering/i).first()

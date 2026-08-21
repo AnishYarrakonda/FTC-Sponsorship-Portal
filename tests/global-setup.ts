@@ -57,7 +57,12 @@ async function clearOrphanedFixtureMoney(supabaseUrl: string) {
   await rest('/funding_fulfillments?submission_id=is.null', { method: 'DELETE' })
   await rest('/transactions_ledger?submission_id=is.null', { method: 'DELETE' })
 
-  // Re-sync every sponsor's counter with what the ledger and open reservations now say.
+  // Re-sync every sponsor's counter to exactly what `detect_capacity_drift()` expects:
+  // open reservations + settled ledger - released capacity. This formula must track that
+  // function's body, not approximate it — it used to count 'changes_requested' as an open
+  // reservation (the real statuses are 'dispatched' / 'delivered' / 'opened') and omitted
+  // the releases term entirely, so global setup could hand the run a non-zero starting
+  // drift and the CAPACITY NON-REGRESSION preconditions would fail before touching money.
   const sponsors = (await (await rest('/sponsors?select=id')).json()) as Array<{ id: string }>
   for (const s of sponsors) {
     const settled = (await (
@@ -65,13 +70,17 @@ async function clearOrphanedFixtureMoney(supabaseUrl: string) {
     ).json()) as Array<{ amount_cents: number }>
     const reserved = (await (
       await rest(
-        `/submissions?sponsor_id=eq.${s.id}&status=in.(dispatched,changes_requested)&select=reserved_amount_cents`
+        `/submissions?sponsor_id=eq.${s.id}&status=in.(dispatched,delivered,opened)&select=reserved_amount_cents`
       )
     ).json()) as Array<{ reserved_amount_cents: number | null }>
+    const released = (await (
+      await rest(`/funding_capacity_releases?sponsor_id=eq.${s.id}&select=amount_cents`)
+    ).json()) as Array<{ amount_cents: number }>
 
     const total =
       settled.reduce((n, r) => n + (r.amount_cents ?? 0), 0) +
-      reserved.reduce((n, r) => n + (r.reserved_amount_cents ?? 0), 0)
+      reserved.reduce((n, r) => n + (r.reserved_amount_cents ?? 0), 0) -
+      released.reduce((n, r) => n + (r.amount_cents ?? 0), 0)
 
     await rest(`/sponsors?id=eq.${s.id}`, {
       method: 'PATCH',

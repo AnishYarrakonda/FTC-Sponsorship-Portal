@@ -18,7 +18,7 @@
 
 import { test, expect, type Page } from '@playwright/test'
 import { createClient } from '@supabase/supabase-js'
-import { signIn } from '../helpers/clerk-auth'
+import { signIn, gotoStable } from '../helpers/clerk-auth'
 import type { Database } from '../../lib/supabase/types'
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? ''
@@ -86,7 +86,7 @@ test.describe.serial('Coach denial flow', () => {
 
   test('1. Admin denies the pending coach with a reason', async ({ page }) => {
     await signIn(page, ADMIN_EMAIL, ADMIN_PASSWORD)
-    await page.goto('/coaches', { timeout: 30_000 })
+    await gotoStable(page, '/coaches', { timeout: 30_000 })
 
     // Find the pending coach's verification card by their email and open the
     // application review dialog.
@@ -115,7 +115,7 @@ test.describe.serial('Coach denial flow', () => {
   test('2. Denied coach sees the denial reason and a re-upload CTA', async ({ page }) => {
     await signIn(page, COACH_EMAIL, COACH_PASSWORD)
 
-    await page.goto('/awaiting-verification', { timeout: 30_000 })
+    await gotoStable(page, '/awaiting-verification', { timeout: 30_000 })
 
     // Denial state: the reason recorded by the admin is shown verbatim...
     await expect(page.getByText(/denied|not approved/i).first()).toBeVisible({ timeout: 20_000 })

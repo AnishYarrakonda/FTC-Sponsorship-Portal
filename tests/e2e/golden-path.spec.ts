@@ -22,7 +22,7 @@
 import { test, expect } from '@playwright/test'
 import { createClient } from '@supabase/supabase-js'
 import { Database } from '../../lib/supabase/types'
-import { signIn } from '../helpers/clerk-auth'
+import { signIn, gotoStable } from '../helpers/clerk-auth'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://127.0.0.1:54321'
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
@@ -117,7 +117,7 @@ test.describe.serial('Golden Path — pitch lifecycle', () => {
 
   test('1. a verified coach can open the pitch composer', async ({ page }) => {
     await signIn(page, COACH_EMAIL, COACH_PASSWORD)
-    await page.goto('/submissions/new')
+    await gotoStable(page, '/submissions/new')
 
     await expect(page.getByText('Create Submission')).toBeVisible()
     await expect(page.getByRole('button', { name: /select a sponsor/i })).toBeVisible()
@@ -125,7 +125,7 @@ test.describe.serial('Golden Path — pitch lifecycle', () => {
 
   test('2. the coach drafts a pitch and it is stored as a draft', async ({ page }) => {
     await signIn(page, COACH_EMAIL, COACH_PASSWORD)
-    await page.goto('/submissions/new')
+    await gotoStable(page, '/submissions/new')
 
     await page.getByRole('button', { name: /select a sponsor/i }).click()
     // Two sponsors match "dev testing" ("dev testing" and "dev testing 2"), so anchor exactly.
@@ -155,7 +155,7 @@ test.describe.serial('Golden Path — pitch lifecycle', () => {
       .single()
 
     await signIn(page, COACH_EMAIL, COACH_PASSWORD)
-    await page.goto(`/submissions/${draft!.id}/edit`)
+    await gotoStable(page, `/submissions/${draft!.id}/edit`)
 
     await page.getByRole('button', { name: /submit for review/i }).click()
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 20_000 })
@@ -170,7 +170,7 @@ test.describe.serial('Golden Path — pitch lifecycle', () => {
 
   test('4. the pitch appears in the admin moderation queue', async ({ page }) => {
     await signIn(page, ADMIN_EMAIL, ADMIN_PASSWORD)
-    await page.goto('/moderation')
+    await gotoStable(page, '/moderation')
 
     await expect(page.getByText(`Submission to ${SPONSOR_COMPANY}`).first()).toBeVisible({
       timeout: 20_000,
@@ -179,7 +179,7 @@ test.describe.serial('Golden Path — pitch lifecycle', () => {
 
   test('5. an admin approves it, which is what dispatches it to the sponsor', async ({ page }) => {
     await signIn(page, ADMIN_EMAIL, ADMIN_PASSWORD)
-    await page.goto('/moderation')
+    await gotoStable(page, '/moderation')
 
     await page.getByRole('button', { name: /approve & dispatch to sponsor/i }).first().click()
 
@@ -220,7 +220,7 @@ test.describe.serial('Golden Path — pitch lifecycle', () => {
 
   test('6. the analytics page renders with the activity', async ({ page }) => {
     await signIn(page, ADMIN_EMAIL, ADMIN_PASSWORD)
-    await page.goto('/analytics')
+    await gotoStable(page, '/analytics')
 
     await expect(page.getByRole('heading', { name: /analytics/i }).first()).toBeVisible({
       timeout: 20_000,

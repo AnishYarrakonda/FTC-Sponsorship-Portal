@@ -54,20 +54,31 @@ export async function signInTicket(email: string): Promise<string> {
 
 /**
  * Firefox aborts a `page.goto` that starts while Clerk's own post-sign-in navigation is
- * still in flight (`NS_BINDING_ABORTED`). One retry is enough, and it is not papering over
- * an app bug — the second navigation lands normally.
+ * still in flight. One retry is enough, and it is not papering over an app bug — the
+ * second navigation lands normally.
+ *
+ * The same race surfaces under two different messages: `NS_BINDING_ABORTED` when the
+ * request is cancelled outright, and "interrupted by another navigation to /dashboard"
+ * when Clerk's post-sign-in redirect wins the race instead. Both are the redirect
+ * superseding our goto, so both retry; anything else still throws.
  */
-export async function gotoStable(page: Page, url: string, options?: { timeout?: number }) {
+export async function gotoStable(
+  page: Page,
+  url: string,
+  options?: Parameters<Page['goto']>[1]
+): ReturnType<Page['goto']> {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      await page.goto(url, options)
-      return
+      // Returns the Response so call sites that assert on status can use this too,
+      // rather than falling back to a bare page.goto that reintroduces the race.
+      return await page.goto(url, options)
     } catch (e) {
       const msg = (e as Error).message
-      if (!/NS_BINDING_ABORTED|frame was detached/.test(msg) || attempt === 2) throw e
+      if (!/NS_BINDING_ABORTED|frame was detached|interrupted by another navigation/.test(msg) || attempt === 2) throw e
       await page.waitForTimeout(750)
     }
   }
+  throw new Error(`gotoStable: exhausted retries for ${url}`)
 }
 
 /**
@@ -162,14 +173,27 @@ export async function establishSession(page: Page, email: string) {
   await loadClerk(page)
   await clerk.signOut({ page }).catch(() => {})
   await clerk.signIn({ page, signInParams: { strategy: 'ticket', ticket } })
+  await waitForClerkSession(page)
 }
 
 /**
  * Sign in as a seeded account. `password` is accepted and ignored — see the file header.
+ */
+/**
+ * Returns only once the Clerk session is actually live.
+ *
+ * `clerk.signIn()` resolves when the sign-in call completes, which is a beat BEFORE
+ * `window.Clerk.session` exists. A `goto` issued in that window carries no session, so
+ * `clerkMiddleware` redirects it to /login and the test then asserts against the login
+ * form — failing with "element(s) not found" for whatever it expected on the real page.
+ * That is why the Firefox run produced exactly one failure per run in a different spec
+ * each time: the loser of the race was simply whichever test ran there. Waiting on the
+ * session here fixes every call site at once.
  */
 export async function signIn(page: Page, email: string, _password?: string) {
   const ticket = await signInTicket(email)
   await requireClerk(page)
   await clerk.signOut({ page }).catch(() => {})
   await clerk.signIn({ page, signInParams: { strategy: 'ticket', ticket } })
+  await waitForClerkSession(page)
 }

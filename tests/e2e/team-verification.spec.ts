@@ -11,7 +11,7 @@
  */
 
 import { test, expect, type Page } from '@playwright/test'
-import { signIn, evaluateStable } from '../helpers/clerk-auth'
+import { signIn, evaluateStable, gotoStable } from '../helpers/clerk-auth'
 import { createClient } from '@supabase/supabase-js'
 import { Database } from '../../lib/supabase/types'
 
@@ -136,7 +136,7 @@ test.describe.serial('Official FIRST team verification', () => {
 
   test('graduating with a name that does not match the official roster is rejected, team stays incubator', async ({ page }) => {
     await signIn(page, COACH_EMAIL, COACH_PASSWORD)
-    await page.goto('/dashboard')
+    await gotoStable(page, '/dashboard')
 
     await page.getByRole('button', { name: /i have a team now/i }).click()
     await page.getByLabel(/new ftc team number/i).fill(String(REJECTED_NUMBER))
@@ -164,7 +164,7 @@ test.describe.serial('Official FIRST team verification', () => {
 
   test('graduating with a near-miss name succeeds but is flagged needs_review, and an admin can override it', async ({ page }) => {
     await signIn(page, COACH_EMAIL, COACH_PASSWORD)
-    await page.goto('/dashboard')
+    await gotoStable(page, '/dashboard')
 
     await page.getByRole('button', { name: /i have a team now/i }).click()
     await page.getByLabel(/new ftc team number/i).fill(String(NEEDS_REVIEW_NUMBER))
@@ -195,7 +195,7 @@ test.describe.serial('Official FIRST team verification', () => {
 
     // Admin sees the pending-review block and can override it.
     await signIn(page, ADMIN_EMAIL, ADMIN_PASSWORD)
-    await page.goto('/coaches')
+    await gotoStable(page, '/coaches')
     await expect(page.getByText(/needs review/i).first()).toBeVisible({ timeout: 15_000 })
 
     const overrideButtons = page.getByRole('button', { name: /^override$/i })
@@ -274,7 +274,7 @@ test.describe.serial('Official FIRST team verification', () => {
 
     test('a coach SELECT on team_verification_records returns only their own rows', async ({ page }) => {
       await signIn(page, COACH_EMAIL, COACH_PASSWORD)
-      await page.goto('/dashboard')
+      await gotoStable(page, '/dashboard')
 
       const own = await restAs(page, `/team_verification_records?team_id=eq.${teamId}`)
       expect(own.status).toBe(200)
@@ -287,7 +287,7 @@ test.describe.serial('Official FIRST team verification', () => {
 
     test('a sponsor SELECT on team_verification_records returns 0 rows — no sponsor branch exists', async ({ page }) => {
       await signIn(page, SPONSOR_EMAIL, SPONSOR_PASSWORD)
-      await page.goto('/sponsor/dashboard')
+      await gotoStable(page, '/sponsor/dashboard')
 
       const result = await restAs(page, `/team_verification_records?team_id=eq.${teamId}`)
       expect(result.status).toBe(200)
@@ -296,7 +296,7 @@ test.describe.serial('Official FIRST team verification', () => {
 
     test('a coach cannot INSERT / UPDATE / DELETE team_verification_records — no policy admits it', async ({ page }) => {
       await signIn(page, COACH_EMAIL, COACH_PASSWORD)
-      await page.goto('/dashboard')
+      await gotoStable(page, '/dashboard')
 
       const insert = await restAs(page, '/team_verification_records', {
         method: 'POST',
@@ -334,7 +334,7 @@ test.describe.serial('Official FIRST team verification', () => {
 
     test('a coach cannot UPDATE ftc_teams_cache — no write policy exists on that table', async ({ page }) => {
       await signIn(page, COACH_EMAIL, COACH_PASSWORD)
-      await page.goto('/dashboard')
+      await gotoStable(page, '/dashboard')
 
       // Denied by RLS, so 0 rows change and PostgREST reports success — the assertion that
       // matters is below: the cached official name is untouched.
@@ -359,7 +359,7 @@ test.describe.serial('Official FIRST team verification', () => {
       // any non-admin away before the override dialog can ever render, which is the same
       // "permission-denied" boundary the prompt's guardrail describes.
       await signIn(page, COACH_EMAIL, COACH_PASSWORD)
-      await page.goto('/coaches')
+      await gotoStable(page, '/coaches')
       await expect(page).toHaveURL(/\/dashboard/, { timeout: 10_000 })
     })
   })
