@@ -1,16 +1,17 @@
 # Next session — start here
 
-**Written:** 2026-08-20, at the end of the session that closed the 11–18 sweep.
-**Branch:** `feat/agreement-templates`, fast-forwarded into `main`. Working tree clean.
-**Deployed:** yes — `dpl_E3x5obYDAqsCtGRNUVC4KyqCnPYV`, production, `/api/health` 200.
+**Written:** 2026-08-21, at the end of the session that closed the owed E2E sweep.
+**Branch:** `main`. Working tree clean. **8 commits ahead of `origin/main`, unpushed.**
+**Head:** `507e88d` — the E2E sweep and its seven harness fixes.
+**Production is running `4597822`** — everything from `51148d1` (the H-09 appeals fix)
+onward is committed but **NOT deployed**.
 
 ---
 
 ## State of the world
 
-All 18 prompts in this folder are **shipped, deployed and audited**. Both audit sweeps
-(`_AUDIT-01-10.md`, `_AUDIT-11-18.md`) are closed except three rows that are deliberate or
-outside the repo:
+All 18 prompts in this folder are **shipped, audited, and now covered by a green E2E suite.**
+Both audit sweeps (`_AUDIT-01-10.md`, `_AUDIT-11-18.md`) are closed except three rows:
 
 | Row | Why it is still open |
 |---|---|
@@ -19,47 +20,68 @@ outside the repo:
 | `F-15` FIRST API credentials | Yours — see the checklist below. Running correctly on the FTCScout fallback. |
 
 Gate at close: typecheck ✅ · lint **0 errors / 340 warnings** ✅ · **419/419** Vitest ✅ ·
-build ✅ · `verify-backlog.mjs` against production **65 pass / 1 fail** (the one failure is
-DMARC, registrar-side).
+build ✅ · **E2E 166 passed / 0 failed / 10 skipped**, reproduced three times.
 
-CI now exists at `.github/workflows/ci.yml` and runs the same four-command gate on every push
-and PR with inert placeholder env. It deliberately does **not** run the E2E job.
+CI at `.github/workflows/ci.yml` runs the same four-command gate on every push and PR with
+inert placeholder env. It deliberately does **not** run the E2E job — that needs Docker.
+
+### The E2E sweep is DONE — do not re-litigate it
+
+It ran clean on 2026-08-20 against the **local** Docker Supabase stack at migration `0097`.
+Seven harness defects had to be fixed first; they are catalogued in `_AUDIT-11-18.md` →
+"The owed E2E sweep". WebKit is permanently excluded — it cannot reach Clerk's FAPI at all.
 
 ---
 
-## The one piece of engineering work still owed
+## What is actually left
 
-### The `SUPABASE_LOCAL` E2E sweep has never run since prompt 11
+### 1. Deploy (one command, then verify)
 
-22 spec files are gated behind `SUPABASE_LOCAL` and have not executed since prompt 11 landed.
-They are the only coverage for the authenticated journeys.
+```
+vercel deploy --prod --yes
+VERIFY_BASE_URL=https://ftc-sponsorship-portal.vercel.app node scripts/verify-backlog.mjs
+```
 
-**It is blocked on disk, not on code.** `/System/Volumes/Data` has **3.0 GiB free of 460 GiB
-(100 %)**. That is the exact condition that corrupted the previous attempt. The local Supabase
-stack needs Docker plus image pulls; starting it at this level will fail or corrupt.
+Expect **65 pass / 1 fail** — the one failure is DMARC, registrar-side. Ask before deploying.
 
-Measured, nothing deleted (deletion was blocked by the permission classifier, and by the
-standing "delete nothing without my say-so" rule):
+### 2. The one open coverage gap: `qa-thread`
 
-| Path | Size | Safe to clear? |
-|---|---|---|
-| `~/.npm/_cacache` | **9.2 G** | Yes — fully regenerable (`npm cache clean --force`) |
-| `~/Library/Developer/CoreSimulator` | **15 G** | Mostly — old/unavailable simulators (`xcrun simctl delete unavailable`) |
-| `~/Library/Caches` | 15 G | Mostly, app-by-app |
-| `~/Library/Developer/Xcode/DerivedData` | 901 M | Yes — fully regenerable |
-| `~/.cache` | 2.1 G | Yes |
-| `~/Library/Containers/com.docker.docker/Data` | 27 G | `docker system prune -a` (Docker must be **running** first) |
-| `~/Library/Application Support` | 52 G | **No** — do not touch blind |
+Eight tests in `tests/e2e/qa-thread.spec.ts` skip on a clean DB because they need a live
+`dispatched`/`delivered`/`opened` submission and `submissions` is empty. **`0085`'s
+database-enforcement coverage for the Q&A moderation gate has therefore never executed** — not
+in this sweep, not in any earlier one. Closing it means seeding a dispatched submission in the
+spec's own `beforeAll` (NOT via `scripts/seed-test-accounts.mjs` — see the rules below).
+The other two skips are legitimate: one dialog-focus a11y test, one reviewer funding-cap test.
 
-Target ≥ 40 GiB free before starting. Then:
+### 3. Nothing else in `prompts/` is owed
 
-1. Start Docker Desktop, `supabase start`, apply migrations with **`psql -f`** (never
-   `db reset`/`db push` — the CLI splitter mangles `$$`-quoted bodies).
-2. `SUPABASE_LOCAL=1 npx playwright test`.
-3. Three gotchas already paid for: Clerk e2e sign-in needs a **minted sign-in token**
-   (password sign-in returns `needs_client_trust`); **WebKit cannot reach Clerk at all** — skip
-   that project; axe needs animations settled, since `opacity: 0` elements are skipped entirely
-   and mid-fade gives phantom contrast failures.
+Every prompt `01`–`18` is implemented. What remains is not engineering — it is the
+registrar/dashboard/counsel list below.
+
+---
+
+## Re-running the E2E suite (the recipe, already paid for)
+
+1. Start Docker Desktop. If `docker info` hangs with `com.docker.backend` running but no
+   `com.docker.virtualization`, that is the stuck-launch signature:
+   `pkill -9 -f com.docker && open -a Docker`.
+2. `npx supabase start` (the DB container may need a second invocation while it goes healthy).
+3. Export **local** Supabase env in the shell *before* starting anything — dotenv does not
+   override already-set shell vars, and that is the only thing keeping the suite off
+   production. Derive the keys from `npx supabase status -o json`; never write them to a file.
+   Also export `SUPABASE_LOCAL=1`, a throwaway `PAYOUT_ENCRYPTION_KEY`, and the nine
+   `*+clerk_test@example.com` account emails. No `*_PASSWORD` — sign-in is ticket-based.
+4. Start the dev server yourself with that env. `playwright.config.ts` has
+   `reuseExistingServer: true`, so a stray production-env server on :3000 is silently reused.
+5. **Verify before running:** the `next-server` process must have no external connections, and
+   local `xact_commit` must move when you curl the app.
+6. `npx playwright test --project=chromium` / `--project=firefox`.
+
+Gotchas already paid for: Clerk e2e sign-in needs a **minted sign-in token** (password sign-in
+returns `needs_client_trust`); **WebKit cannot reach Clerk**; axe needs animations settled,
+since `opacity: 0` elements are skipped entirely and mid-fade gives phantom contrast failures;
+an aborted run leaves the fixture team as `incubator`, which makes the *next* run's
+`portfolio-sections` fail on a heading that is correctly absent — re-run rather than chase it.
 
 ---
 
@@ -90,8 +112,12 @@ Target ≥ 40 GiB free before starting. Then:
   (psql at `/opt/homebrew/opt/libpq/bin`, `DATABASE_URL` in `.env.local`).
 - **Never rebuild a function body from an older migration file.** Dump the **live** body with
   `pg_get_functiondef` and edit that. Three of the worst defects here — `0093`, `0094`, `0096`
-  (a P0 tenant takeover) — were `CREATE OR REPLACE` silently deleting later fixes.
+  (a P0 tenant takeover) — were `CREATE OR REPLACE` silently deleting later fixes. The same
+  class bit the test harness too: two copies of `detect_capacity_drift()`'s arithmetic, both
+  drifted from the live body.
 - **Deploys are manual.** Pushing to `main` deploys nothing: `vercel deploy --prod --yes`.
 - Agents (`action-reviewer`, `rls-auditor`) report false positives. **Re-verify every finding
   independently before acting on it.** Evidence or it didn't happen.
-- Latest migration is **`0097`** (applied). Confirm with `ls supabase/migrations | tail -3`.
+- Latest migration is **`0097`** (applied to production and to the local stack). Confirm with
+  `ls supabase/migrations | tail -3`.
+- Never write a token/JWT/credential to a file. Never read the OS keychain.
