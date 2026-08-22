@@ -11,7 +11,7 @@ one failure being DMARC (registrar-side, item 1 below).
 ## State of the world
 
 All 18 prompts in this folder are **shipped, audited, and now covered by a green E2E suite.**
-Both audit sweeps (`_AUDIT-01-10.md`, `_AUDIT-11-18.md`) are closed except three rows:
+Both audit sweeps (`revamp/_AUDIT-01-10.md`, `revamp/_AUDIT-11-18.md`) are closed except three rows:
 
 | Row | Why it is still open |
 |---|---|
@@ -28,7 +28,7 @@ inert placeholder env. It deliberately does **not** run the E2E job — that nee
 ### The E2E sweep is DONE — do not re-litigate it
 
 It ran clean on 2026-08-20 against the **local** Docker Supabase stack at migration `0097`.
-Seven harness defects had to be fixed first; they are catalogued in `_AUDIT-11-18.md` →
+Seven harness defects had to be fixed first; they are catalogued in `revamp/_AUDIT-11-18.md` →
 "The owed E2E sweep". WebKit is permanently excluded — it cannot reach Clerk's FAPI at all.
 
 ---

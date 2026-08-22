@@ -3,7 +3,7 @@
 **Audit date:** 2026-08-15
 **Standard:** WCAG 2.2 Level AA
 **Tooling:** `@axe-core/playwright` 4.x (tags `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`, `wcag22aa`), Playwright/Chromium, VoiceOver on macOS 15
-**Scope:** the four priority journeys from `prompts/18-accessibility-wcag-aa.md`, plus the public marketing and legal pages
+**Scope:** the four priority journeys from `prompts/revamp/18-accessibility-wcag-aa.md`, plus the public marketing and legal pages
 
 ---
 

@@ -24,12 +24,20 @@ strict capacity caps. Next.js 16 (App Router) + Clerk (auth) + Supabase (Postgre
 - Validate before pushing: `npm run typecheck && npm run lint`. Build uses Turbopack (`next build`); keep the `jsdom`/`cssstyle` `overrides` in `package.json`.
 - Deploys are **manual** — there is no Git integration on the Vercel project. Pushing to `main` does not deploy. Ship with `vercel deploy --prod --yes`.
 
-## Enterprise-readiness roadmap (`/prompts`)
+## `prompts/` — roadmap and audits
 
-`prompts/` holds 18 sequential, self-contained implementation prompts closing the gaps that
-block corporate adoption (funding fulfillment, W-9s, e-sign, sponsor orgs, SSO, CSR reporting,
-accessibility). Start with `prompts/README.md`; `prompts/_CONTEXT.md` is the verified schema
-and architecture ground truth those prompts share, and `prompts/_RUNNER.md` has the launcher.
+`prompts/_NEXT-SESSION.md` is the live handoff; read it first.
+
+`prompts/revamp/` holds the 18 sequential enterprise-readiness prompts (funding fulfillment,
+W-9s, e-sign, sponsor orgs, SSO, CSR reporting, accessibility). **All 18 are shipped and
+audited** — that pack is history, not a queue. `prompts/revamp/_CONTEXT.md` is still the most
+complete written snapshot of the schema and architecture (accurate as of migration `0075`;
+later migrations have moved past it, so the code wins on conflict).
+
+`prompts/audits/` holds the Gemini audit pack — 16 deep audit prompts written to be executed
+by an external Gemini agent, which writes evidence to `prompts/audits/findings/` and emits a
+self-contained fix prompt to `prompts/audits/handoff/` for Claude Code to execute. Start with
+`prompts/audits/_RUNNER-AUDIT.md`; `prompts/audits/_CONTEXT-AUDIT.md` is their shared contract.
 
 Decisions already locked there — do not relitigate: the platform **never touches funds**
 (pledge-and-track only), e-sign is **in-house** (ESIGN/UETA), sponsor multi-user is built on
