@@ -1,10 +1,10 @@
 # Next session — start here
 
-**Written:** 2026-08-21, at the end of the session that closed the owed E2E sweep.
-**Branch:** `main`. Working tree clean. **8 commits ahead of `origin/main`, unpushed.**
-**Head:** `507e88d` — the E2E sweep and its seven harness fixes.
-**Production is running `4597822`** — everything from `51148d1` (the H-09 appeals fix)
-onward is committed but **NOT deployed**.
+**Written:** 2026-08-21, at the end of the session that deployed and closed the `qa-thread` gap.
+**Branch:** `main`. Working tree clean, **pushed to `origin/main`**.
+**Production is current** — deployed 2026-08-21 (`dpl_5Rkqdx7GgLMD9nDavPHhn8XgbjfQ`), aliased
+to `ftc-sponsorship-portal.vercel.app`. `verify-backlog` against it: **65 pass / 1 fail**, the
+one failure being DMARC (registrar-side, item 1 below).
 
 ---
 
@@ -20,7 +20,7 @@ Both audit sweeps (`_AUDIT-01-10.md`, `_AUDIT-11-18.md`) are closed except three
 | `F-15` FIRST API credentials | Yours — see the checklist below. Running correctly on the FTCScout fallback. |
 
 Gate at close: typecheck ✅ · lint **0 errors / 340 warnings** ✅ · **419/419** Vitest ✅ ·
-build ✅ · **E2E 166 passed / 0 failed / 10 skipped**, reproduced three times.
+build ✅ · **E2E 174 passed / 0 failed / 2 skipped** (chromium, 176 total, 5.7m).
 
 CI at `.github/workflows/ci.yml` runs the same four-command gate on every push and PR with
 inert placeholder env. It deliberately does **not** run the E2E job — that needs Docker.
@@ -35,25 +35,15 @@ Seven harness defects had to be fixed first; they are catalogued in `_AUDIT-11-1
 
 ## What is actually left
 
-### 1. Deploy (one command, then verify)
+### 1. Nothing is owed in code
 
-```
-vercel deploy --prod --yes
-VERIFY_BASE_URL=https://ftc-sponsorship-portal.vercel.app node scripts/verify-backlog.mjs
-```
+Both former items are closed. Production is deployed and verified, and the `qa-thread`
+coverage gap is shut: `tests/e2e/qa-thread.spec.ts` now seeds its own world in `beforeAll`
+and tears it down in `afterAll`, so `0085`'s database enforcement actually executes.
+The remaining **2** skips are legitimate: one dialog-focus a11y test, one reviewer
+funding-cap test.
 
-Expect **65 pass / 1 fail** — the one failure is DMARC, registrar-side. Ask before deploying.
-
-### 2. The one open coverage gap: `qa-thread`
-
-Eight tests in `tests/e2e/qa-thread.spec.ts` skip on a clean DB because they need a live
-`dispatched`/`delivered`/`opened` submission and `submissions` is empty. **`0085`'s
-database-enforcement coverage for the Q&A moderation gate has therefore never executed** — not
-in this sweep, not in any earlier one. Closing it means seeding a dispatched submission in the
-spec's own `beforeAll` (NOT via `scripts/seed-test-accounts.mjs` — see the rules below).
-The other two skips are legitimate: one dialog-focus a11y test, one reviewer funding-cap test.
-
-### 3. Nothing else in `prompts/` is owed
+### 2. Nothing else in `prompts/` is owed
 
 Every prompt `01`–`18` is implemented. What remains is not engineering — it is the
 registrar/dashboard/counsel list below.
@@ -61,6 +51,18 @@ registrar/dashboard/counsel list below.
 ---
 
 ## Re-running the E2E suite (the recipe, already paid for)
+
+**Run ONE project per invocation** — `--project=chromium` and `--project=firefox` as two
+separate commands. Combining them in a single command runs global setup (and therefore
+`clearOrphanedFixtureMoney`) only once, so the first project's settled `sponsor-approvals`
+ledger rows survive as orphans (`transactions_ledger.submission_id` is `ON DELETE SET NULL`)
+and eat into `dev testing`'s $5,000 cap. The second project's `golden-path` step 5 then fails:
+approve-and-dispatch is refused and the submission never leaves `pending`. Verified, not
+theorised — it happened on 2026-08-21.
+
+Clerk also throttles a repeated sweep: three full runs inside ~50 minutes made
+`sponsor-domain-gating`'s `createClerkAccount` time out and cascade into 401s, with per-test
+wall clock roughly doubling. Restart the dev server and space runs out rather than chasing it.
 
 1. Start Docker Desktop. If `docker info` hangs with `com.docker.backend` running but no
    `com.docker.virtualization`, that is the stuck-launch signature:
@@ -120,4 +122,8 @@ an aborted run leaves the fixture team as `incubator`, which makes the *next* ru
   independently before acting on it.** Evidence or it didn't happen.
 - Latest migration is **`0097`** (applied to production and to the local stack). Confirm with
   `ls supabase/migrations | tail -3`.
+- A fixture that inserts a submission must set `reserved_amount_cents: 0` unless it also does
+  the capacity bookkeeping. `release_reservation_before_submission_delete` refunds a *live*
+  reservation on DELETE, so a non-zero fixture reservation hands the sponsor capacity it never
+  spent and shows up as global drift in `appeals` / `recognition-tiers`.
 - Never write a token/JWT/credential to a file. Never read the OS keychain.
