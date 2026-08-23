@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { OpenSensitiveDocumentButton } from '@/components/admin/open-sensitive-document-button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -237,9 +238,8 @@ export function PayoutReviewCard({ payout }: { payout: PayoutData }) {
                 <div className="bg-background flex flex-col relative group">
                   <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-background/80 to-transparent p-4 z-10 flex justify-between items-start pointer-events-none">
                     <span className="text-xs font-semibold text-foreground uppercase tracking-widest drop-shadow-md">W-9 Document</span>
-                    <a href={payout.signedUrl!} target="_blank" rel="noreferrer" className="pointer-events-auto bg-background/80 hover:bg-accent text-foreground text-xs px-3 py-1.5 rounded-full backdrop-blur flex items-center gap-1.5 transition-colors border border-border/50">
-                      Open Externally <ExternalLink className="h-3 w-3" />
-                    </a>
+                    {/* A-06-03. See coach-verification-card — same 60s re-mint. */}
+                    <OpenSensitiveDocumentButton kind="w9" subjectId={payout.team_id} />
                   </div>
                   {payout.signedUrl ? (
                     <iframe

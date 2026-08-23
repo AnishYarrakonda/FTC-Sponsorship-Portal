@@ -1,4 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
+// A-06-03. 60s, not 1800s. The "open full size" control re-mints on demand, so the
+// short TTL does not turn into a dead link.
+import { SENSITIVE_DOCUMENT_URL_TTL_SECONDS } from '@/app/actions/sensitive-documents'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { UserCheck } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
@@ -60,7 +63,7 @@ export default async function CoachesPage() {
       if (needsReview(coach)) {
         const { data } = await adminClient.storage
           .from('coach-credentials')
-          .createSignedUrl(coach.coach_credentials_url!, 1800)
+          .createSignedUrl(coach.coach_credentials_url!, SENSITIVE_DOCUMENT_URL_TTL_SECONDS)
         signedUrl = data?.signedUrl ?? null
       }
       // teams is returned as an array from the join; grab first

@@ -21,6 +21,10 @@
  * for a "prepared by" line. The report is about the team.
  */
 
+// A-06-04. Render-side URL allowlist (scheme + host), shared with the sponsor-view page
+// and the portfolio media block so the three cannot drift apart.
+import { safeMediaUrl, safeMediaUrls } from '@/lib/safe-url'
+
 /** Team columns. `id` and `media_no_minors_confirmed_at` are internal — see projectTeam. */
 export const IMPACT_TEAM_FIELDS = [
   'id',
@@ -193,10 +197,25 @@ export function projectTeam(row: RawRow): ImpactTeam {
   // affirmation is cleared automatically by a trigger whenever media_urls changes, so a
   // coach who adds a photo after affirming has to affirm again.
   const affirmed = typeof row.media_no_minors_confirmed_at === 'string' && row.media_no_minors_confirmed_at.length > 0
+  /**
+   * A-06-04. This filtered on `typeof u === 'string'` only, which is a type check, not a
+   * safety check: `javascript:...`, `data:text/html;base64,...` and any third-party host
+   * are all strings. `teams.media_urls` is untyped `jsonb` and rows written before write
+   * validation existed are still in the database, so the render side is where this has to
+   * hold — the same reasoning that put safeMediaUrls on the sponsor-view page and the
+   * portfolio media block.
+   *
+   * safeMediaUrls validates the SCHEME (http/https only) and the HOST (our own Supabase
+   * Storage), rather than pattern-matching the string. The projected report is served as
+   * JSON to sponsor clients and fed into the CSR CSV export, so an unvalidated URL here is
+   * both a stored-XSS vector on whatever renders it and an IP/referrer leak from a
+   * sponsor-facing page to a host the coach chose.
+   *
+   * Slice AFTER validating: filtering first would let N rejected URLs eat the media limit
+   * and silently drop legitimate photos.
+   */
   const rawMedia = Array.isArray(row.media_urls) ? row.media_urls : []
-  const media = affirmed
-    ? rawMedia.filter((u): u is string => typeof u === 'string').slice(0, IMPACT_MEDIA_LIMIT)
-    : []
+  const media = affirmed ? safeMediaUrls(rawMedia).slice(0, IMPACT_MEDIA_LIMIT) : []
 
   return {
     ftc_team_number: num(row.ftc_team_number),
@@ -214,7 +233,14 @@ export function projectTeam(row: RawRow): ImpactTeam {
     tagline: str(row.tagline),
     mission_statement: str(row.mission_statement),
     outreach_summary: str(row.outreach_summary),
-    logo_url: str(row.logo_url),
+    /**
+     * Found while proving A-06-04, same defect class, same file, not named in the pack:
+     * `logo_url` was projected through `str()` — a type coercion with no URL check — and
+     * `components/impact/impact-report-view.tsx` feeds it straight into an `<img src>`.
+     * teams.logo_url is written by uploadTeamLogo into our own storage bucket, so
+     * safeMediaUrl's host rule is exactly right for it.
+     */
+    logo_url: safeMediaUrl(row.logo_url),
     media_urls: media,
   }
 }

@@ -10,6 +10,7 @@ import type { ThreadMessage } from '@/components/messages/thread'
 import { RichText } from '@/components/ui/rich-text'
 import { htmlToPlainText } from '@/lib/utils'
 import { fetchRecognitionLadder, ladderForEmail } from '@/lib/recognition'
+import { isWellFormedAccessToken, throttleTokenView } from '@/lib/token-view-guard'
 
 interface Props {
   params: Promise<{ token: string }>
@@ -23,9 +24,24 @@ function taxBadge(status: string): { label: string; className: string } | null {
 
 export default async function SponsorViewPage({ params }: Props) {
   const { token } = await params
+
+  /**
+   * A-10-05. Both guards run BEFORE the admin-client query — that is the whole point.
+   * This is the only unauthenticated route in the app that reads the database on every
+   * request, and it does so through a client that bypasses RLS.
+   *
+   * The shape check costs nothing and removes every probe that could not have matched a
+   * row anyway (a real token is 64 hex chars). The throttle is a per-instance cost floor
+   * on someone hammering one URL. Both fail to `notFound()` rather than a distinct error,
+   * so neither becomes an oracle for whether a token exists.
+   */
+  if (!isWellFormedAccessToken(token)) return notFound()
+
   const supabase = createAdminClient()
 
   const tokenHash = createHash('sha256').update(token).digest('hex')
+
+  if (!throttleTokenView(tokenHash)) return notFound()
 
   const { data: accessToken } = await supabase
     .from('submission_access_tokens')
