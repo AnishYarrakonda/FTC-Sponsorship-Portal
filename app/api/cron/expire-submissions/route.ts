@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createInAppNotification } from '@/lib/notify'
-import { sweepUnpurgedCredentials } from '@/lib/credentials-retention'
+import { sweepUnpurgedCredentials, sweepPendingStorageDeletions } from '@/lib/credentials-retention'
 import { sweepExpiringW9s } from '@/lib/payout-retention'
 import crypto from 'crypto'
 import { env } from '@/lib/env'
@@ -78,6 +78,16 @@ export async function GET(req: Request) {
     if (retention.purged > 0 || retention.failed > 0) {
       console.log(
         `[cron] credential retention: purged ${retention.purged}, failed ${retention.failed}`
+      )
+    }
+
+    // A-06-02: retry superseded IDs and W-9s whose inline delete failed. Unlike the
+    // sweep above, these have no live pointer left to find them by — the queue IS the
+    // only record that the object exists.
+    const pendingDeletions = await sweepPendingStorageDeletions(supabase)
+    if (pendingDeletions.deleted > 0 || pendingDeletions.failed > 0 || pendingDeletions.skippedStillLive > 0) {
+      console.log(
+        `[cron] superseded storage: deleted ${pendingDeletions.deleted}, failed ${pendingDeletions.failed}, still-live ${pendingDeletions.skippedStillLive}`
       )
     }
 
@@ -162,6 +172,8 @@ export async function GET(req: Request) {
         ids: (expiring ?? []).map((r) => r.id),
         credentials_purged: retention.purged,
         credentials_purge_failed: retention.failed,
+        superseded_storage_deleted: pendingDeletions.deleted,
+        superseded_storage_failed: pendingDeletions.failed,
         w9_renewal_notices: w9Retention.notified,
         w9_renewal_notices_failed: w9Retention.failed,
         proposals_expired: proposalsExpiredCount,

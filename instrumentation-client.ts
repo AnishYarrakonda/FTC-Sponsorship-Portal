@@ -1,5 +1,6 @@
 import { initBotId } from 'botid/client/core'
 import * as Sentry from '@sentry/nextjs'
+import { scrubBreadcrumb, scrubEvent } from '@/lib/sentry-scrub'
 
 /**
  * Vercel BotID (Basic mode) — arms the invisible challenge before anything else runs.
@@ -32,6 +33,12 @@ if (dsn) {
   Sentry.init({
     dsn,
     tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
+    // A-10-03. The browser is where the token is most exposed: the sponsor lands on
+    // /sponsor-view/<token> and every subsequent navigation records it as a breadcrumb
+    // `from` value, so an error three pages later still carries the credential.
+    beforeBreadcrumb: (breadcrumb) => scrubBreadcrumb(breadcrumb),
+    beforeSend: (event) => scrubEvent(event),
+    beforeSendTransaction: (event) => scrubEvent(event),
   })
 }
 

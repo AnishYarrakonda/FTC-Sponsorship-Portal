@@ -9,6 +9,7 @@ const actionError = (error: string): ActionResponse<any> => ({ error })
 const actionSuccess = <T>(data?: T, message?: string): ActionResponse<T> => ({ ok: true, data, message })
 import { payoutProfileSchema, PayoutProfileInput } from '@/lib/schemas/payout'
 import { requireAdmin, requireVerifiedCoach } from '@/lib/actions-utils'
+import { enqueueStorageDeletion } from '@/lib/credentials-retention'
 
 async function requireCoachOwner(teamId: string) {
   const { user, supabase } = await requireVerifiedCoach()
@@ -227,10 +228,12 @@ export async function uploadW9(
     return actionError('Failed to save W-9 record.')
   }
 
-  // Best-effort cleanup of old file
-  if (currentProfile.w9_document_path) {
-    admin.storage.from('tax-documents').remove([currentProfile.w9_document_path])
-      .catch((e: any) => console.error('Failed to cleanup old W9', e))
+  // A-06-02. Was a fire-and-forget remove() with a .catch(console.error) — not even
+  // awaited, so a failure was invisible even in the logs of a serverless invocation that
+  // had already returned. The W-9 pointer has already moved by this point, so a lost
+  // delete orphans a tax document permanently. Queued and retried instead.
+  if (currentProfile.w9_document_path && currentProfile.w9_document_path !== path) {
+    await enqueueStorageDeletion(admin, 'tax-documents', currentProfile.w9_document_path, 'superseded_w9')
   }
 
   // 4. Audit

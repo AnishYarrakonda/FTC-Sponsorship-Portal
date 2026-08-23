@@ -67,6 +67,12 @@ COMMIT;
 | `0098_drop_anon_notification_insert.sql` | no row in `pg_policies` where `tablename='notifications' AND policyname='service_insert_notifications'`; `has_table_privilege('anon','public.notifications','INSERT')` is false |
 | `0099_sign_agreement_member_rank.sql` | live body contains `sponsor_member_role_rank` and `'approver'` |
 | `0100_sponsor_decide_capacity_delta.sql` | live body contains `v_delta` and the `IF v_delta > 0` branch |
+| `0101_close_anon_actor_fallthrough.sql` | live body contains `ELSIF is_trusted_server_context()` **and still contains `v_delta`** — if `v_delta` is gone, 0101 was applied from a stale body and 0100 has just been erased |
+| `0102_teams_update_requires_verified_coach.sql` | `pg_policies` row for `teams` / `UPDATE` contains `is_coach_verified()` **and** `is_admin()` |
+| `0103_pending_storage_deletions.sql` | table exists with RLS enabled; `has_table_privilege('anon','public.pending_storage_deletions','SELECT')` is false |
+
+**0101 supersedes 0100's body.** Apply them in order, or apply 0101 alone — it contains
+0100's capacity reconciliation. Never apply 0100 *after* 0101.
 
 ## Step 3 — verify against production (read-only, except the anon probe)
 

@@ -38,9 +38,55 @@ const MULTI_PART_SUFFIXES = new Set([
 /** A bare hostname: labels of [a-z0-9-] plus an alphabetic TLD of 2+ characters. */
 const HOST_RE = /^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/
 
+/**
+ * IDNA/punycode normalization (A-10-01).
+ *
+ * `HOST_RE` is ASCII-only, so any non-ASCII host used to fail it and `normalizeHost`
+ * returned null — and `checkSponsorEmailDomain` treats a null domain as
+ * `{ allowed: true, reason: 'corporate' }`. Non-ASCII therefore did not bypass the
+ * blocklist by impersonating an entry; it bypassed it by never being looked up at all.
+ *
+ * The case that actually matters is NOT the Cyrillic lookalike the audit cited — that
+ * maps to a distinct domain (`xn--gmil-63d.com`) an attacker would have to register and
+ * run mail for. It is **full-width and other compatibility Latin**: `ｇmail.com`
+ * (U+FF47) IDNA-maps to literally `gmail.com`. Same domain, same mailbox, and the
+ * blocklist never saw it.
+ *
+ * `new URL()` implements UTS-46 for us, which is why there is no punycode dependency
+ * here. It also lowercases, strips a trailing dot, and rejects structurally invalid
+ * hosts — so it subsumes most of what this function did by hand.
+ */
+function toAsciiHost(raw: string): string | null {
+  try {
+    const { hostname } = new URL(`http://${raw}`)
+    return hostname || null
+  } catch {
+    return null
+  }
+}
+
 function normalizeHost(raw: string): string | null {
-  const host = raw.trim().toLowerCase().replace(/\.+$/, '')
+  const trimmed = raw.trim().toLowerCase().replace(/\.+$/, '')
+  if (!trimmed) return null
+  // A host with a slash, space, or userinfo is not a host. Reject before URL() gets a
+  // chance to reinterpret it as a path and hand back something that looks valid.
+  if (/[/\\?#@\s]/.test(trimmed)) return null
+  const host = toAsciiHost(trimmed)
+  if (!host) return null
   return HOST_RE.test(host) ? host : null
+}
+
+/**
+ * Does this host contain an internationalized (punycode) label?
+ *
+ * Advisory only, in keeping with this module's rule that nothing here may auto-reject.
+ * A punycode host is not illegitimate — plenty of real companies have one — but a
+ * sponsor applying from one is worth a human reviewer's attention, because homograph
+ * registration is cheap and the admin card is where the impersonation would land.
+ */
+export function isInternationalizedHost(host: string | null | undefined): boolean {
+  if (!host) return false
+  return host.split('.').some((label) => label.startsWith('xn--'))
 }
 
 /** Lowercased apex domain from an email address, or null if unparseable. */

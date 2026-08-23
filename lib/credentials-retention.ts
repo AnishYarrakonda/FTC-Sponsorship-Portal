@@ -226,3 +226,170 @@ export async function purgeTeamW9(
 
   return { purged: true }
 }
+
+// ─── Superseded-file deletion queue (A-06-02) ────────────────────────────────────
+
+/**
+ * Why this exists at all.
+ *
+ * The purge paths above are careful: storage first, pointer second, so a failure leaves
+ * a row the nightly sweep finds again. The *supersede* paths are not, and cannot be —
+ * when a coach uploads a replacement ID, the pointer must move to the new file, and the
+ * old path is then referenced by nothing. `remove([old]).catch(console.error)` was the
+ * whole cleanup. One transient storage error and a government ID is retained forever,
+ * invisible to `sweepUnpurgedCredentials` (which only walks live pointers) and to every
+ * compliance report.
+ *
+ * So the path is written down before it stops being reachable, and retried until the
+ * object is confirmed gone.
+ */
+
+export type StorageDeletionReason = 'superseded_credentials' | 'superseded_w9'
+
+/**
+ * Record a superseded object, then try to delete it immediately.
+ *
+ * Call this AFTER the pointer update has succeeded — never before. Enqueueing first
+ * would mean a failed pointer update leaves a queued deletion for the file that is
+ * still live, and the sweep would destroy the current document. (The sweep re-checks
+ * live pointers anyway, but the ordering is the primary guard; the re-check is the
+ * backstop.)
+ *
+ * Best-effort by design, like everything else here: it must never fail the upload that
+ * triggered it. The difference from before is that failure is now durable and retried
+ * rather than a line in a log nobody reads.
+ */
+export async function enqueueStorageDeletion(
+  admin: AdminClient,
+  bucket: string,
+  path: string,
+  reason: StorageDeletionReason
+): Promise<{ deleted: boolean }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const table = (admin as any).from('pending_storage_deletions')
+
+  const { error: enqueueError } = await table.upsert(
+    { bucket, path, reason, attempts: 0 },
+    { onConflict: 'bucket,path', ignoreDuplicates: true }
+  )
+  if (enqueueError) {
+    console.error('[retention] failed to enqueue superseded object', bucket, path, enqueueError)
+    Sentry.captureException(
+      new Error(`[retention] enqueue failed for ${bucket}/${path}: ${enqueueError.message}`)
+    )
+    // Fall through and still attempt the delete — a queue miss is not a reason to also
+    // skip the cleanup.
+  }
+
+  const { error: removeError } = await admin.storage.from(bucket).remove([path])
+  if (removeError) {
+    console.error('[retention] superseded object delete failed, queued for retry', bucket, path, removeError)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (admin as any)
+      .from('pending_storage_deletions')
+      .update({ attempts: 1, last_attempt_at: new Date().toISOString(), last_error: removeError.message })
+      .eq('bucket', bucket)
+      .eq('path', path)
+    return { deleted: false }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (admin as any)
+    .from('pending_storage_deletions')
+    .update({ deleted_at: new Date().toISOString(), attempts: 1, last_attempt_at: new Date().toISOString(), last_error: null })
+    .eq('bucket', bucket)
+    .eq('path', path)
+
+  return { deleted: true }
+}
+
+/**
+ * Retry every object whose delete has not yet been confirmed.
+ *
+ * Runs in the nightly cron alongside `sweepUnpurgedCredentials`. Before removing
+ * anything it re-checks that no live pointer still references the path — the ordering in
+ * `enqueueStorageDeletion` should make that impossible, but this is a queue that deletes
+ * government IDs, and a stale row here is not recoverable.
+ */
+export async function sweepPendingStorageDeletions(
+  admin: AdminClient,
+  limit = 200
+): Promise<{ scanned: number; deleted: number; failed: number; skippedStillLive: number }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: rows, error } = await (admin as any)
+    .from('pending_storage_deletions')
+    .select('id, bucket, path, attempts')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: true })
+    .limit(limit)
+
+  if (error) {
+    console.error('[retention] pending deletion sweep query failed', error)
+    Sentry.captureException(new Error(`[retention] pending deletion sweep failed: ${error.message}`))
+    return { scanned: 0, deleted: 0, failed: 0, skippedStillLive: 0 }
+  }
+
+  let deleted = 0
+  let failed = 0
+  let skippedStillLive = 0
+
+  for (const row of (rows ?? []) as { id: string; bucket: string; path: string; attempts: number }[]) {
+    if (await isPathStillLive(admin, row.bucket, row.path)) {
+      skippedStillLive++
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (admin as any)
+        .from('pending_storage_deletions')
+        .update({ last_attempt_at: new Date().toISOString(), last_error: 'skipped: path is still the live pointer' })
+        .eq('id', row.id)
+      continue
+    }
+
+    const { error: removeError } = await admin.storage.from(row.bucket).remove([row.path])
+    const now = new Date().toISOString()
+
+    if (removeError) {
+      failed++
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (admin as any)
+        .from('pending_storage_deletions')
+        .update({ attempts: row.attempts + 1, last_attempt_at: now, last_error: removeError.message })
+        .eq('id', row.id)
+      continue
+    }
+
+    deleted++
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (admin as any)
+      .from('pending_storage_deletions')
+      .update({ deleted_at: now, attempts: row.attempts + 1, last_attempt_at: now, last_error: null })
+      .eq('id', row.id)
+  }
+
+  return { scanned: rows?.length ?? 0, deleted, failed, skippedStillLive }
+}
+
+/**
+ * Is this path still referenced by a live pointer? If so it is NOT a superseded object
+ * and must not be deleted, whatever the queue says.
+ */
+async function isPathStillLive(admin: AdminClient, bucket: string, path: string): Promise<boolean> {
+  if (bucket === CREDENTIALS_BUCKET) {
+    const { data } = await admin
+      .from('profiles')
+      .select('id')
+      .eq('coach_credentials_url', path)
+      .limit(1)
+    return (data?.length ?? 0) > 0
+  }
+
+  if (bucket === 'tax-documents') {
+    const { data } = await admin
+      .from('team_payout_profiles')
+      .select('team_id')
+      .eq('w9_document_path', path)
+      .limit(1)
+    return (data?.length ?? 0) > 0
+  }
+
+  return false
+}
