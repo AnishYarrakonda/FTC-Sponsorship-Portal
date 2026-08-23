@@ -13,6 +13,7 @@ import {
 } from '@/lib/schemas/sponsor-members'
 
 import { writeAudit } from '@/lib/audit'
+import { withdrawProposalsForDepartedMember, backfillOrgAdminIfHeadless } from '@/lib/sponsor-offboarding'
 /** role gate shared by every mutating action in this file. Throws, like every other
  *  require* guard in lib/actions-utils.ts — callers catch and return { error }. */
 function requireOrgAdmin() {
@@ -366,13 +367,27 @@ export async function removeSponsorMember(data: { memberId: string }) {
     await adminClient.from('profiles').update({ sponsor_id: null }).eq('id', target.profile_id)
   }
 
+  // A-12-02: a departing member's in-flight funding proposals used to stay `pending`,
+  // attributed to somebody no longer in the org, with no UI anywhere to reassign them.
+  const { withdrawn } = await withdrawProposalsForDepartedMember(
+    adminClient,
+    sponsorId,
+    target.profile_id,
+    callerId
+  )
+
+  // A-12-03: this action already refuses to remove the last org_admin, so this is
+  // belt-and-braces here — it earns its keep on the webhook path, which had no guard at
+  // all. Kept on both so the two offboarding routes cannot drift apart again.
+  await backfillOrgAdminIfHeadless(adminClient, sponsorId)
+
   // 4. AUDIT
   await writeAudit(adminClient, {
     actor_id: callerId,
     action: 'remove_sponsor_member',
     entity_type: 'sponsor_members',
     entity_id: memberId,
-    metadata: { sponsor_id: sponsorId, profile_id: target.profile_id },
+    metadata: { sponsor_id: sponsorId, profile_id: target.profile_id, proposals_withdrawn: withdrawn },
   })
 
   // 5. NOTIFY
