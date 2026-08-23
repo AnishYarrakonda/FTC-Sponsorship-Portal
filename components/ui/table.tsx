@@ -54,6 +54,11 @@ const TableHead = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <th
     ref={ref}
+    /* P3. No `scope` existed anywhere in the codebase while seven files render <th>.
+       Without it a screen reader has to guess which cells a header governs, and guesses
+       wrong on any table that is not trivially rectangular. `scope="col"` is right for
+       every current use; a row header would pass scope="row" through ...props. */
+    scope="col"
     className={cn("px-2 text-left align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]", className)}
     style={{
       fontSize: "12px",

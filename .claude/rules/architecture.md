@@ -16,7 +16,9 @@
   - `admin/export` — CSV/data export (admin-only)
   - `admin/queue/count` — moderation queue badge count
   - `coach/notifications/unread` — unread notification count (coach)
-  - `cron/expire-submissions` — daily cron at 02:00 UTC (scheduled via `vercel.json`); marks stale submissions expired
+  - `cron/expire-submissions` — **scheduled** daily at 02:00 UTC (`vercel.json`); marks stale submissions expired, releases their reserved sponsor capacity, and sweeps gov-ID/W-9 retention
+  - `cron/daily-maintenance` — **scheduled** daily at 04:00 UTC (`vercel.json`); a dispatcher that runs `refresh-ftc-roster`, `nudge-fulfillments` and `impact-rollup` in sequence, each in its own try/catch
+  - `cron/refresh-ftc-roster`, `cron/nudge-fulfillments`, `cron/impact-rollup` — **not** scheduled directly. Vercel Hobby honours only 2 cron entries and silently ignores extras, which is how three jobs sat dead in production (A-09-05). Each stays independently invocable via its own route; only the *scheduler* moved. **A new cron job goes inside the dispatcher, not into `vercel.json`**, unless the project is on Pro.
   - `health` — public health check
   - `webhooks/clerk` — handles `user.deleted` and email sync from Clerk
   - `webhooks/resend` — delivery event webhooks from Resend

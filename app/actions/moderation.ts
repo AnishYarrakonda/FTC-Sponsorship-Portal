@@ -8,10 +8,13 @@ import { mapDbError } from '@/lib/errors'
 import { z } from 'zod'
 import { writeAudit } from '@/lib/audit'
 import { sponsorRecipientIds } from '@/lib/sponsor-recipients'
+import { LIMITS } from '@/lib/schemas/limits'
 
 const moderationSchema = z.object({
   submissionId: z.string().uuid(),
-  feedback: z.string().max(2000).optional(),
+  // P3: was a hardcoded 2000. Max lengths live in lib/schemas/limits.ts so the
+  // schema and the textarea's maxLength cannot drift apart.
+  feedback: z.string().max(LIMITS.feedback).optional(),
 })
 
 export async function approveSubmission(submissionId: string) {
@@ -108,6 +111,9 @@ export async function approveSubmission(submissionId: string) {
       recipientId: coachId,
       type: 'submission_approved',
       title: `Your application to ${sponsorName} was approved`,
+      // P3: the notification had a title and no body, while the admin's dispatch preview
+      // promises the coach is told exactly this. The two now match.
+      body: `Your submission to ${sponsorName} has been approved and dispatched. You will be notified when the sponsor responds.`,
       submissionId,
     })
   }
@@ -122,6 +128,10 @@ export async function approveSubmission(submissionId: string) {
       sponsorProfileIds.map((recipientId) =>
         createInAppNotification({
           recipientId,
+          // P3: skipEmail. dispatchApprovedSubmission already emails these same people the
+          // real pitch; without this they also received a generic "a submission is ready"
+          // message about the identical event.
+          skipEmail: true,
           type: 'general',
           title: 'New submission is ready for your decision',
           body: 'A coach submission has been approved and sent to your inbox for review.',

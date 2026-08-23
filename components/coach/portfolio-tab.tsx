@@ -325,6 +325,24 @@ export function PortfolioTab({ team, achievements }: { team: Team, achievements:
 
   const errorCount = Object.keys(form.formState.errors).length
 
+  /**
+   * P3. A failed save showed "Please fix N errors above" and left the viewport exactly
+   * where it was — measured at window.scrollY 0 before and 0 after an invalid submit whose
+   * failing field was several screens up. Telling someone there is a problem without
+   * taking them to it is the least useful half of the interaction.
+   *
+   * Focusing rather than only scrolling because focus moves the screen reader too, and
+   * react-hook-form already registers the field refs.
+   */
+  function focusFirstError() {
+    const first = Object.keys(form.formState.errors)[0]
+    if (!first) return
+    const el = document.querySelector<HTMLElement>(`[name="${first}"]`)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.focus({ preventScroll: true })
+  }
+
   // B-03-13. This local ladder keyed on w9_document_path FIRST, so a verified team whose
   // document had been purged under retention read as "Awaiting W-9" here while the funding
   // tab called it verified. resolveW9Status is now the only place that decision is made.
@@ -363,9 +381,14 @@ export function PortfolioTab({ team, achievements }: { team: Team, achievements:
               </Button>
             </div>
             {errorCount > 0 && (
-              <p className="text-[10px] text-destructive-text font-medium animate-pulse">
-                Please fix {errorCount} error{errorCount > 1 ? 's' : ''} above
-              </p>
+              /* P3. Now a control that takes you there, not just a notice. */
+              <button
+                type="button"
+                onClick={focusFirstError}
+                className="text-[10px] text-destructive-text font-medium underline underline-offset-2 hover:no-underline"
+              >
+                Please fix {errorCount} error{errorCount > 1 ? 's' : ''} above — go to the first one
+              </button>
             )}
           </div>
         </div>

@@ -2407,6 +2407,20 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: { action: string }[]
       }
+      // Hand-added for migration 0109_sponsor_self_serve_audit_log.sql (A-12-05).
+      // Regenerate with `supabase gen types` once the migrations are applied.
+      sponsor_audit_log: {
+        Args: { p_limit?: number; p_offset?: number }
+        Returns: {
+          id: string
+          created_at: string
+          action: string
+          actor_label: string
+          amount_cents: number | null
+          entity_type: string | null
+          entity_id: string | null
+        }[]
+      }
       // Hand-added for migration 0070_remint_submission_access_token.sql. Regenerate
       // with `supabase gen types` once the migrations are applied.
       remint_submission_access_token: {

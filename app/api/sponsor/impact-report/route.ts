@@ -4,9 +4,11 @@ import { createClient } from '@/lib/supabase/server'
 import { rowToCsv } from '@/lib/csv'
 import type { SponsorImpactPayload } from '@/lib/impact-report/build'
 import { writeAudit } from '@/lib/audit'
+import { createZip, safeZipSegment, type ZipEntry } from '@/lib/zip'
+import { safeMediaUrl } from '@/lib/safe-url'
 
 /**
- * GET /api/sponsor/impact-report?year=YYYY&format=json|csv
+ * GET /api/sponsor/impact-report?year=YYYY&format=json|csv|assets
  *
  * Two independent barriers on the read: the explicit sponsor filter, and RLS underneath
  * it (impact_snapshots_select_sponsor keys off current_sponsor_ids()). The admin client is
@@ -30,7 +32,9 @@ export async function GET(req: Request) {
   const url = new URL(req.url)
   const yearParam = Number(url.searchParams.get('year'))
   const year = Number.isInteger(yearParam) ? yearParam : new Date().getUTCFullYear()
-  const format = url.searchParams.get('format') === 'csv' ? 'csv' : 'json'
+  const formatParam = url.searchParams.get('format')
+  const format: 'json' | 'csv' | 'assets' =
+    formatParam === 'csv' ? 'csv' : formatParam === 'assets' ? 'assets' : 'json'
 
   const requestedSponsor = url.searchParams.get('sponsorId')
   if (requestedSponsor && !sponsorIds.includes(requestedSponsor)) {
@@ -87,6 +91,24 @@ export async function GET(req: Request) {
     })
   }
 
+  /**
+   * A-12-06. The raw marketing assets behind the report, as a ZIP.
+   *
+   * A CSR team asked to build corporate materials from this report previously had to crop
+   * images out of a rendered page. The assets themselves already exist and are already
+   * cleared: `media_urls` on the snapshot is what `projectTeam` emitted, which means it
+   * passed the media_no_minors affirmation (COPPA, Core Mandate #1) AND the
+   * scheme-and-host allowlist added for A-06-04. This route re-checks the host anyway —
+   * the snapshot is an immutable payload that may predate that fix, and fetching an
+   * arbitrary URL server-side from a signed-in session is textbook SSRF.
+   *
+   * A manifest.csv rides along so a designer knows which team each file belongs to and
+   * what they are allowed to say about it, which is the actual blocker for using them.
+   */
+  if (format === 'assets') {
+    return buildAssetBundle(payload, year)
+  }
+
   const lines: string[] = [
     rowToCsv([
       'ftc_team_number',
@@ -120,7 +142,9 @@ export async function GET(req: Request) {
         section.team.organization,
         section.team.city,
         section.team.state,
-        section.team.tax_status,
+        // P3. 'None' is a legitimate enum value meaning "no charitable status", not a
+        // label — it was landing literally in the CSR spreadsheet's tax_status column.
+        section.team.tax_status === 'None' ? '' : section.team.tax_status,
         section.team.students_reached,
         section.team.events_hosted,
         section.team.volunteer_hours,
@@ -144,6 +168,106 @@ export async function GET(req: Request) {
     headers: {
       'Content-Type': 'text/csv; charset=utf-8',
       'Content-Disposition': `attachment; filename="impact-report-${year}.csv"`,
+    },
+  })
+}
+
+
+/** Per-file and total ceilings. A serverless function must not try to buffer a DVD. */
+const MAX_ASSET_BYTES = 15 * 1024 * 1024
+const MAX_BUNDLE_BYTES = 150 * 1024 * 1024
+
+async function buildAssetBundle(payload: SponsorImpactPayload, year: number): Promise<Response> {
+  const entries: ZipEntry[] = []
+  const manifest: string[] = [
+    rowToCsv(['file', 'ftc_team_number', 'team_name', 'organization', 'city', 'state', 'tagline']),
+  ]
+  const skipped: string[] = []
+  let total = 0
+
+  for (const section of payload.teams ?? []) {
+    const team = section.team
+    const folder = safeZipSegment(
+      `${team.ftc_team_number ?? 'incubator'}-${team.team_name ?? 'team'}`
+    )
+    const urls = [team.logo_url, ...(team.media_urls ?? [])].filter(
+      (u): u is string => typeof u === 'string' && u.length > 0
+    )
+
+    let index = 0
+    for (const rawUrl of urls) {
+      /**
+       * SSRF guard. Re-validating against the SAME allowlist the projection uses means an
+       * old snapshot written before A-06-04 cannot make this route fetch an attacker's
+       * host from inside our network on a signed-in sponsor's behalf.
+       */
+      const url = safeMediaUrl(rawUrl)
+      if (!url) {
+        skipped.push(rawUrl)
+        continue
+      }
+
+      let bytes: Uint8Array
+      try {
+        const res = await fetch(url, { redirect: 'error' })
+        if (!res.ok) {
+          skipped.push(url)
+          continue
+        }
+        const buf = new Uint8Array(await res.arrayBuffer())
+        if (buf.length > MAX_ASSET_BYTES || total + buf.length > MAX_BUNDLE_BYTES) {
+          skipped.push(url)
+          continue
+        }
+        bytes = buf
+      } catch {
+        // One unreachable asset must not fail the whole export.
+        skipped.push(url)
+        continue
+      }
+
+      const ext = (url.split('?')[0].match(/\.([a-z0-9]{2,5})$/i)?.[1] ?? 'jpg').toLowerCase()
+      const name = index === 0 && rawUrl === team.logo_url ? 'logo' : `photo-${index}`
+      const path = `${folder}/${name}.${ext}`
+      entries.push({ name: path, data: bytes })
+      total += bytes.length
+      index += 1
+
+      manifest.push(
+        rowToCsv([
+          path,
+          team.ftc_team_number ?? '',
+          team.team_name ?? '',
+          team.organization ?? '',
+          team.city ?? '',
+          team.state ?? '',
+          team.tagline ?? '',
+        ])
+      )
+    }
+  }
+
+  manifest.push('')
+  manifest.push(
+    rowToCsv([
+      'NOTE',
+      'These images were supplied by the teams and affirmed by their coach as containing no identifiable minors. Use them in accordance with that affirmation.',
+    ])
+  )
+  for (const s of skipped) manifest.push(rowToCsv(['SKIPPED', s]))
+
+  entries.push({
+    name: 'manifest.csv',
+    data: new TextEncoder().encode(manifest.join('\n') + '\n'),
+  })
+
+  const zip = createZip(entries)
+  return new Response(new Uint8Array(zip) as unknown as BodyInit, {
+    headers: {
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="impact-assets-${year}.zip"`,
+      'Content-Length': String(zip.length),
+      'Cache-Control': 'private, no-store',
     },
   })
 }

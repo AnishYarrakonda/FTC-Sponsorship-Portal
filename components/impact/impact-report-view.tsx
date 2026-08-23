@@ -11,6 +11,13 @@ import { RichText } from '@/components/ui/rich-text'
  * `[data-print-hide]` is the contract the portal chrome opts into so this page never has
  * to restructure the shell to hide it.
  */
+/** P3. 'None' is a legitimate enum value meaning "no charitable status", not a label. */
+function taxStatusLabel(status: string | null | undefined): string | null {
+  if (!status || status === 'None') return null
+  if (status === '501c3') return '501(c)(3)'
+  return status
+}
+
 export function ImpactReportView({ payload }: { payload: SponsorImpactPayload }) {
   const money = (cents: number) =>
     `$${(cents / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })}`
@@ -97,7 +104,10 @@ export function ImpactReportView({ payload }: { payload: SponsorImpactPayload })
                         {t.team_name}
                       </h3>
                       <p className="text-sm text-muted-foreground">
-                        {[t.organization, [t.city, t.state].filter(Boolean).join(', '), t.tax_status]
+                        {/* P3: `tax_status` is the enum ('501c3' | 'School' | 'None'), and
+                            'None' is a real value, not a null — so a team with no
+                            charitable status rendered "… · Dayton, OH · None". */}
+                        {[t.organization, [t.city, t.state].filter(Boolean).join(', '), taxStatusLabel(t.tax_status)]
                           .filter(Boolean)
                           .join(' · ')}
                       </p>

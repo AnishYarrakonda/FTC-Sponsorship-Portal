@@ -7,8 +7,25 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { XIcon } from "lucide-react"
 
-function Dialog({ ...props }: DialogPrimitive.Root.Props) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />
+/**
+ * P3 (accessibility polish). The audit noted that base-ui's `Popup` carries no
+ * `aria-modal` and that nothing outside it is `inert`.
+ *
+ * The fix is NOT to hand-add `aria-modal`. That attribute is a promise that the rest of
+ * the page is unreachable; adding it without making that true tells assistive tech to
+ * ignore content the user can still tab into, which is worse than saying nothing.
+ *
+ * base-ui's own `modal` prop is the real mechanism: `true` traps focus, locks page scroll
+ * and disables pointer interaction outside. It already defaults to `true`, so this is
+ * explicit rather than a behaviour change — it is here so that passing `modal={false}`
+ * becomes a visible, deliberate decision at the call site instead of an accident, and so
+ * the reason is written down next to it.
+ *
+ * Containment is asserted end-to-end in tests/e2e/accessibility.spec.ts (B-04-12), for
+ * both a page dialog and the command palette.
+ */
+function Dialog({ modal = true, ...props }: DialogPrimitive.Root.Props) {
+  return <DialogPrimitive.Root data-slot="dialog" modal={modal} {...props} />
 }
 
 function DialogTrigger({ ...props }: DialogPrimitive.Trigger.Props) {

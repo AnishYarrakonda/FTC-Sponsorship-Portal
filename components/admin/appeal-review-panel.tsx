@@ -253,7 +253,12 @@ function AppealRow({
                 disabled={isPending || !outcome || notes.trim().length < 20}
                 onClick={resolve}
               >
-                Confirm {outcome ?? 'decision'}
+                {/* P3: rendered "Confirm overturned" — the enum is a state, not a verb. */}
+                {outcome === 'overturned'
+                  ? 'Confirm overturn'
+                  : outcome === 'upheld'
+                    ? 'Confirm upholding the decision'
+                    : 'Confirm decision'}
               </Button>
               <span className="text-xs tabular-nums text-muted-foreground">
                 {notes.trim().length} / 20 minimum

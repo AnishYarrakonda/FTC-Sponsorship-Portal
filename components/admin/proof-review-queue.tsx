@@ -98,13 +98,24 @@ export function ProofReviewQueue({ rows }: { rows: ProofRow[] }) {
                     so a screen-reader user returning to a half-typed reason hears only
                     the text they typed. There is no room for a visible label in this row,
                     so the name is given explicitly and scoped to the row it belongs to. */}
-                <Input
-                  aria-label={`Reason for removing the proof photo from ${row.team_name ?? 'this team'}`}
-                  placeholder="Reason (min 10 characters) — shown to the coach"
-                  value={reasons[row.id] ?? ''}
-                  maxLength={500}
-                  onChange={(e) => setReasons((r) => ({ ...r, [row.id]: e.target.value }))}
-                />
+                <div className="flex-1 space-y-1">
+                  <Input
+                    id={`proof-reason-${row.id}`}
+                    aria-label={`Reason for removing the proof photo from ${row.team_name ?? 'this team'}`}
+                    aria-describedby={`proof-reason-hint-${row.id}`}
+                    placeholder="Reason (min 10 characters) — shown to the coach"
+                    value={reasons[row.id] ?? ''}
+                    maxLength={500}
+                    onChange={(e) => setReasons((r) => ({ ...r, [row.id]: e.target.value }))}
+                  />
+                  {/* P3. The 10-character rule was stated ONLY in the placeholder, which
+                      vanishes on the first keystroke — so the button stayed disabled with
+                      the reason for it no longer on screen. This persists, and is wired
+                      with aria-describedby so it is announced with the field. */}
+                  <p id={`proof-reason-hint-${row.id}`} className="text-xs text-muted-foreground">
+                    At least 10 characters. This reason is shown to the coach.
+                  </p>
+                </div>
                 <Button
                   variant="destructive"
                   size="sm"

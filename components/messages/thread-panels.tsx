@@ -39,12 +39,11 @@ export function CoachThreadPanel({
       // has asked something. Enforced in the DB trigger too; this is the UI half.
       canCompose={canCompose && hasSponsorMessage}
       composerWarning={<CoachComposerWarning />}
-      closedNotice={
-        closedNotice ??
-        (hasSponsorMessage
-          ? undefined
-          : `No questions yet. If ${sponsorName} has one, it will appear here.`)
-      }
+      /* P3: this sentence was passed as BOTH closedNotice and emptyState, so the coach's
+         submission page printed it twice in a row. emptyState already covers "there are no
+         messages"; closedNotice is for "and you cannot add one", which only needs saying
+         when a caller supplies a specific reason. */
+      closedNotice={closedNotice}
       emptyState={`No questions yet. If ${sponsorName} has one, it will appear here.`}
       description={`Questions from ${sponsorName}, and your replies. Our team reviews every reply before it is sent.`}
       onSubmit={(body) => postCoachReply({ submissionId, body })}

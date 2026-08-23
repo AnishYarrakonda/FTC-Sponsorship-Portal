@@ -164,9 +164,22 @@ export function AuditLogTable({ logs, uniqueActions, currentAction, page, pageSi
         <table className="w-full">
           <thead className="border-b border-border bg-muted/40">
             <tr>
-              {['Actor', 'Action', 'Entity', 'Time', ''].map((h) => (
-                <th key={h} className="px-4 py-2.5 text-left text-xs font-mono uppercase tracking-widest text-muted-foreground">
-                  {h}
+              {/* P3. The fifth header was an empty string — a column with no name at all,
+                  which a screen reader reads as a blank header for whatever the cells
+                  below it contain. `scope="col"` added throughout at the same time. */}
+              {[
+                { label: 'Actor', visible: true },
+                { label: 'Action', visible: true },
+                { label: 'Entity', visible: true },
+                { label: 'Time', visible: true },
+                { label: 'Details', visible: false },
+              ].map((h) => (
+                <th
+                  key={h.label}
+                  scope="col"
+                  className="px-4 py-2.5 text-left text-xs font-mono uppercase tracking-widest text-muted-foreground"
+                >
+                  {h.visible ? h.label : <span className="sr-only">{h.label}</span>}
                 </th>
               ))}
             </tr>

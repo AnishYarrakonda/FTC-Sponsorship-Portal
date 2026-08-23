@@ -9,6 +9,7 @@ import {
   Bell,
   Settings,
   Building2,
+  History,
   Users,
   ShieldCheck,
   Award,
@@ -36,6 +37,9 @@ const NAV_ITEMS = [
   { label: 'Impact', href: '/sponsor/impact', icon: FileBarChart, exact: false },
   { label: 'Inbox', href: '/sponsor/inbox', icon: Bell, exact: false, badge: 'inbox' },
   { label: 'Team', href: '/sponsor/members', icon: Users, exact: false },
+  // A-12-05. Self-serve activity log. Org-admin only; the page renders an explanatory
+  // message rather than 404ing for other seats, so the nav entry can stay unconditional.
+  { label: 'Activity', href: '/sponsor/activity', icon: History, exact: false },
 ] as const
 
 export function SponsorSidebar({

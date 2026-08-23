@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { formatTransactionDate } from '@/lib/format-dates'
 import type { SponsorImpactPayload } from '@/lib/impact-report/build'
 
 /**
@@ -100,8 +101,18 @@ export default async function SponsorImpactIndexPage() {
               >
                 Download CSV
               </a>
+              {/* A-12-06. The raw, COPPA-cleared assets behind the report, so a marketing
+                  team can build their own materials instead of cropping a rendered page.
+                  Ships a manifest.csv naming the team behind each file and restating the
+                  no-identifiable-minors affirmation the images were cleared under. */}
+              <a
+                href={`/api/sponsor/impact-report?year=${row.report_year}&format=assets`}
+                className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+              >
+                Download assets (ZIP)
+              </a>
               <span className="text-xs text-muted-foreground">
-                Figures as of {new Date(row.generated_at).toLocaleDateString('en-US')}
+                Figures as of {formatTransactionDate(row.generated_at)}
               </span>
             </CardContent>
           </Card>

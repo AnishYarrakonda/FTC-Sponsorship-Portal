@@ -74,6 +74,16 @@ function safeHttpUrl(url: unknown): string | null {
   }
 }
 
+/**
+ * P3. Verb phrasing per decision. The enum is a past-participle state name; the dialog
+ * needs an action the reader is about to take.
+ */
+const CONFIRM_PROMPTS: Record<string, string> = {
+  approved: 'Are you sure you want to approve this submission and commit the funding?',
+  declined: 'Are you sure you want to decline this submission?',
+  changes_requested: 'Are you sure you want to ask this team for changes?',
+}
+
 export function SponsorReviewShell({
   submission,
   team,
@@ -576,7 +586,10 @@ export function SponsorReviewShell({
                       <>This will send a ${formatMoneyAmount(amountCents)} commitment to your organization&apos;s
                       Approvers for a second signature — it will not settle until one of them confirms.</>
                     ) : (
-                      <>Are you sure you want to <span className="font-semibold uppercase tracking-wider">{showConfirm.replace('_', ' ')}</span> this submission?</>
+                      /* P3: interpolated the raw decision enum, so the sponsor read
+                         "Are you sure you want to APPROVED this submission?" at the exact
+                         moment they commit money. */
+                      <>{CONFIRM_PROMPTS[showConfirm] ?? 'Are you sure you want to record this decision?'}</>
                     )}
                   </p>
                   <div className="flex gap-3">

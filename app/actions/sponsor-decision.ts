@@ -14,13 +14,16 @@ import {
 } from '@/lib/decision-followup'
 import { requiresApproval } from '@/lib/sponsor-roles'
 import { z } from 'zod'
+import { LIMITS } from '@/lib/schemas/limits'
 
 const DECISION_EMAIL_WARNING = 'The decision was saved, but the notification email could not be sent.'
 
 const sponsorUpdateSchema = z.object({
   submissionId: z.string().uuid(),
   status: z.enum(['approved', 'declined', 'changes_requested']),
-  feedback: z.string().max(2000).optional(),
+  // P3: was a hardcoded 2000. Max lengths live in lib/schemas/limits.ts so the
+  // schema and the textarea's maxLength cannot drift apart.
+  feedback: z.string().max(LIMITS.feedback).optional(),
   /**
    * B-03-07. A partial offer used to exist only on the emailed bearer link: the in-portal
    * console could fund in full or decline, nothing between. A sponsor with $800 against a
