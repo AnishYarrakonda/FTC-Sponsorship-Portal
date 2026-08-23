@@ -26,7 +26,10 @@
 - **Clerk** (auth): set `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SIGNING_SECRET` (+ optional `NEXT_PUBLIC_CLERK_SIGN_IN_URL=/login`, `NEXT_PUBLIC_CLERK_SIGN_UP_URL=/signup`). Dashboard config (not code): register Clerk as a **Supabase third-party auth provider** so RLS trusts the Clerk JWT, and set the Clerk password policy to 12+/upper/lower/number.
 - **Supabase keys**: use the **legacy JWT** keys (`eyJ…`, Settings → API → JWT keys). The new `sb_secret_` key is rejected (401) by REST. `SUPABASE_SERVICE_ROLE_KEY` must be the legacy service_role JWT or the whole server side fails.
 - **No Upstash/Redis** — rate limiting was removed entirely; do not reintroduce those env vars.
-- **Cron**: `vercel.json` schedules `/api/cron/expire-submissions` at `0 2 * * *` (02:00 UTC daily). Any new cron routes must be added there too.
+- **Cron**: Vercel **Hobby honours only 2 cron entries** — extras are silently ignored, which is how three jobs sat dead in production (audit A-09-05). `vercel.json` therefore schedules exactly two:
+  - `/api/cron/expire-submissions` at `0 2 * * *` — kept alone because it releases sponsor capacity and sweeps gov-ID/W-9 retention.
+  - `/api/cron/daily-maintenance` at `0 4 * * *` — a dispatcher that runs `refresh-ftc-roster`, `nudge-fulfillments`, and `impact-rollup` in sequence, each in its own try/catch.
+  Each job stays exported from its own route (`runRefreshFtcRoster`, `runNudgeFulfillments`, `runImpactRollup`), so those routes remain independently invocable — only the *scheduler* changed. **A new cron job goes inside the dispatcher, not into `vercel.json`**, unless you are on Pro. On **Vercel Pro** the cron cap lifts: split the three back into their own `vercel.json` entries and retire `daily-maintenance`.
 
 ## Shipping a change
 Use `/ship`: typecheck → lint → build → tests → open PR (`gh`). Only commit/push when asked; branch off `main` first if on `main`.

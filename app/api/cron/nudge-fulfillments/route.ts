@@ -7,6 +7,7 @@ import { SUPPORT_EMAIL } from '@/lib/site-config'
 import { env } from '@/lib/env'
 import crypto from 'crypto'
 import * as Sentry from '@sentry/nextjs'
+import type { CronJobResult } from '@/lib/cron/authorize'
 
 export async function GET(req: Request) {
   const authHeader = req.headers.get('authorization')
@@ -30,6 +31,17 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const result = await runNudgeFulfillments()
+  return NextResponse.json(result, { status: result.ok ? 200 : 500 })
+}
+
+/**
+ * The job itself, callable without an HTTP request so the consolidated daily-maintenance
+ * dispatcher can run it too. Vercel Hobby honours only 2 cron entries, and this job is
+ * one of the three sharing the second slot. Behaviour is unchanged from when this was
+ * inline in GET.
+ */
+export async function runNudgeFulfillments(): Promise<CronJobResult> {
   const supabase = createAdminClient()
   const now = new Date()
 
@@ -45,7 +57,7 @@ export async function GET(req: Request) {
     .in('status', [...OPEN_FULFILLMENT_STATUSES])
 
   if (error || !fulfillments) {
-    return NextResponse.json({ error: error?.message || 'Failed to fetch fulfillments' }, { status: 500 })
+    return { ok: false, error: error?.message || 'Failed to fetch fulfillments' }
   }
 
   let scanned = 0
@@ -203,6 +215,6 @@ export async function GET(req: Request) {
     },
   })
 
-  return NextResponse.json({ scanned, nudged_sponsor, nudged_coach, escalated_admin, failed })
+  return { ok: true, scanned, nudged_sponsor, nudged_coach, escalated_admin, failed }
 }
 

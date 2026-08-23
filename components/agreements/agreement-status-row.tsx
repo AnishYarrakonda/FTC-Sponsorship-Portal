@@ -3,11 +3,20 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { LucideIcon } from 'lucide-react'
 import { CheckCircle2, Clock, FileSignature } from 'lucide-react'
 import type { Database } from '@/lib/supabase/types'
+import { hasSponsorRole, type SponsorRole } from '@/lib/sponsor-roles'
 
 interface AgreementStatusRowProps {
   supabase: SupabaseClient<Database>
   submissionId: string
   viewerRole: 'sponsor' | 'coach'
+  /**
+   * The viewer's rank inside the sponsor org. Only meaningful when viewerRole is
+   * 'sponsor'; ignored for coaches, who sign as the team owner. Signing binds the
+   * company, so it takes approver rank — this hides the affordance from a viewer or
+   * submitter instead of letting them walk into a rejection. The real gate is
+   * signAgreement() plus sign_agreement_atomic (0099).
+   */
+  sponsorMemberRole?: SponsorRole | null
 }
 
 type AgreementState = 'not_required' | 'awaiting_sponsor' | 'awaiting_coach' | 'executed'
@@ -29,7 +38,7 @@ const STATE_CONFIG: Record<AgreementState, { label: string; icon: LucideIcon }> 
  * RSC dev-mode owner-stack tracking, which crashes (it isn't a plain serializable object).
  * A direct function call inlines the returned JSX with no such serialization boundary.
  */
-export async function AgreementStatusRow({ supabase, submissionId, viewerRole }: AgreementStatusRowProps) {
+export async function AgreementStatusRow({ supabase, submissionId, viewerRole, sponsorMemberRole }: AgreementStatusRowProps) {
   const { data: fulfillment } = await supabase
     .from('funding_fulfillments')
     .select('id, status')
@@ -64,9 +73,13 @@ export async function AgreementStatusRow({ supabase, submissionId, viewerRole }:
 
   const signPath =
     viewerRole === 'sponsor' ? `/sponsor/submissions/${submissionId}/sign` : `/submissions/${submissionId}/sign`
+  const sponsorMaySign = hasSponsorRole(sponsorMemberRole ?? null, 'approver')
+  const isSponsorsTurn = viewerRole === 'sponsor' && state === 'awaiting_sponsor'
   const canSignNow =
-    (viewerRole === 'sponsor' && state === 'awaiting_sponsor') ||
-    (viewerRole === 'coach' && state === 'awaiting_coach')
+    (isSponsorsTurn && sponsorMaySign) || (viewerRole === 'coach' && state === 'awaiting_coach')
+  // It is this sponsor's turn, but this member cannot bind the company. Say so, rather
+  // than showing nothing and leaving them to wonder why the agreement is stuck.
+  const showRankHint = isSponsorsTurn && !sponsorMaySign
 
   const ownSignatureId = viewerRole === 'sponsor' ? sponsorSig?.id : coachSig?.id
   const viewableSignatureId = ownSignatureId ?? sponsorSig?.id ?? coachSig?.id
@@ -82,6 +95,11 @@ export async function AgreementStatusRow({ supabase, submissionId, viewerRole }:
         <Link href={signPath} className="font-medium text-primary underline-offset-4 hover:underline">
           Sign now
         </Link>
+      )}
+      {showRankHint && (
+        <span className="text-muted-foreground">
+          An approver or organization admin must sign this.
+        </span>
       )}
       {canViewRecord && (
         <Link

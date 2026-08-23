@@ -9,7 +9,7 @@ describe('renderReceiptDocument', () => {
     amountCents: 100000,
     variant: 'charitable_501c3',
     payeeLegalName: 'Robotics Booster Club',
-    payeeEinFull: '12-3456789',
+    payeeEinLast4: '6789',
     sponsorLegalName: 'Acme Technologies',
   }
 
@@ -45,11 +45,25 @@ describe('renderReceiptDocument', () => {
     const nonCharCtx: ReceiptDocumentContext = {
       ...sampleCtx,
       variant: 'non_charitable',
-      payeeEinFull: '99-8887776',
+      payeeEinLast4: '7776',
     }
     const { html } = await renderReceiptDocument(nonCharCtx)
 
     expect(html).not.toContain('99-8887776')
     expect(html).not.toContain('EIN')
+  })
+
+  // Regression guard for audit A-06-01. The rendered document is persisted verbatim in
+  // funding_receipts.document_html and emailed via Resend, so a full EIN reaching this
+  // HTML escapes the PAYOUT_ENCRYPTION_KEY boundary permanently and survives key
+  // rotation. The context type no longer carries a full-EIN field; this asserts the
+  // rendered output too, so reintroducing one fails here.
+  it('never emits a full nine-digit EIN — only the last four, labelled as partial', async () => {
+    const { html } = await renderReceiptDocument(sampleCtx)
+
+    expect(html).toContain('ending in 6789')
+    // No NN-NNNNNNN or NNNNNNNNN anywhere in the document.
+    expect(html).not.toMatch(/\b\d{2}-\d{7}\b/)
+    expect(html).not.toMatch(/\b\d{9}\b/)
   })
 })

@@ -118,3 +118,23 @@ next-env.d.ts
 # uploaded artifacts (coach photo IDs, team media)
 /uploads/
 /tmp/
+
+# Gemini audit pack output. Same rationale as the QA-REPORT / REMEDIATION patterns
+# above: these enumerate still-unfixed exploitable findings with working repro steps
+# and file:line locations. The audit *prompts* in prompts/audits/prompts/ are
+# committed on purpose — they are instructions, not disclosure. The evidence and the
+# fix packs are not. `.gitkeep` stays so the directories survive a fresh clone.
+/prompts/audits/findings/*
+!/prompts/audits/findings/.gitkeep
+/prompts/audits/handoff/*
+!/prompts/audits/handoff/.gitkeep
+
+# agent working files
+/scratch/
+/dev.log
+/dev.pid
+/server.log
+/server.pid
+/build_output.log
+/run-tests.sh
+/scratch.md

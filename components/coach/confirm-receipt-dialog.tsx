@@ -56,6 +56,16 @@ export function ConfirmReceiptDialog({
         } else {
           setError(res.error)
         }
+      } else if (res.warning) {
+        // The confirmation itself succeeded, but issuing the tax receipt did not. This
+        // branch used to be missing entirely, so a failure here showed the coach a green
+        // success toast and vanished — which is how B-03-01 stayed invisible in production.
+        toast.warning('Payment confirmed, but the receipt could not be issued', {
+          description: res.warning,
+          duration: 10000,
+        })
+        setOpen(false)
+        router.refresh()
       } else {
         toast.success('Payment confirmed')
         setOpen(false)

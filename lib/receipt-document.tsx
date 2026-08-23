@@ -11,8 +11,12 @@ export interface ReceiptDocumentContext {
   amountCents: number
   variant: ReceiptVariant
   payeeLegalName: string
+  /**
+   * Last four digits only. There is deliberately no full-EIN field: this document is
+   * persisted to funding_receipts.document_html and emailed, so anything placed here
+   * escapes the PAYOUT_ENCRYPTION_KEY boundary permanently. See lib/receipts.ts step 4.
+   */
   payeeEinLast4?: string | null
-  payeeEinFull?: string | null
   payeeTaxClassification?: string | null
   sponsorLegalName: string
   sponsorContactEmail?: string | null
@@ -27,7 +31,9 @@ export interface ReceiptDocumentContext {
  * Shared document body. NO <Html>, NO <Body> — safe to embed in an email shell or web page.
  */
 export function ReceiptDocumentBody(ctx: ReceiptDocumentContext): React.ReactElement {
-  const einToPrint = ctx.payeeEinFull || ctx.payeeEinLast4 || null
+  // Rendered as "EIN ending in 6789" — unambiguous about being a partial identifier,
+  // where a bare "EIN 6789" would read as a malformed full number.
+  const einToPrint = ctx.payeeEinLast4 ? `ending in ${ctx.payeeEinLast4}` : null
   const copy = receiptCopy(ctx.variant, {
     payeeLegalName: ctx.payeeLegalName,
     ein: einToPrint,

@@ -375,8 +375,44 @@ describe('INVARIANT: the rollup cron is auth-hardened and scheduled', () => {
     expect(cron).toContain('token.length !== expectedToken.length')
   })
 
-  it('is registered in vercel.json', () => {
+  /**
+   * The rollup used to have its own vercel.json entry. It no longer does, and that is the
+   * fix for audit A-09-05, not a regression: Vercel Hobby honours only the first 2 cron
+   * entries and vercel.json declared 4, so this job silently never ran in production. It
+   * is now invoked by /api/cron/daily-maintenance.
+   *
+   * The invariant these assertions protect is unchanged — the rollup must actually be
+   * REACHABLE from something the scheduler calls — so they now follow that path instead.
+   */
+  it('is reachable from a cron entry that vercel.json actually schedules', () => {
     const vercel = JSON.parse(read('vercel.json')) as { crons: { path: string }[] }
-    expect(vercel.crons.map((c) => c.path)).toContain('/api/cron/impact-rollup')
+    const paths = vercel.crons.map((c) => c.path)
+
+    // Hobby ignores everything past the second entry, so exceeding 2 means jobs die silently.
+    expect(vercel.crons.length).toBeLessThanOrEqual(2)
+    expect(paths).toContain('/api/cron/daily-maintenance')
+
+    // ...and that dispatcher must genuinely run the rollup.
+    const dispatcher = read('app/api/cron/daily-maintenance/route.ts')
+    expect(dispatcher).toContain('runImpactRollup')
+    expect(read('app/api/cron/impact-rollup/route.ts')).toContain('export async function runImpactRollup')
+  })
+
+  it('the dispatcher isolates each job so one failure cannot swallow the others', () => {
+    const dispatcher = read('app/api/cron/daily-maintenance/route.ts')
+    // Every job goes through runJob(), which wraps the call in its own try/catch.
+    expect(dispatcher).toContain('runJob(')
+    expect(dispatcher).toContain('catch')
+    for (const job of ['runRefreshFtcRoster', 'runNudgeFulfillments', 'runImpactRollup']) {
+      expect(dispatcher).toContain(job)
+    }
+  })
+
+  it('the dispatcher is auth-hardened with the same timing-safe check', () => {
+    const authHelper = read('lib/cron/authorize.ts')
+    expect(authHelper).toContain('crypto.timingSafeEqual')
+    expect(authHelper).toContain('env.CRON_SECRET')
+    expect(authHelper).toContain('token.length !== expectedToken.length')
+    expect(read('app/api/cron/daily-maintenance/route.ts')).toContain('isAuthorizedCronRequest')
   })
 })

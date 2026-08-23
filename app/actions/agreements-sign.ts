@@ -2,7 +2,7 @@
 
 import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
-import { requireAuth, getClientIp } from '@/lib/actions-utils'
+import { requireAuth, requireSponsorRole, getClientIp } from '@/lib/actions-utils'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createInAppNotification } from '@/lib/notify'
 import { signatureProvider } from '@/lib/agreements/in-house-provider'
@@ -27,6 +27,8 @@ function mapSignError(code: string): string {
   switch (code) {
     case 'unauthorized':
       return 'You are not authorized to sign this agreement.'
+    case 'insufficient_org_role':
+      return 'Only an approver or organization admin can sign a sponsorship agreement. Ask a teammate with that access to sign.'
     case 'awaiting_sponsor_signature':
       return 'Waiting for the sponsor to sign first.'
     case 'already_signed':
@@ -191,6 +193,26 @@ export async function signAgreement(data: {
   const signerRole = resolveSignerRole(user.role)
   if (!signerRole) {
     return { error: 'Only sponsors and coaches can sign a sponsorship agreement.' }
+  }
+
+  // Belonging to a sponsor org is not authority to bind it. Signing commits the company
+  // to a legally binding sponsorship agreement, so it sits at the same rank as confirming
+  // a funding decision — approver and above. Without this a `viewer` (the rank every
+  // SSO/JIT first login lands on, per jitMemberRole) could execute the contract.
+  // sign_agreement_atomic re-checks this independently in SQL (0099); this layer exists
+  // to return a message that explains itself. Coaches are unaffected — they sign as the
+  // team owner, which the RPC verifies separately.
+  if (signerRole === 'sponsor') {
+    try {
+      await requireSponsorRole('approver')
+    } catch (e: any) {
+      return {
+        error:
+          e?.code === 'INSUFFICIENT_ORG_ROLE'
+            ? 'Only an approver or organization admin can sign a sponsorship agreement. Ask a teammate with that access to sign.'
+            : e.message,
+      }
+    }
   }
 
   // Typed-name match — done here (not in the RPC) so the message can name the expected

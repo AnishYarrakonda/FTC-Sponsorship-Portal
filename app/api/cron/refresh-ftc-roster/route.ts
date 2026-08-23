@@ -4,6 +4,7 @@ import { refreshStaleRosterEntries } from '@/lib/ftc-roster'
 import crypto from 'crypto'
 import { env } from '@/lib/env'
 import * as Sentry from '@sentry/nextjs'
+import type { CronJobResult } from '@/lib/cron/authorize'
 
 // Vercel cron: runs nightly at 03:00 UTC (configure in vercel.json). Re-verifies the
 // oldest-synced rows in ftc_teams_cache against the official FIRST Events API so a row
@@ -30,6 +31,17 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const result = await runRefreshFtcRoster()
+  return NextResponse.json(result, { status: result.ok ? 200 : 500 })
+}
+
+/**
+ * The job itself, callable without an HTTP request so the consolidated daily-maintenance
+ * dispatcher can run it too. Vercel Hobby honours only 2 cron entries, and this job is
+ * one of the three that share the second slot. Behaviour is unchanged from when this was
+ * inline in GET.
+ */
+export async function runRefreshFtcRoster(): Promise<CronJobResult> {
   const supabase = createAdminClient()
 
   try {
@@ -48,10 +60,10 @@ export async function GET(req: Request) {
     }
 
     console.log(`[cron] refresh-ftc-roster: refreshed ${refreshed}, failed ${failed}`)
-    return NextResponse.json({ refreshed, failed })
+    return { ok: true, refreshed, failed }
   } catch (err) {
     console.error('[cron] refresh-ftc-roster unhandled error', err)
     Sentry.captureException(err)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return { ok: false, error: 'Internal server error' }
   }
 }
