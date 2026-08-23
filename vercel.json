@@ -5,15 +5,7 @@
       "schedule": "0 2 * * *"
     },
     {
-      "path": "/api/cron/nudge-fulfillments",
-      "schedule": "0 14 * * *"
-    },
-    {
-      "path": "/api/cron/refresh-ftc-roster",
-      "schedule": "0 3 * * *"
-    },
-    {
-      "path": "/api/cron/impact-rollup",
+      "path": "/api/cron/daily-maintenance",
       "schedule": "0 4 * * *"
     }
   ]

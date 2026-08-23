@@ -78,7 +78,7 @@ export default async function SponsorSubmissionReviewPage({ params }: { params: 
   return (
     <div className="space-y-4">
       <div className="container mx-auto max-w-4xl pt-6">
-        {await AgreementStatusRow({ supabase, submissionId: id, viewerRole: 'sponsor' })}
+        {await AgreementStatusRow({ supabase, submissionId: id, viewerRole: 'sponsor', sponsorMemberRole: memberRole })}
       </div>
       <SponsorReviewShell
         submission={submission}

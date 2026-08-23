@@ -1,4 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
+
+/**
+ * Matches the .limit(200) the in-flight query below already used. Raise it only with a
+ * paging control to go with it — the columns selected here are wide.
+ */
+const MODERATION_QUEUE_LIMIT = 200
 import { PageHeader } from '@/components/page-header'
 import { ModerationQueue } from '@/components/admin/moderation-queue'
 import { InFlightSubmissions, type InFlightSubmission } from '@/components/admin/in-flight-submissions'
@@ -38,6 +44,22 @@ export default async function ModerationPage() {
     `)
     .eq('status', 'pending')
     .order('created_at', { ascending: true })
+    .limit(MODERATION_QUEUE_LIMIT)
+
+  /**
+   * The select above pulls wide free-text columns (custom_pitch_alignment,
+   * specific_needs_statement, plus the joined team's mission/technical/outreach
+   * summaries). Unbounded, a large backlog buffers every one of those into the function's
+   * memory on a page the admin hits constantly. The sibling in-flight query below has
+   * always capped at 200; this one simply never did.
+   *
+   * The count is fetched separately (head:true, no rows) so the cap is visible in the UI
+   * rather than silently truncating the queue.
+   */
+  const { count: pendingTotal } = await supabase
+    .from('submissions')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'pending')
 
   // Pitches that have left the review queue but not yet reached a sponsor decision.
   // 'dispatched', 'delivered' and 'opened' previously appeared in NO admin view at all,
@@ -157,6 +179,12 @@ export default async function ModerationPage() {
         subtitle="Review submitted portfolios and custom pitches. Approved submissions are dispatched to sponsors with a secure 14-day token link."
       />
       <ModerationQueue initialSubmissions={submissions ?? []} />
+      {typeof pendingTotal === 'number' && pendingTotal > (submissions?.length ?? 0) && (
+        <p className="-mt-6 text-sm text-muted-foreground">
+          Showing the {submissions?.length ?? 0} oldest of {pendingTotal} pending pitches. Work
+          through these and the rest will follow.
+        </p>
+      )}
 
       <MessageReviewQueue pending={pendingReplies} flagged={flaggedMessages} />
 

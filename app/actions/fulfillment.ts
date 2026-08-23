@@ -169,7 +169,23 @@ export async function confirmPaymentReceived(data: z.input<typeof confirmPayment
   revalidatePath('/sponsor/funding')
   revalidatePath('/reconciliation')
 
-  const receiptRes = await generateAndStoreReceipt(localAdminClient, parsed.data.fulfillmentId, user.id)
+  /**
+   * Actor is NULL, not `user.id`, and that is load-bearing.
+   *
+   * This is the AUTOMATIC receipt: the coach confirming payment is the trigger, not the
+   * issuer. issue_funding_receipt rejects any non-NULL actor whose profiles.role is not
+   * 'admin', so passing the coach's id made this call return {ok:false,'unauthorized'}
+   * 100% of the time — no receipt row was ever created by this path, and every
+   * sponsorship dead-ended at 'payment_received'. Passing NULL takes the function's
+   * documented system branch (is_trusted_server_context() + NULL actor => role 'system'),
+   * which both issue_funding_receipt and record_fulfillment_transition implement.
+   *
+   * The coach is still attributed: the audit_log row written above records
+   * confirm_payment_received against user.id. The receipt's own audit entry is 'system',
+   * which is what actually happened. The admin path (/reconciliation) still passes a real
+   * admin id from app/actions/receipt.ts.
+   */
+  const receiptRes = await generateAndStoreReceipt(localAdminClient, parsed.data.fulfillmentId, null)
   if (!receiptRes.ok) {
     return {
       success: true,

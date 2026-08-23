@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import crypto from 'crypto'
 import { env } from '@/lib/env'
 import * as Sentry from '@sentry/nextjs'
+import type { CronJobResult } from '@/lib/cron/authorize'
 import {
   buildPlatformImpactPayload,
   buildSponsorImpactPayload,
@@ -45,6 +46,17 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const result = await runImpactRollup()
+  return NextResponse.json(result, { status: result.ok ? 200 : 500 })
+}
+
+/**
+ * The job itself, callable without an HTTP request so the consolidated daily-maintenance
+ * dispatcher can run it too. Vercel Hobby honours only 2 cron entries, and this job is
+ * one of the three sharing the second slot. Behaviour is unchanged from when this was
+ * inline in GET.
+ */
+export async function runImpactRollup(): Promise<CronJobResult> {
   const supabase = createAdminClient()
   const now = new Date()
   const currentYear = now.getUTCFullYear()
@@ -151,12 +163,12 @@ export async function GET(req: Request) {
     },
   })
 
-  return NextResponse.json({
+  return {
     ok: failures.length === 0,
     year: currentYear,
     sponsorsGenerated,
     platformGenerated,
     priorYearClosed,
     failures,
-  })
+  }
 }

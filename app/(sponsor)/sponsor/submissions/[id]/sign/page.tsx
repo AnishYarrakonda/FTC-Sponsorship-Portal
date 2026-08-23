@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
-import { requireSponsor } from '@/lib/actions-utils'
+import { requireSponsorRole } from '@/lib/actions-utils'
 import { BackButton } from '@/components/ui/back-button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -19,10 +19,15 @@ export default async function SponsorSignAgreementPage({ params }: { params: Pro
    * Clerk Organization, and the old guard bounced them to /dashboard — which the coach
    * layout bounces straight back here, producing an infinite redirect loop.
    */
+  /**
+   * Signing binds the company, so this page takes approver rank — not mere membership.
+   * A viewer or submitter who deep-links here is sent back rather than shown a form that
+   * signAgreement() and sign_agreement_atomic (0099) would both reject on submit.
+   */
   try {
-    await requireSponsor()
+    await requireSponsorRole('approver')
   } catch {
-    redirect('/dashboard')
+    redirect(`/sponsor/submissions/${id}`)
   }
 
   const result = await prepareAgreementForSigning({ submissionId: id })

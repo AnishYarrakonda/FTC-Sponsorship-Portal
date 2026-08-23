@@ -1,6 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { Database } from './supabase/types'
-import { env } from '@/lib/env'
 import { createInAppNotification, sendFundingReceiptEmail } from '@/lib/notify'
 import {
   formatReceiptNumber,
@@ -112,30 +111,20 @@ export async function generateAndStoreReceipt(
     }
   }
 
-  // 4. Resolve EIN when showEin is applicable
-  let payeeEinFull: string | null = null
-  const payeeEinLast4 = payoutProfile?.ein_last4 || null
-
-  if ((variant === 'charitable_501c3' || variant === 'governmental_school') && team?.id) {
-    try {
-      const target = payoutProfile?.is_fiscally_sponsored ? 'fiscal_sponsor' : 'payee'
-      const { data: einRes } = await adminClient.rpc('get_payout_ein' as any, {
-        p_team_id: team.id,
-        p_key: env.PAYOUT_ENCRYPTION_KEY,
-        p_target: target,
-      })
-      if (typeof einRes === 'string' && einRes.trim()) {
-        payeeEinFull = einRes.trim()
-      }
-    } catch {
-      // Fall back to last 4 if RPC fails or key is missing
-      payeeEinFull = null
-    }
-  }
-
-  if (variant === 'non_charitable') {
-    payeeEinFull = null
-  }
+  /**
+   * 4. EIN — LAST FOUR ONLY. Never the full number.
+   *
+   * This used to decrypt the full EIN via get_payout_ein() and print it into the document.
+   * That HTML is then persisted verbatim in funding_receipts.document_html and emailed
+   * through Resend, so the plaintext EIN outlived the encryption boundary that
+   * PAYOUT_ENCRYPTION_KEY exists to draw: any DB export, admin viewer, or intercepted
+   * email exposed it, and rotating the key could not reach receipts already issued.
+   *
+   * Nothing is lost by dropping it. An IRS written acknowledgment under §170(f)(8) has to
+   * name the donee, the amount, the date, and whether goods or services were exchanged —
+   * the donee's EIN is not a required element.
+   */
+  const payeeEinLast4 = variant === 'non_charitable' ? null : payoutProfile?.ein_last4 || null
 
   // 5. Predict receipt number for Node render
   const currentYear = new Date().getUTCFullYear()
@@ -162,7 +151,6 @@ export async function generateAndStoreReceipt(
     variant,
     payeeLegalName,
     payeeEinLast4: payeeEinLast4 || undefined,
-    payeeEinFull: payeeEinFull || undefined,
     payeeTaxClassification: payoutProfile?.tax_classification || undefined,
     sponsorLegalName: sponsor.company_name,
     sponsorContactEmail: sponsor.contact_email || undefined,
