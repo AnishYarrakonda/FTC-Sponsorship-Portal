@@ -352,12 +352,10 @@ export async function recordSponsorDecision(
   // surfaces as a warning while the recorded decision still returns ok.
   let emailsOk = true
   if (submissionId && decision !== 'decline') {
+    // A-05-04. Same duplicate as runDecisionFollowUp had, on the emailed-token path.
+    // The handshake is the canonical approval email; see the note there.
     const approvedAmount = result.amount_cents ?? partialAmount
-    const [handshake, decisionEmail] = await Promise.all([
-      sendHandshakeEmail(submissionId, approvedAmount),
-      sendSubmissionDecisionEmail(submissionId, 'approved'),
-    ])
-    emailsOk = handshake.success && decisionEmail.success
+    emailsOk = (await sendHandshakeEmail(submissionId, approvedAmount)).success
   } else if (submissionId) {
     emailsOk = (await sendSubmissionDecisionEmail(submissionId, 'declined')).success
   }

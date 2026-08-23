@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { formatMoneyAmount } from '@/lib/format-money'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -73,7 +74,7 @@ export function ApprovalPolicyCard({
             </Label>
             <p className="text-xs text-muted-foreground">
               {enabled
-                ? `Commitments above $${(parsedCents / 100).toLocaleString()} need a second person to confirm. $${(parsedCents / 100).toLocaleString()} and below go through immediately.`
+                ? `Commitments above $${formatMoneyAmount(parsedCents)} need a second person to confirm. $${formatMoneyAmount(parsedCents)} and below go through immediately.`
                 : 'Every funding decision commits immediately, as it does today.'}
             </p>
           </div>

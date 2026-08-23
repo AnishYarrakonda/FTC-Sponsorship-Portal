@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { formatMoneyAmount } from '@/lib/format-money'
 import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -12,6 +13,7 @@ import { ConfirmReceiptDialog } from './confirm-receipt-dialog'
 import { ageInDays } from '@/lib/fulfillment-aging'
 import { canTransition } from '@/lib/fulfillment-status'
 import { formatTransactionDate, formatTransactionDateShort } from '@/lib/format-dates'
+import { resolveW9Status, W9_STATUS_COPY } from '@/lib/w9-status'
 
 export function FundingTab({
   teams,
@@ -36,64 +38,24 @@ export function FundingTab({
   const cancelled = currentFulfillments.filter(f => f.status === 'cancelled')
 
   // Derive Payout Readiness Banner (5 states)
+  /**
+   * B-03-13. This chain used to key on `w9_uploaded_at`, while /team/payout/w9 keyed on
+   * `w9_verified_at` and the portfolio tab keyed on `w9_document_path`. After the
+   * retention job purges a verified document the three disagreed, and the coach was sent
+   * from a "W-9 Missing" banner to a page that said "W-9 Verified" and had removed the
+   * upload control. One resolver now decides for all three.
+   */
+  const w9Status = resolveW9Status(currentPayoutProfile)
+  const w9Copy = W9_STATUS_COPY[w9Status]
+
   let banner = null
-  if (!currentPayoutProfile) {
-    banner = (
-      <Alert variant="destructive">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Payout Readiness Required</AlertTitle>
-        <AlertDescription className="mt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <span>Sponsors cannot pay you yet. Add your legal payee name, address and W-9.</span>
-          <Button asChild variant="outline" size="sm" className="shrink-0 bg-background">
-            <Link href="/team/payout">Set Up Payout Profile</Link>
-          </Button>
-        </AlertDescription>
-      </Alert>
-    )
-  } else if (!currentPayoutProfile.w9_uploaded_at) {
-    banner = (
-      <Alert variant="destructive">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>W-9 Missing</AlertTitle>
-        <AlertDescription className="mt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <span>Your payee details are saved, but no W-9 is on file. Corporate AP departments will not release funds without a W-9.</span>
-          <Button asChild variant="outline" size="sm" className="shrink-0 bg-background">
-            <Link href="/team/payout/w9">Upload W-9</Link>
-          </Button>
-        </AlertDescription>
-      </Alert>
-    )
-  } else if (currentPayoutProfile.w9_rejected_at) {
-    banner = (
-      <Alert variant="destructive">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>W-9 Needs Attention</AlertTitle>
-        <AlertDescription className="mt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <span>Your W-9 needs attention: {currentPayoutProfile.w9_rejected_reason || 'Please re-upload a valid form.'}</span>
-          <Button asChild variant="outline" size="sm" className="shrink-0 bg-background">
-            <Link href="/team/payout/w9">Re-upload W-9</Link>
-          </Button>
-        </AlertDescription>
-      </Alert>
-    )
-  } else if (!currentPayoutProfile.w9_verified_at) {
-    banner = (
-      <Alert className="border-amber-500/50 bg-amber-500/10 text-amber-900 dark:text-amber-200">
-        <AlertCircle className="h-4 w-4 text-amber-500" />
-        <AlertTitle>W-9 In Review</AlertTitle>
-        <AlertDescription className="mt-1">
-          Your W-9 is in review. Sponsors can see your payee name but not yet that a W-9 is on file.
-        </AlertDescription>
-      </Alert>
-    )
-  } else {
-    // Verified state
+  if (w9Status === 'verified') {
     let expMsg = ''
-    if (currentPayoutProfile.w9_expires_at) {
+    if (currentPayoutProfile?.w9_expires_at) {
       const expDate = new Date(currentPayoutProfile.w9_expires_at)
       const daysUntilExp = Math.floor((expDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
       if (daysUntilExp <= 90) {
-        expMsg = ` (Expires ${expDate.toLocaleDateString()})`
+        expMsg = ` (Expires ${formatTransactionDate(currentPayoutProfile.w9_expires_at)})`
       }
     }
     banner = (
@@ -101,6 +63,38 @@ export function FundingTab({
         <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
         <span>Payout details verified.{expMsg}</span>
       </div>
+    )
+  } else if (w9Status === 'in_review') {
+    banner = (
+      <Alert className="border-amber-500/50 bg-amber-500/10 text-amber-900 dark:text-amber-200">
+        <AlertCircle className="h-4 w-4 text-amber-500" />
+        <AlertTitle>{w9Copy.title}</AlertTitle>
+        <AlertDescription className="mt-1">{w9Copy.body}</AlertDescription>
+      </Alert>
+    )
+  } else {
+    // verified_purged is deliberately NOT destructive: nothing is broken and no payment is
+    // blocked, so a red banner would be a lie. Everything else genuinely blocks payout.
+    const tone = w9Status === 'verified_purged' ? undefined : ('destructive' as const)
+    const body =
+      w9Status === 'rejected' && currentPayoutProfile?.w9_rejected_reason
+        ? `Your W-9 needs attention: ${currentPayoutProfile.w9_rejected_reason}`
+        : w9Copy.body
+    banner = (
+      <Alert variant={tone}>
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>{w9Copy.title}</AlertTitle>
+        <AlertDescription className="mt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <span>{body}</span>
+          {w9Copy.cta && (
+            <Button asChild variant="outline" size="sm" className="shrink-0 bg-background">
+              <Link href={w9Status === 'not_started' ? '/team/payout' : '/team/payout/w9'}>
+                {w9Copy.cta}
+              </Link>
+            </Button>
+          )}
+        </AlertDescription>
+      </Alert>
     )
   }
 
@@ -222,7 +216,7 @@ function FulfillmentCard({ fulfillment: f, isVerified }: { fulfillment: any, isV
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-lg text-foreground">${(f.amount_cents / 100).toLocaleString()}</span>
+              <span className="font-semibold text-lg text-foreground">${formatMoneyAmount(f.amount_cents)}</span>
               <span className="text-sm font-medium text-muted-foreground">from {sponsorName}</span>
             </div>
             

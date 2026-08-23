@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { formatMoneyAmount } from '@/lib/format-money'
 import { requireSponsorRole } from '@/lib/actions-utils'
 import { createInAppNotification } from '@/lib/notify'
 import { runDecisionFollowUp, mapDecisionError, notifyEligibleApprovers } from '@/lib/decision-followup'
@@ -55,7 +56,7 @@ export async function confirmFundingProposal(data: { proposalId: string; note?: 
       recipientId: proposal.proposed_by,
       type: 'general',
       title: 'Your funding proposal was confirmed',
-      body: `A second approver confirmed the funding request you sent for $${((result.amount_cents ?? proposal.amount_cents) / 100).toLocaleString()}.`,
+      body: `A second approver confirmed the funding request you sent for $${formatMoneyAmount((result.amount_cents ?? proposal.amount_cents))}.`,
       submissionId: proposal.submission_id,
     })
   }
@@ -246,7 +247,7 @@ export async function updateOrgApprovalSettings(data: { approvalRequiredAboveCen
   const title =
     approvalRequiredAboveCents === null
       ? 'Two-step approval was turned off'
-      : `Two-step approval is now on above $${(approvalRequiredAboveCents / 100).toLocaleString()}`
+      : `Two-step approval is now on above $${formatMoneyAmount(approvalRequiredAboveCents)}`
   for (const m of members ?? []) {
     if (!m.profile_id || m.profile_id === user.id) continue
     await createInAppNotification({ recipientId: m.profile_id, type: 'general', title })

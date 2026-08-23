@@ -26,6 +26,7 @@ interface Submission {
   requested_amount_cents: number | null
   custom_pitch_alignment: string | null
   specific_needs_statement: string | null
+  local_connection_notes: string | null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   teams: any
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -93,6 +94,15 @@ function PreviewPane({ submission }: { submission: Submission }) {
         <FieldBlock label="Specific Needs Statement">
           <p className="whitespace-pre-wrap rounded-md bg-muted/50 px-3 py-2.5 text-muted-foreground leading-relaxed">
             {htmlToPlainText(submission.specific_needs_statement) || '—'}
+          </p>
+        </FieldBlock>
+        {/* B-03-09. The coach fills this in and, until now, no human ever saw it — least
+            of all the admin gatekeeping sponsor-facing outreach, who has to be able to
+            read every coach-authored word that reaches a sponsor. Spans both columns
+            because it is prose, not a paired field. */}
+        <FieldBlock label="Local Connection">
+          <p className="whitespace-pre-wrap rounded-md bg-muted/50 px-3 py-2.5 text-muted-foreground leading-relaxed">
+            {htmlToPlainText(submission.local_connection_notes) || '—'}
           </p>
         </FieldBlock>
       </div>

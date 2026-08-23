@@ -174,6 +174,13 @@ export default async function SponsorViewPage({ params }: Props) {
           <p className="whitespace-pre-wrap text-muted-foreground leading-relaxed">{htmlToPlainText(submission.custom_pitch_alignment)}</p>
           <h2 className="text-lg font-semibold text-foreground pt-2">Our Specific Needs</h2>
           <p className="whitespace-pre-wrap text-muted-foreground leading-relaxed">{htmlToPlainText(submission.specific_needs_statement)}</p>
+          {/* B-03-09 */}
+          {htmlToPlainText(submission.local_connection_notes) && (
+            <>
+              <h2 className="text-lg font-semibold text-foreground pt-2">Our Local Connection</h2>
+              <p className="whitespace-pre-wrap text-muted-foreground leading-relaxed">{htmlToPlainText(submission.local_connection_notes)}</p>
+            </>
+          )}
         </div>
 
         {/* 1. Achievements & Awards */}

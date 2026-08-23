@@ -116,11 +116,20 @@ export async function runDecisionFollowUp(
   // as a warning while the saved decision still returns success.
   let emailsOk = true
   if (status === 'approved') {
-    const [handshake, decision] = await Promise.all([
-      sendHandshakeEmail(submissionId, amountCents),
-      sendSubmissionDecisionEmail(submissionId, 'approved', feedback),
-    ])
-    emailsOk = handshake.success && decision.success
+    /**
+     * A-05-04. This used to send BOTH sendHandshakeEmail and
+     * sendSubmissionDecisionEmail(…, 'approved'), so a coach received two emails about one
+     * event: the rich "Match Made!" handshake that names the amount and sets a reply-to
+     * pointing at the sponsor, and a generic "your submission was approved" beside it.
+     *
+     * The handshake is the canonical one — it is the message that actually starts the
+     * money handoff, and it is the one with the working reply address. The generic email
+     * carried nothing the handshake does not, except the sponsor's optional feedback,
+     * which is already delivered by the in-app notification created just above (and stays
+     * on the submission thread). Decline and changes_requested keep the decision email,
+     * because there is no handshake on those paths.
+     */
+    emailsOk = (await sendHandshakeEmail(submissionId, amountCents)).success
   } else if (status === 'declined') {
     emailsOk = (await sendSubmissionDecisionEmail(submissionId, 'declined', feedback)).success
   } else {

@@ -1,4 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js'
+import { formatMoneyAmount } from '@/lib/format-money'
 import { Database } from './supabase/types'
 import { createInAppNotification, sendFundingReceiptEmail } from '@/lib/notify'
 import {
@@ -242,7 +243,7 @@ export async function generateAndStoreReceipt(
         recipientId: spUser.id,
         type: 'general',
         title: `Receipt ${finalReceiptNumber} issued`,
-        body: `An official tax receipt of $${(fulfillment.amount_cents / 100).toLocaleString()} has been issued for your contribution to ${payeeLegalName}.`,
+        body: `An official tax receipt of $${formatMoneyAmount(fulfillment.amount_cents)} has been issued for your contribution to ${payeeLegalName}.`,
         skipEmail: true, // sponsor received the dedicated receipt email above
       })
     }
@@ -254,7 +255,7 @@ export async function generateAndStoreReceipt(
       recipientId: team.owner_id,
       type: 'general',
       title: `Receipt ${finalReceiptNumber} issued to ${sponsor.company_name}`,
-      body: `An official contribution receipt of $${(fulfillment.amount_cents / 100).toLocaleString()} was issued to ${sponsor.company_name}.`,
+      body: `An official contribution receipt of $${formatMoneyAmount(fulfillment.amount_cents)} was issued to ${sponsor.company_name}.`,
       skipEmail: false,
     })
   }

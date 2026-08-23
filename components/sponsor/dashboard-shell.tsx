@@ -1,6 +1,7 @@
 'use client'
 
 import { isAwaitingSponsor } from '@/lib/submission-status'
+import { formatMoneyAmount } from '@/lib/format-money'
 import { SUPPORT_EMAIL } from '@/lib/site-config'
 
 import Link from 'next/link'
@@ -125,7 +126,7 @@ export function SponsorDashboardShell({
         />
         <StatCard
           label="$ In Support"
-          value={`$${(sponsor.funding_used_cents / 100).toLocaleString()}`}
+          value={`$${formatMoneyAmount(sponsor.funding_used_cents)}`}
           icon={Wallet}
           description="Total approved to date"
         />
@@ -202,7 +203,7 @@ export function SponsorDashboardShell({
                <div className="space-y-4">
                  <div className="space-y-1">
                    <div className="text-xs font-mono text-muted-foreground uppercase">In Support</div>
-                   <div className="text-2xl font-semibold tracking-tight">${(sponsor.funding_used_cents / 100).toLocaleString()}</div>
+                   <div className="text-2xl font-semibold tracking-tight">${formatMoneyAmount(sponsor.funding_used_cents)}</div>
                  </div>
                  <div className="grid grid-cols-2 gap-2">
                    <div className="p-3 rounded-lg bg-background border border-border/50 text-center">

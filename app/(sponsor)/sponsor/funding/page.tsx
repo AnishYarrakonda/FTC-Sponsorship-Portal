@@ -1,4 +1,5 @@
 import { requireSponsorRole } from '@/lib/actions-utils'
+import { formatMoneyAmount } from '@/lib/format-money'
 import type { SponsorRole } from '@/lib/sponsor-roles'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
@@ -132,7 +133,7 @@ export default async function SponsorFundingPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest">Total Committed</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-semibold">${(totalCommitted / 100).toLocaleString()}</div>
+            <div className="text-3xl font-semibold">${formatMoneyAmount(totalCommitted)}</div>
             <p className="text-xs text-muted-foreground mt-1">Across all teams, all time</p>
           </CardContent>
         </Card>
@@ -141,7 +142,7 @@ export default async function SponsorFundingPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest">Awaiting Your Payment</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-semibold">${(awaitingPaymentSum / 100).toLocaleString()}</div>
+            <div className="text-3xl font-semibold">${formatMoneyAmount(awaitingPaymentSum)}</div>
             <p className="text-xs text-muted-foreground mt-1">{awaitingPaymentCount} commitment{awaitingPaymentCount !== 1 ? 's' : ''}</p>
           </CardContent>
         </Card>
@@ -150,7 +151,7 @@ export default async function SponsorFundingPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest">In Transit</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-semibold">${(inTransitSum / 100).toLocaleString()}</div>
+            <div className="text-3xl font-semibold">${formatMoneyAmount(inTransitSum)}</div>
             <p className="text-xs text-muted-foreground mt-1">{inTransitCount} commitment{inTransitCount !== 1 ? 's' : ''}</p>
           </CardContent>
         </Card>
@@ -159,7 +160,7 @@ export default async function SponsorFundingPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest">Confirmed Received</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-semibold">${(confirmedSum / 100).toLocaleString()}</div>
+            <div className="text-3xl font-semibold">${formatMoneyAmount(confirmedSum)}</div>
             <p className="text-xs text-muted-foreground mt-1">{confirmedCount} commitment{confirmedCount !== 1 ? 's' : ''}</p>
           </CardContent>
         </Card>
@@ -239,19 +240,14 @@ export default async function SponsorFundingPage() {
                         {r.payee_legal_name || r.teams?.team_name || 'Team'}
                       </td>
                       <td className="px-4 py-3 font-semibold">
-                        ${(r.amount_cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        ${formatMoneyAmount(r.amount_cents)}
                       </td>
+                      {/* A-07-04. Was a hand-rolled span with `capitalize` over the raw
+                          enum — the one place in the app that reimplemented the badge
+                          instead of using it, so receipt states were the only statuses
+                          rendered without an icon and with different colours. */}
                       <td className="px-4 py-3">
-                        <span
-                          className={cn(
-                            'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize',
-                            r.status === 'issued'
-                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                              : 'bg-destructive/10 text-destructive'
-                          )}
-                        >
-                          {r.status}
-                        </span>
+                        <StatusBadge status={r.status} />
                       </td>
                     </tr>
                   ))}

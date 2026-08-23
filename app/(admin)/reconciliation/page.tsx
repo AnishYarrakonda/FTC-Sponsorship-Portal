@@ -1,4 +1,5 @@
 import { getAuthedProfile } from '@/lib/actions-utils'
+import { formatMoneyAmount } from '@/lib/format-money'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { ReconciliationTable } from '@/components/admin/reconciliation-table'
@@ -121,21 +122,21 @@ export default async function ReconciliationPage() {
         <Card className="bg-primary/5 border-primary/20">
           <CardContent className="p-6">
             <div className="text-xs font-mono uppercase tracking-widest text-muted-foreground">Pledged Volume (Excl. Cancelled)</div>
-            <div className="text-3xl font-bold mt-2">${(totalPledgedCents / 100).toLocaleString()}</div>
+            <div className="text-3xl font-bold mt-2">${formatMoneyAmount(totalPledgedCents)}</div>
             <div className="text-xs text-muted-foreground mt-1">Total money committed by sponsors</div>
           </CardContent>
         </Card>
         <Card className="bg-emerald-500/5 border-emerald-500/20">
           <CardContent className="p-6">
             <div className="text-xs font-mono uppercase tracking-widest text-muted-foreground">Received Volume</div>
-            <div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-2">${(totalReceivedCents / 100).toLocaleString()}</div>
+            <div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-2">${formatMoneyAmount(totalReceivedCents)}</div>
             <div className="text-xs text-muted-foreground mt-1">{receivedPct}% of total pledged</div>
           </CardContent>
         </Card>
         <Card className="bg-blue-500/5 border-blue-500/20">
           <CardContent className="p-6">
             <div className="text-xs font-mono uppercase tracking-widest text-muted-foreground">Receipted Volume</div>
-            <div className="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-2">${(totalReceiptedCents / 100).toLocaleString()}</div>
+            <div className="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-2">${formatMoneyAmount(totalReceiptedCents)}</div>
             <div className="text-xs text-muted-foreground mt-1">Official acknowledgment issued</div>
           </CardContent>
         </Card>
@@ -147,7 +148,7 @@ export default async function ReconciliationPage() {
           <Card key={s} className="shadow-xs">
             <CardContent className="p-4">
               <div className="text-[11px] font-mono uppercase text-muted-foreground truncate">{s.replace('_', ' ')}</div>
-              <div className="text-xl font-semibold mt-1">${(statsByStatus[s].sumCents / 100).toLocaleString()}</div>
+              <div className="text-xl font-semibold mt-1">${formatMoneyAmount(statsByStatus[s].sumCents)}</div>
               <div className="text-xs text-muted-foreground mt-0.5">{statsByStatus[s].count} item{statsByStatus[s].count !== 1 ? 's' : ''}</div>
             </CardContent>
           </Card>

@@ -55,8 +55,9 @@ describe('A-02-04 — every UPDATE policy states its WITH CHECK explicitly', () 
 
 describe('A-06-03 — signed URLs for government IDs and W-9s are short-lived', () => {
   it('the TTL is 60 seconds, not 1800', () => {
-    const action = read('app/actions/sensitive-documents.ts')
-    expect(action).toContain('SENSITIVE_DOCUMENT_URL_TTL_SECONDS = 60')
+    // The constant lives in lib/, not the action file: every export of a 'use server'
+    // module must be an async server action, and exporting a const there fails the build.
+    expect(read('lib/sensitive-documents.ts')).toContain('SENSITIVE_DOCUMENT_URL_TTL_SECONDS = 60')
   })
 
   it('neither admin queue mints a 1800-second URL any more', () => {

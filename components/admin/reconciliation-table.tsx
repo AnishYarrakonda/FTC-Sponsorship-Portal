@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { formatMoneyAmount } from '@/lib/format-money'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/status-badge'
@@ -84,7 +85,7 @@ function FulfillmentRow({ f, tone }: { f: any; tone: string }) {
             )}
           </div>
           <div className="text-xs text-muted-foreground mt-1 flex items-center gap-3">
-            <span>Amount: ${(f.amount_cents / 100).toLocaleString()}</span>
+            <span>Amount: ${formatMoneyAmount(f.amount_cents)}</span>
             <span>•</span>
             <span>{nudgedInfo}</span>
           </div>

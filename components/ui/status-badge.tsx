@@ -3,7 +3,9 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
+  FileCheck,
   FileEdit,
+  FileX,
   MailCheck,
   MailOpen,
   MailWarning,
@@ -63,6 +65,12 @@ export const STATUS_CONFIG: Record<string, { label: string; tone: Tone; icon: Lu
   payment_received: { label: 'Payment received', tone: 'success', icon: CheckCircle2 },
   receipted: { label: 'Receipted', tone: 'success', icon: CheckCircle2 },
   cancelled: { label: 'Cancelled', tone: 'neutral', icon: XCircle },
+  // Receipts (A-07-04). `/sponsor/funding` hand-rolled these two as a `capitalize` span,
+  // which is how a tax document's state ended up being the only status in the app rendered
+  // without an icon. Note `issued` deliberately reads "Issued", not "Approved" — a receipt
+  // is a record, not a decision.
+  issued: { label: 'Issued', tone: 'success', icon: FileCheck },
+  voided: { label: 'Voided', tone: 'rejected', icon: FileX },
 }
 
 const FALLBACK = { label: '', tone: 'neutral' as Tone, icon: AlertCircle }

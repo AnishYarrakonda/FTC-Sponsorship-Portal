@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { formatMoneyAmount } from '@/lib/format-money'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { sponsorSignupSchema, type SponsorSignupInput } from '@/lib/schemas/sponsor-signup'
@@ -568,7 +569,7 @@ export function SponsorSignupWizard() {
                           <div className="text-sm grid grid-cols-2 gap-y-1.5 text-muted-foreground">
                             <span>Company:</span><span className="text-foreground">{form.watch('companyName') || '—'}</span>
                             <span>Representative:</span><span className="text-foreground">{form.watch('fullName') || '—'}</span>
-                            <span>Annual Cap:</span><span className="text-foreground">${(form.watch('proposedCapCents') / 100).toLocaleString()}</span>
+                            <span>Annual Cap:</span><span className="text-foreground">${formatMoneyAmount(form.watch('proposedCapCents'))}</span>
                             <span>Focus:</span><span className="text-foreground">{form.watch('industryFocus')?.join(', ') || '—'}</span>
                           </div>
                         </div>

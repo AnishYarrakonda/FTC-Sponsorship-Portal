@@ -1,3 +1,4 @@
+import { resolveW9Status } from '@/lib/w9-status'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getAuthedProfile } from '@/lib/actions-utils'
@@ -54,10 +55,17 @@ export default async function W9UploadPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <UploadW9Client 
-            teamId={team.id} 
-            hasExistingW9={!!payoutProfile.w9_document_path} 
-            isVerified={!!payoutProfile.w9_verified_at}
+          {/* B-03-13. `isVerified` used to be `!!w9_verified_at`, which is true even after
+              the retention job destroys the document — so this page told a coach who had
+              just been sent here by a "W-9 Missing" banner that there was nothing to do,
+              and removed the file input. The shared resolver distinguishes 'verified'
+              (document on file, nothing to do) from 'verified_purged' (verified, document
+              deleted under our retention policy, upload control must stay). */}
+          <UploadW9Client
+            teamId={team.id}
+            hasExistingW9={!!payoutProfile.w9_document_path}
+            isVerified={resolveW9Status(payoutProfile) === 'verified'}
+            isVerifiedPurged={resolveW9Status(payoutProfile) === 'verified_purged'}
             rejectedReason={payoutProfile.w9_rejected_reason}
           />
         </CardContent>

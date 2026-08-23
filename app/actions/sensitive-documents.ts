@@ -3,6 +3,7 @@
 import { z } from 'zod'
 import { requireAdmin } from '@/lib/actions-utils'
 import { writeAudit } from '@/lib/audit'
+import { SENSITIVE_DOCUMENT_URL_TTL_SECONDS } from '@/lib/sensitive-documents'
 
 /**
  * A-06-03. On-demand signed URLs for the two most sensitive artefacts in the system: a
@@ -23,8 +24,6 @@ import { writeAudit } from '@/lib/audit'
  * Every mint is audited. These are the documents where "who looked, and when" is the
  * question that gets asked afterwards.
  */
-export const SENSITIVE_DOCUMENT_URL_TTL_SECONDS = 60
-
 const mintSchema = z.object({
   kind: z.enum(['coach_credential', 'w9']),
   subjectId: z.string().uuid(),

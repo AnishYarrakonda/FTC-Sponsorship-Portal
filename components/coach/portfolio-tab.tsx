@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition, useCallback, useEffect, type ReactNode } from 'react'
+import { formatMoneyAmount } from '@/lib/format-money'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { teamOnboardingSchema, type TeamOnboardingInput } from '@/lib/schemas/team'
@@ -14,6 +15,7 @@ import { toast } from 'sonner'
 import Image from 'next/image'
 import Link from 'next/link'
 import type { Team, TeamAchievement } from '@/lib/supabase/types'
+import { resolveW9Status, type W9Status } from '@/lib/w9-status'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@clerk/nextjs'
 import { cn } from '@/lib/utils'
@@ -323,28 +325,21 @@ export function PortfolioTab({ team, achievements }: { team: Team, achievements:
 
   const errorCount = Object.keys(form.formState.errors).length
 
-  const [payoutStatus, setPayoutStatus] = useState<'not_started' | 'awaiting_w9' | 'in_review' | 'verified' | 'rejected'>('not_started')
+  // B-03-13. This local ladder keyed on w9_document_path FIRST, so a verified team whose
+  // document had been purged under retention read as "Awaiting W-9" here while the funding
+  // tab called it verified. resolveW9Status is now the only place that decision is made.
+  const [payoutStatus, setPayoutStatus] = useState<W9Status>('not_started')
 
   useEffect(() => {
     const supabase = createClient()
     supabase
       .from('team_payout_profiles')
-      .select('legal_payee_name, w9_document_path, w9_uploaded_at, w9_verified_at, w9_rejected_at')
+      .select('legal_payee_name, w9_document_path, w9_uploaded_at, w9_verified_at, w9_rejected_at, w9_purged_at')
       .eq('team_id', team.id)
-      .single()
-      .then(({ data }) => {
-        if (!data || !data.legal_payee_name) {
-          setPayoutStatus('not_started')
-        } else if (!data.w9_document_path) {
-          setPayoutStatus('awaiting_w9')
-        } else if (data.w9_verified_at) {
-          setPayoutStatus('verified')
-        } else if (data.w9_rejected_at) {
-          setPayoutStatus('rejected')
-        } else if (data.w9_uploaded_at) {
-          setPayoutStatus('in_review')
-        }
-      })
+      // P3: .single() throws a console 406 on every load for a team with no payout
+      // profile; the absence of a row is the expected state here, not an error.
+      .maybeSingle()
+      .then(({ data }) => setPayoutStatus(resolveW9Status(data)))
   }, [team.id])
 
   return (
@@ -383,8 +378,13 @@ export function PortfolioTab({ team, achievements }: { team: Team, achievements:
               {payoutStatus === 'not_started' && (
                 <span className="rounded-full bg-muted border border-border px-2.5 py-0.5 text-xs font-medium text-muted-foreground">Not started</span>
               )}
-              {payoutStatus === 'awaiting_w9' && (
+              {payoutStatus === 'awaiting_upload' && (
                 <span className="rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 text-xs font-medium text-amber-600">Awaiting W-9</span>
+              )}
+              {/* B-03-13. Verified, document purged. Emerald, not amber: the verification
+                  stands and no payment is blocked — only the copy asks for a re-upload. */}
+              {payoutStatus === 'verified_purged' && (
+                <span className="rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 text-xs font-medium text-emerald-600">Verified · re-upload requested</span>
               )}
               {payoutStatus === 'in_review' && (
                 <span className="rounded-full bg-blue-500/10 border border-blue-500/20 px-2.5 py-0.5 text-xs font-medium text-blue-600">In review</span>
@@ -865,7 +865,7 @@ export function PortfolioTab({ team, achievements }: { team: Team, achievements:
             <div className="flex items-center justify-between pt-2 border-t border-border">
               <span className="text-sm font-medium text-foreground">Total Request</span>
               <span className="text-lg font-bold text-foreground">
-                ${((form.watch('financialAskCents') || 0) / 100).toLocaleString()}
+                ${formatMoneyAmount((form.watch('financialAskCents') || 0))}
               </span>
             </div>
           </div>

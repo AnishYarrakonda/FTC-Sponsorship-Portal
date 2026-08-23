@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { formatMoneyAmount } from '@/lib/format-money'
 import Link from 'next/link'
 import { isAwaitingSponsor, isTerminal } from '@/lib/submission-status'
 import { statusLabel } from '@/components/ui/status-badge'
@@ -25,6 +26,7 @@ type SponsorSubmission = {
   status: string
   custom_pitch_alignment?: string | null
   specific_needs_statement?: string | null
+  local_connection_notes?: string | null
   sponsors?: { company_name?: string | null } | null
   requested_amount_cents: number
 }
@@ -234,6 +236,15 @@ export function SponsorReviewShell({
                   {htmlToPlainText(submissionData.specific_needs_statement) || 'General sponsorship request.'}
                 </p>
               </div>
+              {/* B-03-09. Optional, so it is only rendered when the coach wrote one. */}
+              {htmlToPlainText(submissionData.local_connection_notes) && (
+                <div className="space-y-3">
+                  <Label className="text-[11px] uppercase tracking-widest text-muted-foreground font-mono">Local Connection</Label>
+                  <p className="whitespace-pre-wrap text-[15px] text-foreground leading-relaxed">
+                    {htmlToPlainText(submissionData.local_connection_notes)}
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -372,7 +383,7 @@ export function SponsorReviewShell({
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-primary" />Awaiting approval</CardTitle>
                   <CardDescription className="text-[13px]">
-                    A funding request for ${(pendingProposal.amount_cents / 100).toLocaleString()} is waiting for a second
+                    A funding request for ${formatMoneyAmount(pendingProposal.amount_cents)} is waiting for a second
                     approver to confirm. <Link href="/sponsor/approvals" className="text-primary hover:underline">View it in Approvals →</Link>
                   </CardDescription>
                 </CardHeader>
@@ -469,7 +480,7 @@ export function SponsorReviewShell({
                     ) : (
                       <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
                         <p className="text-[13px] text-muted-foreground">
-                          The full request is ${(amountCents / 100).toLocaleString()}. Enter what your
+                          The full request is ${formatMoneyAmount(amountCents)}. Enter what your
                           organization can commit.
                         </p>
                         {/* A label, not a placeholder: a placeholder is not reliably exposed
@@ -501,7 +512,7 @@ export function SponsorReviewShell({
                         {partialExceedsAsk && (
                           <p id="portal-partial-amount-error" role="alert" className="text-xs text-status-warning">
                             A partial offer can&apos;t exceed the full request of $
-                            {(amountCents / 100).toLocaleString()}.
+                            {formatMoneyAmount(amountCents)}.
                           </p>
                         )}
                         <div className="flex gap-2">
@@ -562,7 +573,7 @@ export function SponsorReviewShell({
                 >
                   <p className="text-[14px] leading-relaxed text-center text-foreground">
                     {showConfirm === 'approved' && willNeedApproval ? (
-                      <>This will send a ${(amountCents / 100).toLocaleString()} commitment to your organization&apos;s
+                      <>This will send a ${formatMoneyAmount(amountCents)} commitment to your organization&apos;s
                       Approvers for a second signature — it will not settle until one of them confirms.</>
                     ) : (
                       <>Are you sure you want to <span className="font-semibold uppercase tracking-wider">{showConfirm.replace('_', ' ')}</span> this submission?</>

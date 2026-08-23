@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { formatMoneyAmount } from '@/lib/format-money'
 import Link from 'next/link'
 import { TrendingUp, Eye, EyeOff, FileSignature, Clock } from 'lucide-react'
 import { StatusBadge } from '@/components/ui/status-badge'
@@ -73,7 +74,7 @@ export function SponsorFulfillmentRow({
       </div>
       <div className="flex items-center gap-4 text-right shrink-0">
         <div>
-          <div className="font-bold text-emerald-500">${(f.amount_cents / 100).toLocaleString()}</div>
+          <div className="font-bold text-emerald-500">${formatMoneyAmount(f.amount_cents)}</div>
           <div className="mt-1 flex justify-end">
             <StatusBadge status={f.status} />
           </div>

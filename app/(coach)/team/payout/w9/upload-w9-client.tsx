@@ -8,16 +8,19 @@ import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { CheckCircle, AlertTriangle, UploadCloud } from 'lucide-react'
 import { uploadW9 } from '@/app/actions/payout'
+import { W9_STATUS_COPY } from '@/lib/w9-status'
 import { describeActionError } from '@/lib/client-errors'
 
 type Props = {
   teamId: string
   hasExistingW9: boolean
   isVerified: boolean
+  /** B-03-13: verified, but the document was purged under retention. */
+  isVerifiedPurged?: boolean
   rejectedReason: string | null
 }
 
-export function UploadW9Client({ teamId, hasExistingW9, isVerified, rejectedReason }: Props) {
+export function UploadW9Client({ teamId, hasExistingW9, isVerified, isVerifiedPurged = false, rejectedReason }: Props) {
   const router = useRouter()
   const [file, setFile] = useState<File | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -66,6 +69,16 @@ export function UploadW9Client({ teamId, hasExistingW9, isVerified, rejectedReas
 
   return (
     <div className="space-y-6">
+      {/* B-03-13. Verified, but the document was purged under retention. This falls THROUGH
+          to the upload form below on purpose — the old code returned early on
+          `w9_verified_at` alone and left the coach with no file input at all. */}
+      {isVerifiedPurged && (
+        <Alert className="bg-emerald-500/10 border-emerald-500/20 text-emerald-700">
+          <CheckCircle className="h-4 w-4" />
+          <AlertTitle>{W9_STATUS_COPY.verified_purged.title}</AlertTitle>
+          <AlertDescription>{W9_STATUS_COPY.verified_purged.body}</AlertDescription>
+        </Alert>
+      )}
       {hasExistingW9 && !rejectedReason && (
         <Alert className="bg-amber-500/10 border-amber-500/20 text-amber-700">
           <AlertTriangle className="h-4 w-4" />

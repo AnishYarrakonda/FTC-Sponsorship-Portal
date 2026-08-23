@@ -1,7 +1,7 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
-import { submissionSchema, type SubmissionInput } from '@/lib/schemas/submission'
+import { submissionSchema, submissionDraftSchema, type SubmissionInput } from '@/lib/schemas/submission'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
@@ -50,15 +50,35 @@ export async function saveSubmission(
   status: 'draft' | 'pending' = 'draft',
   submissionId?: string
 ) {
+  /**
+   * B-03-10, second half — found while fixing the autosave path.
+   *
+   * This function DID call `submissionSchema.safeParse(data)` on the submit path, but then
+   * threw `result.data` away and built its payload from the raw `data` argument, so the
+   * htmlToPlainText transform never reached the database. On the draft path it did not
+   * parse at all. Between them, no write from this action was ever sanitised — the
+   * validation was doing gatekeeping only, never normalisation.
+   *
+   * `sanitized` is what every write below uses. A draft goes through the partial schema
+   * (transforms and maximums, no 50-char minimums); a submission goes through the full one.
+   */
+  let sanitized: Partial<SubmissionInput> & { sponsorId: string }
   if (status === 'pending') {
     const result = submissionSchema.safeParse(data)
     if (!result.success) return { error: 'Please complete all required fields before submitting' }
+    sanitized = result.data
     // Submitting to sponsors requires verified-coach status.
     try {
       await requireVerifiedCoach()
     } catch (e: any) {
       return { error: e.message, code: e.code }
     }
+  } else {
+    const draft = submissionDraftSchema.safeParse(data)
+    if (!draft.success) {
+      return { error: 'Validation failed: ' + draft.error.issues.map((i) => i.message).join(', ') }
+    }
+    sanitized = draft.data
   }
 
   const ctx = await getCoachTeamId()
@@ -97,7 +117,7 @@ export async function saveSubmission(
     const { data: sponsor } = await supabase
       .from('v_sponsors_public')
       .select('status')
-      .eq('id', data.sponsorId)
+      .eq('id', sanitized.sponsorId)
       .single()
 
     if (!sponsor || sponsor.status !== 'active') {
@@ -108,10 +128,10 @@ export async function saveSubmission(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const payload: any = {
     team_id: teamId,
-    sponsor_id: data.sponsorId,
-    custom_pitch_alignment: data.customPitchAlignment ?? null,
-    specific_needs_statement: data.specificNeedsStatement ?? null,
-    local_connection_notes: data.localConnectionNotes ?? null,
+    sponsor_id: sanitized.sponsorId,
+    custom_pitch_alignment: sanitized.customPitchAlignment ?? null,
+    specific_needs_statement: sanitized.specificNeedsStatement ?? null,
+    local_connection_notes: sanitized.localConnectionNotes ?? null,
     status,
     submitted_at: status === 'pending' ? new Date().toISOString() : null,
     requested_amount_cents: financialAsk
@@ -143,7 +163,7 @@ export async function saveSubmission(
       .from('submissions')
       .select('id, status')
       .eq('team_id', teamId)
-      .eq('sponsor_id', data.sponsorId)
+      .eq('sponsor_id', sanitized.sponsorId)
       .not('status', 'in', '("declined","expired","bounced")')
       .maybeSingle()
 
@@ -175,7 +195,7 @@ export async function saveSubmission(
       action: 'submit_submission',
       entity_type: 'submissions',
       entity_id: submissionId ?? null,
-      metadata: { sponsor_id: data.sponsorId },
+      metadata: { sponsor_id: sanitized.sponsorId },
     })
 
     // Notify every admin (inbox + email) that a pitch is awaiting moderation.
@@ -313,6 +333,17 @@ export async function autoSaveSubmissionDraft(
     return { error: 'Sponsor ID is required to autosave' }
   }
 
+  /**
+   * B-03-10. Step 1 of the canonical action shape, which this path skipped entirely.
+   * submissionDraftSchema applies the same htmlToPlainText transforms and max-lengths as
+   * the submit path without the 50-character minimums a half-written draft cannot meet.
+   * Everything written below now comes from `parsed.data`, never from `data`.
+   */
+  const parsed = submissionDraftSchema.safeParse(data)
+  if (!parsed.success) {
+    return { error: 'Validation failed: ' + parsed.error.issues.map((i) => i.message).join(', ') }
+  }
+
   // NOTE: `status` is deliberately NOT part of the shared payload.
   // It used to be hard-coded to 'draft' here, so merely autosaving an edit to a
   // `changes_requested` or `declined` pitch silently demoted it back to `draft` and
@@ -320,10 +351,11 @@ export async function autoSaveSubmissionDraft(
   // had asked for something. Autosave persists content; it must never change state.
   const payload = {
     team_id: teamId,
-    sponsor_id: data.sponsorId,
-    custom_pitch_alignment: data.customPitchAlignment ?? null,
-    specific_needs_statement: data.specificNeedsStatement ?? null,
-    local_connection_notes: data.localConnectionNotes ?? null,
+    sponsor_id: parsed.data.sponsorId,
+    custom_pitch_alignment: parsed.data.customPitchAlignment ?? null,
+    specific_needs_statement: parsed.data.specificNeedsStatement ?? null,
+    local_connection_notes: parsed.data.localConnectionNotes ?? null,
+    // Never from the request: the ask is a property of the team, not of this payload.
     requested_amount_cents: financialAsk
   }
 

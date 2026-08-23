@@ -27,6 +27,7 @@ export default async function ModerationPage() {
       requested_amount_cents,
       custom_pitch_alignment,
       specific_needs_statement,
+      local_connection_notes,
       teams:team_id (
         team_name,
         ftc_team_number,

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { formatMoneyAmount } from '@/lib/format-money'
 import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
@@ -488,7 +489,7 @@ function OverviewTab({
                 <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   <span>Funded</span>
                   <span className="font-mono text-foreground">
-                    ${(fundedAmount / 100).toLocaleString()} of ${(portfolioAsk / 100).toLocaleString()}
+                    ${formatMoneyAmount(fundedAmount)} of ${formatMoneyAmount(portfolioAsk)}
                   </span>
                 </div>
                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
@@ -720,7 +721,7 @@ function FindSponsorsTab({ sponsors, submissions }: { sponsors: Sponsor[], submi
                   <div className="px-5 pb-5 space-y-2">
                     <div className="flex items-center justify-between text-xs text-muted-foreground font-medium uppercase tracking-wider">
                       <span>Remaining</span>
-                      <span className="font-mono text-foreground">${(remaining / 100).toLocaleString()}</span>
+                      <span className="font-mono text-foreground">${formatMoneyAmount(remaining)}</span>
                     </div>
                     <div className="h-1.5 rounded-full bg-border overflow-hidden">
                       <div
@@ -954,7 +955,7 @@ function SubmissionsTab({ submissions, onNewPitch }: { submissions: CoachSubmiss
                       )}
                       {s.requested_amount_cents != null && (
                         <div className="text-xs text-muted-foreground">
-                          Ask: <span className="text-foreground font-mono font-medium">${(s.requested_amount_cents / 100).toLocaleString()}</span>
+                          Ask: <span className="text-foreground font-mono font-medium">${formatMoneyAmount(s.requested_amount_cents)}</span>
                         </div>
                       )}
                     </div>

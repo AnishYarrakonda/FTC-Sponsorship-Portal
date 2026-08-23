@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { submissionSchema, type SubmissionInput } from '@/lib/schemas/submission'
 import { saveSubmission, autoSaveSubmissionDraft } from '@/app/actions/submission'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -22,6 +23,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import type { Submission } from '@/lib/supabase/types'
 import { describeActionError } from '@/lib/client-errors'
+import { cn } from '@/lib/utils'
 
 import { LIMITS } from '@/lib/schemas/limits'
 const AUTOSAVE_DELAY_MS = 2000
@@ -41,6 +43,8 @@ type Props = {
 export function PortfolioForm({ initialSubmission, initialValues, sponsors = [], preselectedSponsorId }: Props) {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
+  // B-01-4
+  const [needsVerification, setNeedsVerification] = useState(false)
   const [isPending, setIsPending] = useState(false)
   const [submissionId, setSubmissionId] = useState<string | undefined>(initialSubmission?.id)
   
@@ -100,6 +104,19 @@ export function PortfolioForm({ initialSubmission, initialValues, sponsors = [],
     try {
       const result = await saveSubmission(values, status, submissionId)
       if (result?.error) {
+        /**
+         * B-01-4. `NEEDS_VERIFICATION` used to render as the bare string "Awaiting
+         * credential verification" in a red box with no next step — the coach was told
+         * they were blocked and given nothing to click. requireVerifiedCoach sets
+         * `e.code = 'NEEDS_VERIFICATION'` precisely so callers can branch on it and show
+         * the CTA instead of the message.
+         */
+        if ('code' in result && result.code === 'NEEDS_VERIFICATION') {
+          setNeedsVerification(true)
+          setError(null)
+          setIsPending(false)
+          return
+        }
         const msg = result.error === 'rate_limited' && 'message' in result
           ? (result as { message: string }).message
           : result.error
@@ -142,6 +159,23 @@ export function PortfolioForm({ initialSubmission, initialValues, sponsors = [],
         )}
         <Form {...form}>
           <form className="space-y-8">
+            {/* B-01-4. A real CTA, not a red box the coach cannot act on. */}
+            {needsVerification && (
+              <Alert>
+                <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <span>
+                    Your coach credentials are still being verified, so this pitch cannot be
+                    submitted yet. Your draft has been saved.
+                  </span>
+                  <Link
+                    href="/awaiting-verification"
+                    className={cn(buttonVariants({ size: 'sm' }), 'shrink-0')}
+                  >
+                    Check verification status
+                  </Link>
+                </AlertDescription>
+              </Alert>
+            )}
             {error && (
               <Alert variant="destructive">
                 <AlertDescription>{error}</AlertDescription>

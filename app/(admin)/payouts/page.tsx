@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 // A-06-03. 60s, not 1800s. The "open full size" control re-mints on demand, so the
 // short TTL does not turn into a dead link.
-import { SENSITIVE_DOCUMENT_URL_TTL_SECONDS } from '@/app/actions/sensitive-documents'
+import { SENSITIVE_DOCUMENT_URL_TTL_SECONDS } from '@/lib/sensitive-documents'
 import { Receipt } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { EmptyState } from '@/components/ui/empty-state'

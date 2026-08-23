@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { formatMoneyAmount } from '@/lib/format-money'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sponsorRecipientProfiles } from '@/lib/sponsor-recipients'
 import { nudgePlan } from '@/lib/fulfillment-aging'
@@ -115,7 +116,7 @@ export async function runNudgeFulfillments(): Promise<CronJobResult> {
             recipientId: s.id,
             type: 'general',
             title: `Payment reminder for ${teamName}`,
-            body: `Fulfillment of $${(f.amount_cents / 100).toLocaleString()} for ${teamName} requires attention.`,
+            body: `Fulfillment of $${formatMoneyAmount(f.amount_cents)} for ${teamName} requires attention.`,
             skipEmail: true,
           })
           if (inAppRes.success) rowSentSuccess = true
