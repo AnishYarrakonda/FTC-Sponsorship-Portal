@@ -48,8 +48,25 @@ export async function POST(req: NextRequest) {
     // secret is passed; we pass it explicitly so a missing var fails loudly.
     evt = await verifyWebhook(req, { signingSecret: env.CLERK_WEBHOOK_SIGNING_SECRET })
   } catch (err) {
-    console.error('[clerk-webhook] signature verification failed', err)
-    Sentry.captureException(err)
+    /**
+     * A11-05. This used to be `Sentry.captureException(err)` on the raw Svix error, which
+     * carries the UNVERIFIED request body. A failed signature check means precisely that
+     * the payload is untrusted and unattributed — and a Clerk user payload is full of
+     * PII (email addresses, names, external account identifiers). Forwarding it to a
+     * third-party error tracker is the one thing this branch must not do.
+     *
+     * The message and the Svix header ids are enough to diagnose a real signing-secret
+     * mismatch; the body is not, and never was.
+     */
+    const reason = err instanceof Error ? err.message : 'unknown verification failure'
+    console.error('[clerk-webhook] signature verification failed:', reason)
+    Sentry.captureException(new Error(`[clerk-webhook] signature verification failed: ${reason}`), {
+      tags: { webhook: 'clerk' },
+      extra: {
+        svix_id: req.headers.get('svix-id'),
+        svix_timestamp: req.headers.get('svix-timestamp'),
+      },
+    })
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
 

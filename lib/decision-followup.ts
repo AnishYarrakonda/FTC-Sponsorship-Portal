@@ -1,5 +1,6 @@
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { legacyOwnerIdsWithoutMembership } from '@/lib/sponsor-recipients'
 import { createInAppNotification, sendHandshakeEmail, sendSubmissionDecisionEmail } from '@/lib/notify'
 import { writeAudit } from '@/lib/audit'
 
@@ -130,20 +131,34 @@ export async function notifyEligibleApprovers({
     .eq('sponsor_id', sponsorId)
     .in('role', ['approver', 'org_admin'])
 
-  let recipients = (rows ?? [])
-    .map((r) => r.profile_id)
-    .filter((id): id is string => !!id && id !== excludeProfileId)
+  /**
+   * A-05-03. The legacy owner used to be reachable ONLY when the org had zero member rows
+   * at all, so the moment one person was invited — even a viewer — the original account
+   * holder stopped receiving every proposal notification, while remaining the person with
+   * full authority over the org. LEGACY_MEMBER_ROLE is org_admin and requireSponsorRole
+   * already resolves them that way; the approver set has to agree.
+   */
+  const legacyOwners = await legacyOwnerIdsWithoutMembership(adminClient, sponsorId)
+
+  const eligible = new Set<string>([
+    ...(rows ?? []).map((r) => r.profile_id).filter((id): id is string => !!id),
+    ...legacyOwners,
+  ])
+
+  let recipients = Array.from(eligible).filter((id) => id !== excludeProfileId)
 
   if (recipients.length === 0) {
-    const fallback = (rows ?? []).map((r) => r.profile_id).filter((id): id is string => !!id)
+    const fallback = Array.from(eligible)
     if (fallback.length === 0) {
-      const { data: legacyOwner } = await adminClient
-        .from('profiles')
-        .select('id')
+      // No ranked member and no legacy owner: fall back to ANY member row, since an
+      // unconfirmable proposal is worse than notifying someone who cannot act on it.
+      const { data: anyMember } = await adminClient
+        .from('sponsor_members')
+        .select('profile_id')
         .eq('sponsor_id', sponsorId)
-        .eq('role', 'sponsor')
-        .maybeSingle()
-      recipients = legacyOwner?.id ? [legacyOwner.id] : []
+      recipients = (anyMember ?? [])
+        .map((r) => r.profile_id)
+        .filter((id): id is string => !!id)
     } else {
       recipients = fallback
       await writeAudit(adminClient, {

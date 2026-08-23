@@ -121,10 +121,39 @@ export async function runImpactRollup(): Promise<CronJobResult> {
         new Set((rows ?? []).map((r) => r.sponsor_id as string).filter(Boolean))
       )
 
-      for (const sponsorId of sponsorIds) {
-        const payload = await buildSponsorImpactPayload(supabase, sponsorId, year)
-        if (await upsert('sponsor', sponsorId, year, payload)) sponsorsGenerated += 1
-      }
+      /**
+       * A-09-03. This was a bare `for … await`, so N sponsors meant N fully serialized
+       * round trips, each of which is itself several queries.
+       *
+       * Note the finding's stated reason is out of date: it argues from "Vercel Hobby's
+       * 10-second timeout", but the default function duration is now 300s on all plans,
+       * and this job runs inside the daily-maintenance dispatcher which caps itself at 60.
+       * The reason to fix it is that the work is embarrassingly parallel and the serial
+       * version wastes the budget it does have — not an imminent timeout.
+       *
+       * Bounded concurrency rather than a bare Promise.all: each payload build issues
+       * several queries, so an unbounded fan-out over hundreds of sponsors would open
+       * hundreds of simultaneous connections against a Supabase pool that is small on the
+       * free tier — trading a slow job for a job that takes the database down.
+       */
+      const CONCURRENCY = 5
+      let cursor = 0
+      const workers = Array.from({ length: Math.min(CONCURRENCY, sponsorIds.length) }, async () => {
+        while (true) {
+          const index = cursor++
+          if (index >= sponsorIds.length) return
+          const sponsorId = sponsorIds[index]
+          // One sponsor's failure must not abort the others: `upsert` already records it
+          // in `failures`, and a half-regenerated year is better than none.
+          try {
+            const payload = await buildSponsorImpactPayload(supabase, sponsorId, year)
+            if (await upsert('sponsor', sponsorId, year, payload)) sponsorsGenerated += 1
+          } catch (e) {
+            failures.push(`sponsor:${sponsorId}:${e instanceof Error ? e.message : String(e)}`)
+          }
+        }
+      })
+      await Promise.all(workers)
 
       const platform = await buildPlatformImpactPayload(supabase, year)
       if (await upsert('platform', null, year, platform)) platformGenerated += 1

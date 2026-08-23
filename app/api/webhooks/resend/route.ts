@@ -44,6 +44,44 @@ const COMPLAINT_EVENT = 'email.complained'
  * the one that complained. Resend has already auto-suppressed the complaining address at the
  * account level — see docs/email-deliverability.md §7 before removing anything from it.
  */
+/**
+ * Tell the coach their pitch email bounced, so they can act instead of waiting it out.
+ *
+ * Best-effort: a notification failure must not turn a handled webhook into a 500, which
+ * would make Svix redeliver an event whose reservation release has already happened.
+ */
+async function notifyCoachOfBounce(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  submissionId: string
+): Promise<void> {
+  try {
+    const { data: submission } = await supabase
+      .from('submissions')
+      .select('id, teams:team_id(owner_id, team_name), sponsors:sponsor_id(company_name)')
+      .eq('id', submissionId)
+      .maybeSingle()
+
+    const ownerId = submission?.teams?.owner_id
+    if (!ownerId) return
+
+    const sponsorName = submission?.sponsors?.company_name ?? 'the sponsor'
+    await createInAppNotification({
+      recipientId: ownerId,
+      type: 'general',
+      title: 'Your pitch could not be delivered',
+      body:
+        `The email carrying your pitch to ${sponsorName} bounced, so they never received it. ` +
+        'The sponsorship slot has been released, and you can submit to another sponsor. ' +
+        'If you believe the address is wrong, contact an admin so it can be corrected.',
+      submissionId,
+    })
+  } catch (e) {
+    console.error('[resend-webhook] failed to notify coach of bounce', submissionId, e)
+    Sentry.captureException(e)
+  }
+}
+
 async function notifyAdminsOfComplaint(
   supabase: ReturnType<typeof createAdminClient>,
   submissionId: string | null,
@@ -250,6 +288,19 @@ export async function POST(req: Request) {
       // re-notifying everyone on the retry.
       await notifyAdminsOfComplaint(supabase, submissionId, data.email_id)
       return NextResponse.json({ success: true, matched: true, complained: true })
+    }
+
+    /**
+     * A11-04. A bounce released the sponsor's reservation and told nobody. The coach's
+     * pitch was silently dead: the sponsor never received it, the capacity went back, and
+     * the coach's only signal was a status word on a page they had no reason to reload.
+     * They would keep waiting out the 14-day window for a decision that could never come.
+     *
+     * Fanned out AFTER the audit row, same as the complaint path above, so a Svix retry
+     * is deduped by the idempotency check and the coach is not notified twice.
+     */
+    if (type === 'email.bounced') {
+      await notifyCoachOfBounce(supabase, submissionId)
     }
 
     return NextResponse.json({ success: true, matched: true, status: newStatus })

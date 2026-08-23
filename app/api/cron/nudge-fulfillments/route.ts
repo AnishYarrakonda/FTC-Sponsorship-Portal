@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { sponsorRecipientProfiles } from '@/lib/sponsor-recipients'
 import { nudgePlan } from '@/lib/fulfillment-aging'
 import { OPEN_FULFILLMENT_STATUSES } from '@/lib/fulfillment-status'
 import { createInAppNotification, sendFulfillmentNudgeEmail } from '@/lib/notify'
@@ -85,11 +86,12 @@ export async function runNudgeFulfillments(): Promise<CronJobResult> {
 
     try {
       if (plan.target === 'sponsor') {
-        const { data: sponsorProfiles } = await supabase
-          .from('profiles')
-          .select('id, email, full_name')
-          .eq('role', 'sponsor')
-          .eq('sponsor_id', f.sponsor_id)
+        // A-05-01. This was a hand-rolled `profiles WHERE role='sponsor' AND sponsor_id`
+        // read, which only ever matches the ORIGINAL account holder — profiles.sponsor_id
+        // is never stamped on an invited teammate. Any org whose seats were filled by
+        // invitation received no fulfillment nudges at all, and an empty recipient list
+        // looks exactly like a successful send, so nothing ever reported it.
+        const sponsorProfiles = await sponsorRecipientProfiles(supabase, f.sponsor_id)
 
         for (const s of sponsorProfiles || []) {
           if (s.email) {

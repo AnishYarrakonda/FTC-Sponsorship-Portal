@@ -72,6 +72,8 @@ COMMIT;
 | `0103_pending_storage_deletions.sql` | table exists with RLS enabled; `has_table_privilege('anon','public.pending_storage_deletions','SELECT')` is false |
 | `0104_override_reason_survives_actor_deletion.sql` | `override_requires_reason` no longer mentions `overridden_by` |
 
+| `0105_submissions_updated_at_index.sql` | `idx_submissions_updated_at` and `idx_submissions_status_updated_at` both exist |
+
 **`0104` is not from the audit pack.** It was found while proving A-01-02:
 `team_verification_records.overridden_by` is `ON DELETE SET NULL` while the CHECK demanded
 it be NOT NULL, so deleting any admin who had ever overridden a team verification made the

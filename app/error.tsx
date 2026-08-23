@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import * as Sentry from '@sentry/nextjs'
 import Link from 'next/link'
 import { Button, buttonVariants } from '@/components/ui/button'
 import {
@@ -21,6 +22,16 @@ export default function Error({
   unstable_retry: () => void
 }) {
   useEffect(() => {
+    // A11-02. This boundary only console.error'd. Sentry auto-captures Server Component
+    // crashes through captureRequestError in instrumentation.ts, but a client-side error
+    // that lands HERE renders a 200 and vanishes — the operator sees a healthy request and
+    // the user sees "Something went wrong". Capturing here is the only report there is.
+    Sentry.captureException(error, {
+      tags: { boundary: 'app/error' },
+      // The digest is how a client-side error is correlated with the server-side log
+      // entry for the same failure; without it the two are unmatchable.
+      extra: { digest: error.digest },
+    })
     console.error('[app/error] Unhandled error:', error)
   }, [error])
 
