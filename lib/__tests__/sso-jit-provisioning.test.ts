@@ -336,7 +336,20 @@ describe('clerk webhook — SSO JIT provisioning', () => {
     expect((mocks.tables.audit_log ?? []).some((r) => r.action === 'sponsor_member_sync_rejected')).toBe(true)
   })
 
-  it('does not let a second organization claim an existing member', async () => {
+  /**
+   * A-12-01, SUPERSEDED. This used to assert that a second organization could NOT claim an
+   * existing member — the webhook rejected it, wrote `sponsor_member_sync_rejected` and
+   * paged every admin as an anomaly.
+   *
+   * Multi-org membership is now a supported shape (Anish's Phase 4 decision), so joining a
+   * second org succeeds. It is still AUDITED, because gaining access to an additional
+   * company's funding portal is a material access change — it is simply no longer refused.
+   *
+   * What must NOT change, and is asserted below: the person's PRIMARY org pointer
+   * (profiles.sponsor_id) is left alone. Repointing it would silently move which company
+   * every existing surface shows them, which is what the active-org cookie is for.
+   */
+  it('lets a second organization add an existing member, and audits it', async () => {
     mocks.verifyMock.mockResolvedValue(membershipEvent({ orgId: 'org_other' }))
     mocks.tables.sponsors = [
       { id: SPONSOR_ID, clerk_org_id: ORG_ID, company_name: 'Acme Robotics' },
@@ -347,7 +360,12 @@ describe('clerk webhook — SSO JIT provisioning', () => {
     const res = await POST(request() as never)
 
     expect(res.status).toBe(200)
-    expect(mocks.tables.sponsor_members ?? []).toHaveLength(0)
+    expect(mocks.tables.sponsor_members ?? []).toHaveLength(1)
+    expect((mocks.tables.sponsor_members ?? [])[0].sponsor_id).toBe('sponsor-other')
+    expect(
+      (mocks.tables.audit_log ?? []).some((r) => r.action === 'sponsor_member_joined_additional_org')
+    ).toBe(true)
+    // The primary pointer is untouched.
     expect(mocks.tables.profiles[0].sponsor_id).toBe(SPONSOR_ID)
   })
 

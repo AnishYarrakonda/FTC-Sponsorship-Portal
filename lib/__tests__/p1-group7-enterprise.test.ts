@@ -74,26 +74,54 @@ describe('A-12-03 — SCIM deprovisioning cannot leave an org headless', () => {
   })
 })
 
-describe('A-12-01 — NOT BUILT, on purpose', () => {
-  it('multi-org membership is deliberately refused today', () => {
-    // The finding asks for an org switcher because "a user with two sponsor_members rows
-    // has no way to select which org to view". The app never creates that state: the
-    // Clerk webhook explicitly refuses a second-org membership and alerts admins.
-    // Building a switcher would be reversing a deliberately enforced product invariant,
-    // not fixing a defect — that is a product decision, not an audit fix.
+describe('A-12-01 — SUPERSEDED: now BUILT', () => {
+  /**
+   * This block used to assert the opposite: that multi-org membership was deliberately
+   * refused, and that building a switcher would reverse an enforced product invariant.
+   *
+   * That was the correct read of the code at the time, and the decision was correctly
+   * escalated rather than made unilaterally. Anish answered it in the Phase 4 close:
+   * a sponsor user CAN legitimately belong to two organizations (an agency contact, a
+   * parent company and a subsidiary), so the invariant was a limitation rather than a
+   * safeguard, and the switcher is built.
+   *
+   * The behaviour is now pinned in lib/__tests__/phase4-enterprise-decisions.test.ts,
+   * including the part that actually matters: the active-org cookie is caller-controlled
+   * and is re-validated against real memberships on every request.
+   */
+  it('a second organization is no longer refused, but is still audited', () => {
     const hook = read('app/api/webhooks/clerk/route.ts')
-    expect(hook).toContain('already a member of a different sponsor organization')
+    expect(hook).not.toContain('already a member of a different sponsor organization')
+    expect(hook).toContain('sponsor_member_joined_additional_org')
+  })
+
+  it('the P0-13 guard is untouched: a coach/admin is still never flipped to sponsor', () => {
+    const hook = read('app/api/webhooks/clerk/route.ts')
+    expect(hook).toContain('profile role is not sponsor')
   })
 })
 
-describe('A-12-04 — NOT BUILT, on purpose', () => {
-  it('there is still no po_number column, and that is the current state of record', () => {
-    // PO numbers and fiscal-year budget buckets are net-new finance surface: a schema
-    // change to transactions_ledger and sponsor_decision_proposals, a migration of
-    // funding caps from all-time to per-year, and UI on every funding path. That is a
-    // feature to specify, not a bug to fix, and half-building it would leave money
-    // state in two shapes at once.
-    const types = read('lib/supabase/types.ts')
-    expect(types).not.toContain('po_number')
+describe('A-12-04 — SUPERSEDED: now BUILT', () => {
+  /**
+   * This block used to assert there was no `po_number` column, on the reasoning that
+   * half-building the feature would leave money state in two shapes. Anish answered it in
+   * the Phase 4 close: build it end-to-end.
+   *
+   * The "two shapes" concern was real and is what shaped the design rather than being
+   * overridden by it — migration 0110 adds the PO number and the fiscal-year BOUNDARY but
+   * deliberately does NOT bucket funding caps by year, so `funding_cap_cents` remains the
+   * single enforcement point for Capacity Integrity. See phase4-enterprise-decisions.test.ts.
+   */
+  it('the PO number exists and reaches the CSR report', () => {
+    expect(read('lib/supabase/types.ts')).toContain('po_number')
+    expect(read('supabase/migrations/0110_po_numbers_and_fiscal_year.sql')).toContain(
+      'ADD COLUMN IF NOT EXISTS po_number text'
+    )
+  })
+
+  it('funding caps were NOT bucketed by year — capacity keeps one source of truth', () => {
+    const migration = read('supabase/migrations/0110_po_numbers_and_fiscal_year.sql')
+    expect(migration).not.toMatch(/UPDATE\s+sponsors\s+SET\s+funding_used_cents/i)
+    expect(migration).toContain('fiscal_year_start_month')
   })
 })

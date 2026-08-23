@@ -411,31 +411,38 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ success: true, skipped: 'profile role is not sponsor' })
         }
 
-        const { data: otherMembership } = await supabase
+        /**
+         * A-12-01. Accepting an invitation to a SECOND organization is now a supported
+         * flow, not an incident.
+         *
+         * This branch used to reject it outright, write a `sponsor_member_sync_rejected`
+         * audit row and page every admin with "this needs investigation". That was the
+         * webhook half of a one-org invariant the schema never had.
+         *
+         * It is still AUDITED, because a person gaining access to an additional company's
+         * funding portal is a material access change and someone should be able to see when
+         * it happened — it is just no longer refused, and no longer treated as an anomaly.
+         */
+        const { data: otherMemberships } = await supabase
           .from('sponsor_members')
           .select('sponsor_id')
           .eq('profile_id', profile.id)
           .neq('sponsor_id', sponsor.id)
-          .maybeSingle()
 
-        if ((profile.sponsor_id && profile.sponsor_id !== sponsor.id) || otherMembership) {
+        if ((profile.sponsor_id && profile.sponsor_id !== sponsor.id) || (otherMemberships ?? []).length > 0) {
           await writeAudit(supabase, {
             actor_id: null,
-            action: 'sponsor_member_sync_rejected',
+            action: 'sponsor_member_joined_additional_org',
             entity_type: 'sponsor_members',
             entity_id: profile.id,
             metadata: {
-              reason: 'already a member of a different sponsor organization',
-              existing_sponsor_id: profile.sponsor_id ?? otherMembership?.sponsor_id,
-              attempted_sponsor_id: sponsor.id,
+              sponsor_id: sponsor.id,
+              existing_sponsor_ids: [
+                ...(profile.sponsor_id && profile.sponsor_id !== sponsor.id ? [profile.sponsor_id] : []),
+                ...(otherMemberships ?? []).map((m) => m.sponsor_id),
+              ],
             },
           })
-          await notifyAdmins(
-            supabase,
-            'Sponsor org invite rejected',
-            'A sponsor user already belonging to one organization accepted an invitation to a second — this needs investigation.'
-          )
-          return NextResponse.json({ success: true, skipped: 'already a member of a different organization' })
         }
 
         // Idempotency (prompt 10): SSO re-fires membership events, and an invitation this

@@ -62,6 +62,11 @@ export const IMPACT_FULFILLMENT_FIELDS = [
   'pledged_at',
   'payment_received_at',
   'receipted_at',
+  // A-12-04. The SPONSOR's own purchase-order reference. Safe on this allowlist: it is
+  // authored by the sponsor's finance team about their own commitment, so it carries no
+  // team or student information, and it is the field their AP department reconciles
+  // against. Note `payment_reference` (a cheque/ACH number) stays excluded.
+  'po_number',
 ] as const
 
 export const IMPACT_BENEFIT_FIELDS = ['benefit_type', 'status', 'delivered_at', 'proof_url'] as const
@@ -167,6 +172,8 @@ export interface ImpactFulfillment {
   pledged_at: string | null
   payment_received_at: string | null
   receipted_at: string | null
+  /** A-12-04. Sponsor-authored PO reference; null when their AP has not issued one. */
+  po_number: string | null
 }
 
 export interface ImpactBenefit {
@@ -261,6 +268,7 @@ export function projectFulfillment(row: RawRow): ImpactFulfillment {
     pledged_at: str(row.pledged_at),
     payment_received_at: str(row.payment_received_at),
     receipted_at: str(row.receipted_at),
+    po_number: str(row.po_number),
   }
 }
 

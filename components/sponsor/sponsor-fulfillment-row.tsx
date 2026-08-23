@@ -11,6 +11,7 @@ import { canTransition } from '@/lib/fulfillment-status'
 import { buttonVariants } from '@/components/ui/button'
 import { hasSponsorRole, type SponsorRole } from '@/lib/sponsor-roles'
 import { formatTransactionDate, formatTransactionDateShort } from '@/lib/format-dates'
+import { PoNumberField } from '@/components/sponsor/po-number-field'
 import { cn } from '@/lib/utils'
 
 export function SponsorFulfillmentRow({
@@ -50,6 +51,12 @@ export function SponsorFulfillmentRow({
             )}
           </div>
           <div className="text-xs text-muted-foreground mt-1 truncate">{timeline}</div>
+
+          {/* A-12-04. The sponsor's own PO reference for this commitment. Editable at any
+              status because AP issues and corrects POs on their own schedule. */}
+          <div className="mt-2 max-w-xs">
+            <PoNumberField fulfillmentId={f.id} initialValue={f.po_number ?? null} />
+          </div>
 
           {f.payment_reference && (
             <div className="text-xs text-muted-foreground mt-1 flex items-center gap-2">

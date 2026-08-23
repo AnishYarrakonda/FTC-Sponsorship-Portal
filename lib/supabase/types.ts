@@ -665,6 +665,8 @@ export type Database = {
       sponsors: {
         Row: {
           approval_required_above_cents: number | null
+          // A-12-04 (migration 0110). Hand-added; regenerate with `supabase gen types`.
+          fiscal_year_start_month: number
           clerk_org_id: string | null
           company_name: string
           contact_email: string
@@ -686,6 +688,7 @@ export type Database = {
         }
         Insert: {
           approval_required_above_cents?: number | null
+          fiscal_year_start_month?: number
           clerk_org_id?: string | null
           company_name: string
           contact_email: string
@@ -707,6 +710,7 @@ export type Database = {
         }
         Update: {
           approval_required_above_cents?: number | null
+          fiscal_year_start_month?: number
           clerk_org_id?: string | null
           company_name?: string
           contact_email?: string
@@ -1994,6 +1998,8 @@ export type Database = {
                         payment_method: Database["public"]["Enums"]["fulfillment_payment_method"] | null
                         payment_received_at: string | null
                         payment_reference: string | null
+                        // A-12-04 (migration 0110). Hand-added; regenerate with `supabase gen types`.
+                        po_number: string | null
                         payment_sent_at: string | null
                         pledged_at: string
                         receipted_at: string | null
@@ -2017,6 +2023,7 @@ export type Database = {
                         payment_method?: Database["public"]["Enums"]["fulfillment_payment_method"] | null
                         payment_received_at?: string | null
                         payment_reference?: string | null
+                        po_number?: string | null
                         payment_sent_at?: string | null
                         pledged_at?: string
                         receipted_at?: string | null
@@ -2040,6 +2047,7 @@ export type Database = {
                         payment_method?: Database["public"]["Enums"]["fulfillment_payment_method"] | null
                         payment_received_at?: string | null
                         payment_reference?: string | null
+                        po_number?: string | null
                         payment_sent_at?: string | null
                         pledged_at?: string
                         receipted_at?: string | null

@@ -77,19 +77,28 @@ export async function inviteSponsorMember(data: { email: string; role: SponsorRo
     if (existingProfile.role !== 'sponsor') {
       return { error: 'This email belongs to an existing coach or admin account and cannot be invited as a sponsor.' }
     }
-    if (existingProfile.sponsor_id && existingProfile.sponsor_id !== sponsorId) {
-      return { error: 'This person already belongs to another sponsor organization.' }
-    }
-
+    /**
+     * A-12-01. Belonging to another sponsor organization is no longer a refusal.
+     *
+     * This used to reject anyone whose profiles.sponsor_id or sponsor_members row named a
+     * different company — the application-level half of a one-org-per-person invariant the
+     * SCHEMA never had (sponsor_members has always been many-to-many, and
+     * current_sponsor_ids() has always returned an array). A person who genuinely sponsors
+     * through two companies — an agency contact, a parent company and its subsidiary — had
+     * to hold two logins.
+     *
+     * What is still refused is a DUPLICATE membership of THIS org, which is a mistake
+     * rather than a second seat. Note the check is now scoped with .eq('sponsor_id', …)
+     * rather than reading "their membership" and comparing: with N memberships,
+     * maybeSingle() over an unscoped query would throw on the second org.
+     */
     const { data: existingMembership } = await adminClient
       .from('sponsor_members')
       .select('sponsor_id')
       .eq('profile_id', existingProfile.id)
+      .eq('sponsor_id', sponsorId)
       .maybeSingle()
-    if (existingMembership && existingMembership.sponsor_id !== sponsorId) {
-      return { error: 'This person already belongs to another sponsor organization.' }
-    }
-    if (existingMembership && existingMembership.sponsor_id === sponsorId) {
+    if (existingMembership) {
       return { error: 'This person is already part of your team.' }
     }
   }

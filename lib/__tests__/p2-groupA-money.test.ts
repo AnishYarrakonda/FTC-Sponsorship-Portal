@@ -270,3 +270,53 @@ describe('A-03-03 — the proposal branch revalidates every affected surface', (
     }
   })
 })
+
+/**
+ * B-03-08 — the governing-law clause. Phase 4 item 1.
+ *
+ * Section 11 of the effective `sponsorship_agreement` reads
+ * `TODO(legal): jurisdiction to be set by counsel.` The P1 sweep deliberately did not
+ * invent a jurisdiction, and that call stands: the executed record attests to the exact
+ * bytes shown, SHA-256'd as evidence, so fabricating a governing-law clause into an
+ * ESIGN/UETA document would be worse than the gap.
+ *
+ * What the P1 sweep got wrong was letting the signer proceed anyway. A-04-02 showed the
+ * gate was always the intent — migration 0079's own header says an attorney must review
+ * the seeded body "and an admin must clear the flag before this platform relies on it in a
+ * real transaction". 0106 enforces it and the signing panel blocks.
+ *
+ * The item is therefore CLOSED as: the platform cannot execute an unreviewed agreement,
+ * and the one remaining action is not an engineering one. It is recorded in
+ * prompts/_NEXT-SESSION.md as the single thing Anish must obtain from counsel.
+ */
+describe('B-03-08 — an unreviewed agreement cannot be countersigned', () => {
+  const migration = read('supabase/migrations/0106_legal_review_gate_and_orphan_fulfillments.sql')
+
+  it('the DB refuses to sign while needs_legal_review is true', () => {
+    expect(migration).toContain('IF v_template.needs_legal_review THEN')
+    expect(migration).toContain("'template_needs_legal_review'")
+  })
+
+  it('the gate is the ONLY thing standing between the TODO and an executed document', () => {
+    // If someone clears the flag without replacing the clause, the document executes with
+    // the placeholder in it. That is a deliberate product decision (the flag means "counsel
+    // has reviewed this"), not an oversight — but it must stay a conscious admin act.
+    const approve = read('app/actions/agreements.ts')
+    expect(approve).toContain('needs_legal_review: false')
+    expect(approve).toContain('requireAdmin')
+  })
+
+  it('no jurisdiction was fabricated into the seeded template', () => {
+    // The seeded body lives in migration 0079. If a future change writes a jurisdiction
+    // there without counsel, this fails and someone has to justify it.
+    const seed = read('supabase/migrations/0079_agreement_templates.sql')
+    expect(seed).toContain('TODO(legal)')
+    expect(seed).toContain('LEGAL REVIEW REQUIRED')
+  })
+
+  it('the signer is told it is blocked, not invited to sign anyway', () => {
+    const panel = read('components/agreements/signing-panel.tsx')
+    expect(panel).toContain('This agreement cannot be signed yet.')
+    expect(panel).not.toContain('You can sign, and the signature is legally recorded')
+  })
+})

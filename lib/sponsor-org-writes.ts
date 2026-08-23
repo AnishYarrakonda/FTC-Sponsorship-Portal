@@ -20,7 +20,13 @@ import type { Database } from '@/lib/supabase/types'
  * Widening what an org admin can write now takes an edit to THIS line, in a file whose
  * whole purpose is that decision -- not an extra key quietly added to an object literal.
  */
-export const ORG_ADMIN_WRITABLE_SPONSOR_COLUMNS = ['approval_required_above_cents'] as const
+// A-12-04 adds fiscal_year_start_month. It is safe for an org admin precisely BECAUSE it
+// is a reporting boundary and not a budget: it cannot widen funding_cap_cents, and nothing
+// in the reserve/settle path reads it. funding_cap_cents and status stay off this list.
+export const ORG_ADMIN_WRITABLE_SPONSOR_COLUMNS = [
+  'approval_required_above_cents',
+  'fiscal_year_start_month',
+] as const
 
 export type OrgAdminWritableSponsorColumn = (typeof ORG_ADMIN_WRITABLE_SPONSOR_COLUMNS)[number]
 

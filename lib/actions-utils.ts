@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { headers } from 'next/headers'
+import { resolveActiveSponsorId } from '@/lib/active-sponsor-org'
 import type { Database } from '@/lib/supabase/types'
 import {
   type SponsorRole,
@@ -175,16 +176,31 @@ export async function requireSponsor(): Promise<{
   }
 
   const rows = (memberships ?? []) as { id: string; sponsor_id: string; role: string }[]
-  const ownMembership = rows.find((m) => m.sponsor_id === user.sponsor_id) ?? rows[0] ?? null
 
   const sponsorIds = Array.from(
     new Set([...(user.sponsor_id ? [user.sponsor_id] : []), ...rows.map((m) => m.sponsor_id)])
   )
-  const sponsorId = user.sponsor_id ?? sponsorIds[0]
+  const defaultSponsorId = user.sponsor_id ?? sponsorIds[0]
 
-  if (!sponsorId) {
+  if (!defaultSponsorId) {
     throw new Error('Forbidden')
   }
+
+  /**
+   * A-12-01. Multi-org membership is now supported, so `sponsorId` means "the org THIS
+   * request is about" rather than "the caller's only org".
+   *
+   * The selection comes from a cookie, which is caller-controlled — so it is validated
+   * against `sponsorIds`, the memberships this function has just resolved server-side from
+   * the database. An unrecognised value falls back to the default org silently; it cannot
+   * introduce an org the caller does not hold. See lib/active-sponsor-org.ts.
+   *
+   * `membership` follows the ACTIVE org, not profiles.sponsor_id: someone who is an
+   * org_admin of company A and a viewer of company B must be a viewer while acting as B.
+   * Reading the rank from the wrong org is exactly how a multi-org rollout leaks authority.
+   */
+  const sponsorId = await resolveActiveSponsorId(sponsorIds, defaultSponsorId)
+  const ownMembership = rows.find((m) => m.sponsor_id === sponsorId) ?? null
 
   return {
     supabase,

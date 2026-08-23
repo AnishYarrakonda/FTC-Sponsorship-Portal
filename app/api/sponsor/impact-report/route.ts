@@ -4,6 +4,12 @@ import { createClient } from '@/lib/supabase/server'
 import { rowToCsv } from '@/lib/csv'
 import type { SponsorImpactPayload } from '@/lib/impact-report/build'
 import { writeAudit } from '@/lib/audit'
+
+/** A-12-04. Label only; the fiscal-year maths itself lives in fiscal_year_of() (0110). */
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
 import { createZip, safeZipSegment, type ZipEntry } from '@/lib/zip'
 import { safeMediaUrl } from '@/lib/safe-url'
 
@@ -85,6 +91,16 @@ export async function GET(req: Request) {
 
   const payload = snapshot.payload as unknown as SponsorImpactPayload
 
+  // A-12-04. Read live rather than from the snapshot: the snapshot is an immutable record
+  // of the FIGURES, while which fiscal year to label them under is a presentation choice
+  // the sponsor can correct without invalidating the report.
+  const { data: sponsorRow } = await supabase
+    .from('sponsors')
+    .select('fiscal_year_start_month')
+    .eq('id', scopedSponsorId)
+    .maybeSingle()
+  const fiscalYearStartMonth = sponsorRow?.fiscal_year_start_month ?? 1
+
   if (format === 'json') {
     return NextResponse.json(payload, {
       headers: { 'Content-Disposition': `attachment; filename="impact-report-${year}.json"` },
@@ -117,6 +133,9 @@ export async function GET(req: Request) {
       'city',
       'state',
       'tax_status',
+      // A-12-04
+      'po_numbers',
+      'fiscal_year',
       'students_reached',
       'events_hosted',
       'volunteer_hours',
@@ -128,6 +147,14 @@ export async function GET(req: Request) {
       'achievements',
     ]),
   ]
+
+  /**
+   * A-12-04. The sponsor's fiscal year, not the calendar year the snapshot is filed under.
+   * A reporting label only — see migration 0110 for why it is not a budget.
+   */
+  const fiscalStartMonth = fiscalYearStartMonth ?? 1
+  const fiscalYearLabel =
+    fiscalStartMonth === 1 ? String(year) : `FY${year} (starts ${MONTH_NAMES[fiscalStartMonth - 1]})`
 
   for (const section of payload.teams ?? []) {
     const pledged = section.fulfillments.reduce((n, f) => n + (f.amount_cents ?? 0), 0)
@@ -145,6 +172,12 @@ export async function GET(req: Request) {
         // P3. 'None' is a legitimate enum value meaning "no charitable status", not a
         // label — it was landing literally in the CSR spreadsheet's tax_status column.
         section.team.tax_status === 'None' ? '' : section.team.tax_status,
+        // A-12-04. Every PO this sponsor's AP issued against this team, and the fiscal
+        // year the pledges fall in — the two columns a finance team reconciles by.
+        Array.from(
+          new Set(section.fulfillments.map((f) => f.po_number).filter((v): v is string => !!v))
+        ).join('; '),
+        fiscalYearLabel,
         section.team.students_reached,
         section.team.events_hosted,
         section.team.volunteer_hours,

@@ -15,6 +15,7 @@ import {
   Award,
   FileBarChart,
 } from 'lucide-react'
+import { SponsorOrgSwitcher } from '@/components/sponsor/org-switcher'
 import {
   PortalBrand,
   PortalLabel,
@@ -43,12 +44,17 @@ const NAV_ITEMS = [
 ] as const
 
 export function SponsorSidebar({
+  orgs = [],
+  activeOrgId,
   companyName,
   userName,
   userEmail,
   pendingCount = 0,
   pendingApprovalCount = 0,
 }: {
+  /** A-12-01. Empty or single-entry hides the switcher entirely. */
+  orgs?: { id: string; company_name: string }[]
+  activeOrgId?: string | null
   companyName: string
   userName: string
   userEmail: string
@@ -64,6 +70,8 @@ export function SponsorSidebar({
     <PortalSidebar mobileTitle={companyName} routeKey={pathname}>
       <PortalBrand />
       <PortalLabel icon={Building2} title={companyName} subtitle="Sponsor Portal" />
+      {/* A-12-01. Renders nothing unless this person belongs to more than one org. */}
+      {activeOrgId && <SponsorOrgSwitcher orgs={orgs} activeId={activeOrgId} />}
 
       <nav aria-label="Sponsor portal" className="flex-1 space-y-0.5 overflow-y-auto px-2 py-3">
         {NAV_ITEMS.map((item) => (
