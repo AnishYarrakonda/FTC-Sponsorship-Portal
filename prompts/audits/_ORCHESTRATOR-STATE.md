@@ -53,10 +53,39 @@ findings with working repro steps — the same document class as the `*QA-REPORT
 `*REMEDIATION*` patterns already excluded in `.gitignore`. The audit *prompts* stay committed;
 the evidence does not. They are present on Anish's machine only.
 
+### P1 sweep executed — 2026-08-23
+
+All 48 P1s worked in seven groups, each gated and deployed separately (PRs #6–#10).
+**41 fixed, 3 do not reproduce, 4 deliberately not built.**
+
+| Did not reproduce | Why |
+|---|---|
+| `A-02-03` | `remint_submission_access_token`'s **live** body already has the `is_trusted_server_context()` gate. The audit read migration `0070`; a later migration had closed it. |
+| `A-11-01` | `instrumentation-client.ts` IS Next's supported convention (`sentry.client.config.ts` is the legacy one), and `initBotId` from that file is present in the built client bundle. Renaming would break BotID. |
+| `A-08-02` | The element sits on a **CharcoalCard**, not the cream page background: 6.10:1, a pass. **The audit's proposed fix would have made it 2.91:1 — a real failure introduced by the fix.** |
+
+| Deliberately not built | Why |
+|---|---|
+| `A-12-01` org switcher | The app refuses second-org membership by design; building it reverses a product invariant. |
+| `A-12-04` PO / fiscal year | Net-new finance surface, not a bug. Half-building leaves money state in two shapes. |
+| `B-03-08` governing-law clause | Content for counsel. Fabricating a jurisdiction into an ESIGN/UETA-executed document is worse than the gap; the signer is now warned instead. |
+| stored-receipt EIN backfill | Re-rendering an issued receipt changes its `document_sha256`. Deferred pending a production census. |
+
+**Correction rate: 3 phantoms + 3 findings whose stated mechanism was wrong (`A-04-01`,
+`A-10-01`, `A-09-01`) out of 57 P0+P1.** Reproduce before fixing, every time.
+
+### Found by this work, NOT in the pack
+
+- `0104` — `team_verification_records.overridden_by` is `ON DELETE SET NULL` while its
+  CHECK demanded NOT NULL, so deleting any admin who had overridden a verification made
+  account deletion permanently impossible, after the webhook had already purged their
+  government ID.
+
 ### Owed
 
-`prompts/audits/_RESUME-AFTER-RESTART.md` — migrations `0098`/`0099`/`0100` are applied and
+`prompts/audits/_RESUME-AFTER-RESTART.md` — migrations **`0098`–`0105`** are applied and
 proven on **local only**. Production DB access is blocked by the auto-mode classifier.
+All code is merged to `main` and deployed. **The P2 (30) and P3 (16) tiers are untouched.**
 
 ---
 

@@ -1,11 +1,12 @@
 # Next session — start here
 
-**Written:** 2026-08-23, at the end of the session that executed the P0 sweep of the Gemini
-audit pack.
-**Branch:** `fix/audit-p0-sweep`, merged to `main`.
-**Production:** the code half of the P0 sweep is deployed. **Migrations `0098`, `0099`, `0100`
-are NOT applied to production** — see "What is actually owed" below. Until `0098` lands, anyone
-holding the public anon key can forge notifications to any user.
+**Written:** 2026-08-23, at the end of the session that executed the P0 **and P1** sweeps of
+the Gemini audit pack.
+**Branch:** `main`. PRs #5–#10 merged and deployed.
+**Production:** all code from both sweeps is deployed and smoke-tested (`/api/health` reports
+`db: "ok"`, protected routes 307, `/api/*` 401). **Migrations `0098`–`0105` are NOT applied to
+production** — see "What is actually owed" below. Until `0098` lands, anyone holding the public
+anon key can forge notifications to any user.
 
 ---
 
@@ -13,10 +14,10 @@ holding the public anon key can forge notifications to any user.
 
 The 18 revamp prompts are shipped, audited, and covered by a green E2E suite. The 16-part
 Gemini audit pack has been **run in full** (102 findings: 9 P0, 48 P1, 30 P2, 16 P3) and its
-**P0 tier is closed** — 7 fixed, 2 phantoms. See `prompts/audits/_ORCHESTRATOR-STATE.md` for
-the per-finding record.
+**P0 and P1 tiers are both closed** — 48 fixed, 5 phantoms, 4 deliberately not built. See
+`prompts/audits/_ORCHESTRATOR-STATE.md` for the per-finding record.
 
-Gate at close: typecheck ✅ · lint **0 errors / 340 warnings** ✅ · **437/437** Vitest ✅ · build ✅.
+Gate at close: typecheck ✅ · lint **0 errors** ✅ · **550/550** Vitest ✅ · build ✅.
 
 The audit's own `findings/` and `handoff/` output is **deliberately gitignored** — those files
 enumerate 93 still-unfixed findings with working repro steps, which is the same document class
@@ -35,8 +36,9 @@ Seven harness defects had to be fixed first; they are catalogued in `revamp/_AUD
 
 ### 1. Three migrations, unapplied in production — start here
 
-`prompts/audits/_RESUME-AFTER-RESTART.md` is the runbook. It is not optional reading: `0099`
-and `0100` are `CREATE OR REPLACE` bodies authored from **local** dumps, so they must be
+`prompts/audits/_RESUME-AFTER-RESTART.md` is the runbook — now covering **`0098`–`0105`**.
+It is not optional reading: `0099`, `0100` and `0101` are `CREATE OR REPLACE` bodies
+authored from **local** dumps, so they must be
 diffed against the **production** `pg_get_functiondef` output before they are applied.
 Replacing a drifted body has silently deleted later fixes three times in this repo.
 
@@ -45,13 +47,17 @@ allow-rule. `npx supabase migration list --linked` is the one read path that sur
 it reports the ledger stopping at **0075** — but that ledger is not evidence, because
 `psql -f` never stamps it.
 
-### 2. The 48 P1 findings
+### 2. The P1 tier is CLOSED
 
-Grouped and ordered in the approved plan. Group 1 (security/RLS/money) first:
-`A-02-02`/`-03`, `A-06-02`, `A-10-01`…`-04`, `B-01-3`.
+All 48 worked in seven groups, merged as PRs #6–#10 and deployed: **41 fixed, 3 phantoms,
+4 deliberately not built.** Per-finding verdicts are in
+`prompts/audits/_ORCHESTRATOR-STATE.md`.
 
-**Reproduce before fixing.** The P0 pass ran 2-in-9 phantom, and `A-04-01`'s stated mechanism
-was wrong even though the bug underneath it was real — and worse than described.
+What remains of the pack is **P2 (30) and P3 (16)** — untouched.
+
+**Reproduce before fixing.** Across P0+P1 the pack produced 3 phantoms and 3 findings whose
+stated mechanism was wrong. One of them, `A-08-02`, would have *introduced* the WCAG
+failure it claimed to fix if applied as written.
 
 ### 3. Nothing else in `prompts/revamp/` is owed
 
