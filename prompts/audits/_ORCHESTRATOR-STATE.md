@@ -1,6 +1,6 @@
-# Audit pack — orchestrator state (COMPLETE 2026-08-22 · P0 tier executed 2026-08-23)
+# Audit pack — orchestrator state (COMPLETE 2026-08-22 · P0/P1/P2/P3 ALL executed 2026-08-23)
 
-## Status: 16 of 16 audits complete, quality-gated and accepted. **P0 tier closed.**
+## Status: 16 of 16 audits complete. **ALL 102 findings closed — the pack is history, not a queue.**
 
 ### Complete and quality-gated
 A-01…A-12, B-01, B-02 (pre-existing; re-gated this session — all pass)
@@ -150,3 +150,106 @@ The fix that worked: write findings incrementally, and do NOT attempt to automat
 - Clerk Pro $29/mo (Orgs) / Business ~$300/mo+ (SAML SSO + SCIM) (A-09, A-10, A-12).
 - Sentry Team $29/mo — 5k errors/mo free tier (A-09).
 - No subscription findings: A-01, A-02, A-03, A-04, A-07, A-08, B-01, B-02.
+
+
+---
+
+## P2 + P3 tiers and Phase 4 executed — 2026-08-23 (the closing session)
+
+Executed from `prompts/audits/_FINISH-EVERYTHING.md`. **30 P2 + 16 P3 + 5 deferred items.**
+Every finding was reproduced before it was fixed.
+
+### Phase 0 — production database (the highest-value work in the file)
+
+Migrations `0098`–`0105` were applied and proven on LOCAL only; **production had none of them**.
+
+Pre-flight drift check passed: `sign_agreement_atomic`, `sponsor_decide_submission_atomic` and
+`issue_funding_receipt` were dumped from production with `pg_get_functiondef` and diffed against
+local. The only differences were the intended fixes — no production-only logic would be erased.
+All four dependency objects (`is_trusted_server_context`, `sponsor_member_role_rank`,
+`current_sponsor_ids`, `detect_capacity_drift`) were present.
+
+All eight applied, one transaction each, post-condition asserted before COMMIT. `0101` was applied
+AFTER `0100` and the assertion confirmed `v_delta` survived.
+
+**A-02-01 — the anon notification-forgery hole was LIVE in production until this session.**
+Before: `service_insert_notifications` present, `anon` held INSERT/UPDATE/DELETE on
+`notifications`. After `0098`: the probe returns **401 both with and without**
+`Prefer: return=representation`. The probe row count is 0.
+
+**A-04-01 — `detect_capacity_drift()` returns ZERO rows.** No pre-existing money damage.
+Re-checked after every subsequent migration; still zero.
+
+**Ledger repaired.** `0076`–`0110` stamped into `supabase_migrations.schema_migrations` after
+verifying every object exists live. `migration list --linked` no longer claims production is at
+0075.
+
+### Phase 1 — the EIN census
+
+```
+hyphenated | bare | total
+         0 |    0 |     0
+```
+
+`funding_receipts` is **empty in production**. Nothing to redact, no migration owed. The A-06-01
+forward fix (last-4 rendering) is pinned by a test. **Closed outright.**
+
+Production is pre-launch: 0 submissions, 0 teams, 1 profile, 3 sponsors, 1 fulfillment.
+
+### Phases 2–4 — findings
+
+| Group | Findings | Outcome |
+|---|---|---|
+| P2-A money/capacity/state | 9 | 7 fixed · 1 partial (A-11-06) · **1 wrong mechanism (A-03-03)** |
+| P2-B security/access | 5 | 4 fixed · **1 did not reproduce (A-01-03)** |
+| P2-C coach/sponsor journeys | 7 | 7 fixed |
+| P2-D accessibility | 7 | 6 fixed · **1 did not reproduce (A-08-04)** |
+| P2-E enterprise | 2 | 2 built |
+| P3 | 16 | 14 fixed · 2 were not what the pack said |
+| Phase 4 deferred | 5 | 2 built · 3 closed |
+
+**New migrations: `0106`–`0110`**, all applied to production with post-conditions asserted.
+
+### What did NOT reproduce (the phantom rate is itself a finding about the pack)
+
+- **A-01-03** — claims `requireSponsor` falls back to `LEGACY_MEMBER_ROLE` when the membership
+  read fails. It does not: the error is checked and thrown. Already fixed; now pinned by a test.
+- **A-08-04** — claims the command palette is a hand-rolled overlay with no focus trap. B-04-05 in
+  the P1 sweep had already rebuilt it on the project's base-ui `Dialog`. Now verified LIVE rather
+  than by inspection.
+- **A-03-03** — stated mechanism is WRONG in the opposite direction. Both settle branches DO
+  revalidate, via `runDecisionFollowUp`. The real gap was the proposal branch. Fixed that.
+- **A-11-06** — partial. The script did assert independently-stated figures, so "asserts what it
+  computed" is not right; but nothing proved `detect_capacity_drift()` could report drift at all.
+  Added a negative control.
+- **P3 architecture.md cron bullet** — called "already done". `workflows.md` was updated;
+  `architecture.md` was not. Fixed.
+- **P3 textarea** — the pack measured the FOCUS treatment (4.49 rest-vs-focus, 5.29 vs field bg),
+  said it PASSES, and asked only for visual consistency. Both figures reproduce. But the REST
+  border was **1.18:1** and FAILED 1.4.11 — `Input` had the same problem and was already fixed.
+- **P3 IdP group mapping** — names `updateSponsorAsOrgAdmin`, which writes `sponsors` columns and
+  has nothing to do with member roles. Closed as a product decision, invariant pinned.
+
+### Found while proving other findings — never in the pack
+
+1. `saveSubmission` called `safeParse` on the submit path then built its payload from the **raw**
+   argument, discarding the `htmlToPlainText` transform; the draft path did not parse at all.
+2. `teams.logo_url` was projected into the CSR impact report with no URL validation and rendered
+   straight into an `<img src>` — same defect class as A-06-04, same file.
+3. `verify-capacity-invariant.mjs` scenario 6 asserted `already_decided` for a token call after a
+   portal settle, copied from a worked example in `0084`'s header. It was never reachable: `0071`
+   had already moved the status guard ahead of the ledger guard.
+4. `tests/e2e/payout-w9.spec.ts` could not be COLLECTED — it imported a validator through a
+   `'use server'` module, dragging in `server-only`. Playwright failed the whole file, so every
+   payout/W-9 security-boundary test in it had been silently absent. Pre-existing; confirmed by
+   reproducing it at the session's starting commit.
+5. A fourth UPDATE policy with a null `with_check` (on `storage.objects`) that the A-02-04 sweep
+   found and the pack did not name.
+
+### The one thing that is NOT an engineering task
+
+Section 11 of the effective `sponsorship_agreement` template still reads
+`TODO(legal): jurisdiction to be set by counsel.` **Anish must obtain a governing-law clause from
+counsel**, publish it as a new template version, and clear `needs_legal_review` via the admin
+`/agreements` page. Until then, signing is BLOCKED — by design, and now enforced in
+`sign_agreement_atomic` (0106) rather than merely warned about.

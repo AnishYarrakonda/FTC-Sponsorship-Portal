@@ -13,7 +13,10 @@ import {
 import { sponsorSignupSchema, type SponsorSignupInput } from '@/lib/schemas/sponsor-signup'
 import { getClientIp } from '@/lib/actions-utils'
 import { mapDbError } from '@/lib/errors'
-import { validateUploadedFile } from '@/lib/file-validation'
+import {
+  validateUploadedFile,
+  validateTaxDocumentFile as validateTaxDocumentFileImpl,
+} from '@/lib/file-validation'
 import * as Sentry from '@sentry/nextjs'
 import {
   sendCredentialUploadAlert,
@@ -87,23 +90,21 @@ export async function validateCredentialFile(
   return { ext: result.ext }
 }
 
-const MAX_TAX_DOC_FILE_SIZE = 5 * 1024 * 1024 // 5MB
-const ALLOWED_TAX_DOC_MIMES = ['application/pdf'] as const
+
 
 /**
  * Validates size, MIME allowlist, and magic bytes for W-9s.
  * Returns the canonical extension (pdf).
  */
+/**
+ * Re-exported from lib/file-validation.ts, which is where the rule now lives. Every export
+ * of a `'use server'` file must be an async server action, so this stays a thin async
+ * wrapper rather than a bare `export { ... }`.
+ */
 export async function validateTaxDocumentFile(
   file: File
 ): Promise<{ ext: string; error?: never } | { ext?: never; error: string }> {
-  const result = await validateUploadedFile(file, {
-    allowedMimes: ALLOWED_TAX_DOC_MIMES,
-    maxBytes: MAX_TAX_DOC_FILE_SIZE,
-    label: 'Tax document',
-  })
-  if (result.error !== undefined) return { error: result.error }
-  return { ext: result.ext }
+  return validateTaxDocumentFileImpl(file)
 }
 
 // ---------------------------------------------------------------------------

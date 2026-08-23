@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '../../lib/supabase/types'
-import { validateTaxDocumentFile } from '../../app/actions/auth'
+import { validateTaxDocumentFile } from '../../lib/file-validation'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://127.0.0.1:54321'
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
