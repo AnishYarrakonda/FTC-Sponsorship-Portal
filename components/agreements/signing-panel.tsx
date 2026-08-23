@@ -79,6 +79,30 @@ export function SigningPanel({ submissionId, document }: SigningPanelProps) {
 
   return (
     <div className="space-y-6">
+      {/* B-03-08. Section 11 of the effective sponsorship agreement currently reads
+          "TODO(legal): jurisdiction to be set by counsel." The admin /agreements page
+          already flags the template; the person actually executing it did not see that
+          anywhere. The clause itself is content for counsel to write — inventing a
+          jurisdiction here would be worse than the gap, because the executed record
+          attests to the exact bytes shown. This makes the gap visible to the signer
+          instead. Remove the flag on the template (see approveAgreementTemplate) and this
+          banner disappears on its own. */}
+      {document.needsLegalReview && (
+        <div
+          role="status"
+          className="flex items-start gap-3 rounded-md border border-[var(--badge-warning-text)]/30 bg-[var(--badge-warning-bg)] px-4 py-3 text-sm text-[var(--badge-warning-text)]"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <div className="space-y-1">
+            <p className="font-medium">This agreement has not been reviewed by counsel.</p>
+            <p className="font-normal">
+              At least one clause is still a placeholder — the governing-law section does not
+              yet name a jurisdiction. You can sign, and the signature is legally recorded,
+              but review the text with your own legal advisor first.
+            </p>
+          </div>
+        </div>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>{document.title}</CardTitle>

@@ -28,6 +28,7 @@ import * as Sentry from '@sentry/nextjs'
 import { auth } from '@clerk/nextjs/server'
 import { clerkClient } from '@clerk/nextjs/server'
 import { revalidatePath } from 'next/cache'
+import { writeAudit } from '@/lib/audit'
 
 // --- COACH ACTIONS ---
 
@@ -296,7 +297,7 @@ export async function adminVerifyW9(teamId: string): Promise<ActionResponse<void
   }
 
   // 3. Audit
-  await (admin as any).from('audit_log').insert({
+  await writeAudit((admin as any), {
     actor_id: profile.id,
     action: 'verify_team_payout_profile',
     entity_type: 'teams',
@@ -358,7 +359,7 @@ export async function adminRejectW9(
   }
 
   // 3. Audit
-  await (admin as any).from('audit_log').insert({
+  await writeAudit((admin as any), {
     actor_id: profile.id,
     action: 'reject_team_payout_profile',
     entity_type: 'teams',

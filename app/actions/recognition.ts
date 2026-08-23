@@ -22,6 +22,7 @@ import {
   type RecognitionActionResult,
 } from '@/lib/schemas/recognition'
 
+import { writeAudit } from '@/lib/audit'
 /**
  * Recognition benefit fulfillment.
  *
@@ -196,7 +197,7 @@ export async function markBenefitDelivered(input: {
   // already_in_status is a soft error: the coach clicked the state it is already in.
   if (failure && (result as RpcResult)?.error !== 'already_in_status') return { error: failure }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'mark_benefit_delivered',
     entity_type: 'recognition_benefit_deliveries',
@@ -306,7 +307,7 @@ export async function uploadBenefitProof(
   if (failure) return { error: failure }
 
   // The URL is deliberately absent from this metadata.
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'upload_benefit_proof',
     entity_type: 'recognition_benefit_deliveries',
@@ -361,7 +362,7 @@ export async function waiveBenefit(input: {
   const failure = rpcFailure(result as RpcResult, rpcError)
   if (failure) return { error: failure }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'waive_benefit',
     entity_type: 'recognition_benefit_deliveries',
@@ -416,7 +417,7 @@ export async function adminSetBenefitStatus(input: {
   const failure = rpcFailure(result as RpcResult, rpcError)
   if (failure && (result as RpcResult)?.error !== 'already_in_status') return { error: failure }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'admin_set_benefit_status',
     entity_type: 'recognition_benefit_deliveries',
@@ -636,7 +637,7 @@ export async function syncRecognitionForFulfillment(
     })
   }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'recognition_award_notified',
     entity_type: 'sponsor_recognition_awards',

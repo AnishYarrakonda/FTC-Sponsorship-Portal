@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import { requireAdmin } from '@/lib/actions-utils'
 import { mapDbError } from '@/lib/errors'
 import { z } from 'zod'
+import { writeAudit } from '@/lib/audit'
 
 const moderationSchema = z.object({
   submissionId: z.string().uuid(),
@@ -218,7 +219,7 @@ export async function redispatchSubmission(submissionId: string) {
 
   const dispatchResult = await dispatchApprovedSubmission(submissionId, result.token!)
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'redispatch_submission',
     entity_type: 'submissions',

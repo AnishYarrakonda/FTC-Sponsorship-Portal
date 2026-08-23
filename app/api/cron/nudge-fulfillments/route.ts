@@ -8,6 +8,7 @@ import { env } from '@/lib/env'
 import crypto from 'crypto'
 import * as Sentry from '@sentry/nextjs'
 import type { CronJobResult } from '@/lib/cron/authorize'
+import { writeAudit } from '@/lib/audit'
 
 export async function GET(req: Request) {
   const authHeader = req.headers.get('authorization')
@@ -202,7 +203,7 @@ export async function runNudgeFulfillments(): Promise<CronJobResult> {
   }
 
   // Durable single audit log row for the cron sweep
-  await supabase.from('audit_log').insert({
+  await writeAudit(supabase, {
     action: 'cron_nudge_fulfillments',
     entity_type: 'funding_fulfillments',
     entity_id: null,

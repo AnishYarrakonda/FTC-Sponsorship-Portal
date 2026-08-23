@@ -16,6 +16,17 @@ const sponsorUpdateSchema = z.object({
   submissionId: z.string().uuid(),
   status: z.enum(['approved', 'declined', 'changes_requested']),
   feedback: z.string().max(2000).optional(),
+  /**
+   * B-03-07. A partial offer used to exist only on the emailed bearer link: the in-portal
+   * console could fund in full or decline, nothing between. A sponsor with $800 against a
+   * $1,200 ask could express that only while still holding a working 14-day email link —
+   * and the moderation queue itself surfaces the case where the email never arrived,
+   * which is exactly when they fall back to the portal.
+   *
+   * Both RPCs already accepted p_amount_cents and already treated 0 < amount < reserved
+   * as partial. Only this action and the console hardcoded 0.
+   */
+  amountCents: z.number().int().positive().optional(),
 })
 
 const recordDecisionSchema = z.object({
@@ -27,10 +38,17 @@ const recordDecisionSchema = z.object({
 export async function sponsorUpdateSubmissionStatus(
   submissionId: string,
   status: 'approved' | 'declined' | 'changes_requested',
-  feedback?: string
+  feedback?: string,
+  amountCents?: number
 ) {
-  const parsed = sponsorUpdateSchema.safeParse({ submissionId, status, feedback })
+  const parsed = sponsorUpdateSchema.safeParse({ submissionId, status, feedback, amountCents })
   if (!parsed.success) return { error: 'Invalid data provided' }
+
+  // A partial amount is only meaningful on the money-committing decision. Accepting one
+  // on a decline would silently do nothing, which is worse than refusing it.
+  if (amountCents !== undefined && status !== 'approved') {
+    return { error: 'An amount can only be offered when approving a sponsorship.' }
+  }
 
   let user, sponsorId, sponsorIds, adminClient
   try {
@@ -97,13 +115,33 @@ export async function sponsorUpdateSubmissionStatus(
     .eq('id', decisionSponsorId)
     .single()
 
-  const amountCents = sub?.reserved_amount_cents || sub?.requested_amount_cents || 0
+  const fullAmountCents = sub?.reserved_amount_cents || sub?.requested_amount_cents || 0
 
-  if (requiresApproval(amountCents, sponsor?.approval_required_above_cents ?? null)) {
+  /**
+   * B-03-07. A partial offer above the full ask is not a partial offer — refuse it here
+   * rather than letting the RPC's `p_amount_cents < v_reserved` test quietly reinterpret
+   * it as "fund in full", which would commit MORE money than the sponsor chose.
+   */
+  const requestedPartial = parsed.data.amountCents
+  if (requestedPartial !== undefined && fullAmountCents > 0 && requestedPartial > fullAmountCents) {
+    return { error: 'A partial offer cannot exceed the full request.' }
+  }
+
+  const partialAmountCents =
+    requestedPartial !== undefined && requestedPartial < fullAmountCents ? requestedPartial : 0
+
+  // The threshold has to be judged against what is actually being committed. Gating a
+  // $200 partial on the approval rule for a $5,000 ask would send trivial commitments to
+  // approvers for no reason.
+  const committedAmountCents = partialAmountCents > 0 ? partialAmountCents : fullAmountCents
+
+  if (requiresApproval(committedAmountCents, sponsor?.approval_required_above_cents ?? null)) {
     const { data: rpcResult, error: rpcError } = await adminClient.rpc('create_sponsor_decision_proposal', {
       p_submission_id: submissionId,
       p_proposed_by: user.id,
-      p_amount_cents: 0,
+      // B-03-07: the partial has to survive the approval round-trip, or an approver would
+      // countersign the full amount the submitter never offered.
+      p_amount_cents: partialAmountCents,
       p_origin: 'portal',
       p_feedback: normalizedFeedback,
     })
@@ -127,7 +165,7 @@ export async function sponsorUpdateSubmissionStatus(
       success: true,
       pendingApproval: true,
       proposalId: result.proposal_id,
-      amountCents: result.amount_cents ?? amountCents,
+      amountCents: result.amount_cents ?? committedAmountCents,
       ...(warning.warning ? { warning: warning.warning } : {}),
     }
   }
@@ -139,7 +177,7 @@ export async function sponsorUpdateSubmissionStatus(
     p_sponsor_user_id: user.id,
     p_decision: status,
     p_feedback: normalizedFeedback,
-    p_amount_cents: 0,
+    p_amount_cents: partialAmountCents,
   })
 
   if (rpcError) return { error: mapDbError(rpcError, 'sponsorUpdateSubmissionStatus.rpc') }

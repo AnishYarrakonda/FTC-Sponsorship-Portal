@@ -1,4 +1,5 @@
-import { requireSponsor } from '@/lib/actions-utils'
+import { requireSponsorRole } from '@/lib/actions-utils'
+import type { SponsorRole } from '@/lib/sponsor-roles'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { TrendingUp, Wallet, Building2, FileText } from 'lucide-react'
@@ -19,11 +20,16 @@ export default async function SponsorFundingPage() {
    * Clerk Organization, and the old guard bounced them to /dashboard — which the coach
    * layout bounces straight back here, producing an infinite redirect loop.
    */
-  let supabase: Awaited<ReturnType<typeof requireSponsor>>['supabase']
+  let supabase: Awaited<ReturnType<typeof requireSponsorRole>>['supabase']
+  let adminClient: Awaited<ReturnType<typeof requireSponsorRole>>['adminClient']
   let sponsorId: string
   let sponsorIds: string[]
+  let memberRole: SponsorRole
   try {
-    ;({ supabase, sponsorId, sponsorIds } = await requireSponsor())
+    // 'viewer' is the floor — everyone in the org may look at funding. The rank is read
+    // here only so the row can tell a viewer WHO can sign rather than offering them a
+    // link that will bounce them (B-03-05 + B-02-01).
+    ;({ supabase, adminClient, sponsorId, sponsorIds, memberRole } = await requireSponsorRole('viewer'))
   } catch {
     redirect('/login')
   }
@@ -52,6 +58,39 @@ export default async function SponsorFundingPage() {
     .select('*, teams(team_name)')
     .in('sponsor_id', sponsorIds)
     .order('issued_at', { ascending: false })
+
+  /**
+   * B-03-05: which of these pledges is blocked on a signature, and whose.
+   *
+   * record_fulfillment_transition refuses `payment_sent` until agreement_is_signed()
+   * is true, and that needs BOTH the sponsor's and the coach's signature. The page used
+   * to render an enabled "Mark Payment Sent" for every pledged row regardless, so the
+   * sponsor was offered an action the database had already decided to refuse — and the
+   * refusal came back as the literal string `agreement_not_signed`.
+   *
+   * Read through the ADMIN client on purpose: agreement_signatures_select_sponsor scopes
+   * to the sponsor's own rows, so the sponsor cannot see whether the COACH has signed,
+   * and "waiting on the coach" would be indistinguishable from "you have not signed".
+   * Only submission_id and signer_role are selected — no signature payload, no PII.
+   */
+  const submissionIds = Array.from(
+    new Set((fulfillments ?? []).map((f: any) => f.submission_id).filter(Boolean))
+  ) as string[]
+
+  const signedBySubmission = new Map<string, { sponsor: boolean; coach: boolean }>()
+  if (submissionIds.length > 0) {
+    const { data: signatures } = await adminClient
+      .from('agreement_signatures')
+      .select('submission_id, signer_role')
+      .in('submission_id', submissionIds)
+
+    for (const row of (signatures ?? []) as { submission_id: string; signer_role: string }[]) {
+      const entry = signedBySubmission.get(row.submission_id) ?? { sponsor: false, coach: false }
+      if (row.signer_role === 'sponsor') entry.sponsor = true
+      if (row.signer_role === 'coach') entry.coach = true
+      signedBySubmission.set(row.submission_id, entry)
+    }
+  }
 
   let totalCommitted = 0
   let awaitingPaymentCount = 0
@@ -133,7 +172,12 @@ export default async function SponsorFundingPage() {
         <CardContent>
           <div className="space-y-4">
             {fulfillments?.map((f: any) => (
-              <SponsorFulfillmentRow key={f.id} fulfillment={f} />
+              <SponsorFulfillmentRow
+                key={f.id}
+                fulfillment={f}
+                signatures={signedBySubmission.get(f.submission_id) ?? { sponsor: false, coach: false }}
+                memberRole={memberRole}
+              />
             ))}
             {(!fulfillments || fulfillments.length === 0) && (
               <EmptyState

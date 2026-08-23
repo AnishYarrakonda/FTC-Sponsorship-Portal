@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/actions-utils'
 import { rowToCsv } from '@/lib/csv'
 import type { PlatformImpactPayload } from '@/lib/impact-report/build'
+import { writeAudit } from '@/lib/audit'
 
 /**
  * GET /api/admin/impact-report?year=YYYY&format=json|csv
@@ -54,7 +55,7 @@ export async function GET(req: Request) {
     )
   }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'export_platform_impact_report',
     entity_type: 'impact_report_snapshots',

@@ -14,6 +14,7 @@ import {
   getExecutedAgreementSchema,
 } from '@/lib/schemas/agreement-signature'
 import type { PreparedDocument, RetrievedSignature } from '@/lib/agreements/provider'
+import { writeAudit } from '@/lib/audit'
 
 type SignerRole = 'sponsor' | 'coach'
 
@@ -249,7 +250,7 @@ export async function signAgreement(data: {
 
   // 4. AUDIT — via the admin client; audit_log is RLS-protected. IP is already a
   // first-class column on the signature row, so it is not duplicated into metadata.
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'agreement_signed',
     entity_type: 'agreement_signatures',
@@ -368,7 +369,7 @@ export async function getExecutedAgreement(data: {
 
   // 4. AUDIT
   const adminClient = createAdminClient()
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'agreement_document_retrieved',
     entity_type: 'agreement_signatures',

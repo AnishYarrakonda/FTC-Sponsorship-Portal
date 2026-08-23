@@ -6,6 +6,7 @@ import { createInAppNotification, sendFundingReceiptEmail } from '@/lib/notify'
 import { generateAndStoreReceipt } from '@/lib/receipts'
 import { revalidatePath } from 'next/cache'
 import { LIMITS } from '@/lib/schemas/limits'
+import { writeAudit } from '@/lib/audit'
 
 const issueReceiptSchema = z.object({
   fulfillmentId: z.string().uuid(),
@@ -242,7 +243,7 @@ export async function resendReceiptEmail(data: z.input<typeof resendReceiptSchem
     .update({ emailed_at: new Date().toISOString() })
     .eq('id', receipt.id)
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'resend_funding_receipt',
     entity_type: 'funding_receipts',

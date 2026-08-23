@@ -57,6 +57,7 @@ import { overrideTeamVerification } from '@/app/actions/admin'
 import { createInAppNotification } from '@/lib/notify'
 import { mapDbError } from '@/lib/errors'
 import { revalidatePath } from 'next/cache'
+import { writeAudit } from '@/lib/audit'
 
 type AdminClient = ReturnType<typeof createAdminClient>
 
@@ -231,7 +232,7 @@ export async function createAppeal(data: CreateAppealInput): Promise<AppealActio
     return { error: mapDbError(error, 'createAppeal.insert') }
   }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'create_appeal',
     entity_type: 'appeals',
@@ -329,7 +330,7 @@ export async function assignAppeal(data: AssignAppealInput): Promise<AppealActio
   if (error) return { error: mapDbError(error, 'assignAppeal.update') }
   if (!updated || updated.length === 0) return { error: 'This appeal has already been picked up.' }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'assign_appeal',
     entity_type: 'appeals',
@@ -338,7 +339,7 @@ export async function assignAppeal(data: AssignAppealInput): Promise<AppealActio
   })
 
   if (isSelfReview && overrideReason) {
-    await adminClient.from('audit_log').insert({
+    await writeAudit(adminClient, {
       actor_id: user.id,
       action: 'appeal_self_review_override',
       entity_type: 'appeals',
@@ -459,7 +460,7 @@ export async function resolveAppeal(data: ResolveAppealInput): Promise<AppealAct
         // never happened last time.
       }
 
-      await adminClient.from('audit_log').insert({
+      await writeAudit(adminClient, {
         actor_id: user.id,
         action: 'appeal_overturn_submission',
         entity_type: 'submissions',
@@ -508,7 +509,7 @@ export async function resolveAppeal(data: ResolveAppealInput): Promise<AppealAct
       // The submission branch writes a targeted audit row; without a matching one here,
       // auditing a profile by entity_id would never surface the reversal — which is exactly
       // how createAppeal reconstructs the original decider.
-      await adminClient.from('audit_log').insert({
+      await writeAudit(adminClient, {
         actor_id: user.id,
         action: 'appeal_overturn_coach_verification',
         entity_type: 'profiles',
@@ -577,7 +578,7 @@ export async function resolveAppeal(data: ResolveAppealInput): Promise<AppealAct
   if (error) return { error: mapDbError(error, 'resolveAppeal.update') }
   if (!updated || updated.length === 0) return { error: 'This appeal is not under review.' }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'resolve_appeal',
     entity_type: 'appeals',
@@ -642,7 +643,7 @@ export async function withdrawAppeal(data: WithdrawAppealInput): Promise<AppealA
     return { error: 'That appeal is not yours, or it has already been resolved.' }
   }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'withdraw_appeal',
     entity_type: 'appeals',

@@ -55,6 +55,9 @@ export default async function ReconciliationPage() {
     escalate: [] as any[],
   }
 
+  // B-03-06: receipted fulfillments, which every bucket above deliberately excludes.
+  const receiptedRows: any[] = []
+
   allFulfillments.forEach((f: any) => {
     const status = f.status as FulfillmentStatus
     if (statsByStatus[status]) {
@@ -78,7 +81,26 @@ export default async function ReconciliationPage() {
       const b = agingBucket(age)
       buckets[b].push(f)
     }
+
+    // B-03-06: receipted rows need a mount point of their own. They are correctly
+    // excluded from the aging report — nothing is owed on them — but ReconciliationTable
+    // is the ONLY component in the repo that renders VoidReceiptDialog and
+    // ResendReceiptEmailButton, so leaving them out of every table made those controls
+    // unreachable from anywhere in the app. voidReceipt, resendReceiptEmail and the
+    // supersede-a-voided-receipt machinery all work; they simply could not be invoked.
+    // A receipt issued with a wrong amount, payee legal name or contribution date was
+    // permanently uncorrectable, and a receipt whose email bounced could never be resent.
+    if (status === 'receipted') {
+      receiptedRows.push(f)
+    }
   })
+
+  // Most recently receipted first — a correction is almost always to a fresh receipt.
+  receiptedRows.sort(
+    (a, b) =>
+      new Date(b.receipted_at ?? b.payment_received_at ?? b.pledged_at ?? 0).getTime() -
+      new Date(a.receipted_at ?? a.payment_received_at ?? a.pledged_at ?? 0).getTime()
+  )
 
   // Sort open rows within buckets oldest first
   Object.values(buckets).forEach(arr => {
@@ -139,6 +161,27 @@ export default async function ReconciliationPage() {
         <ReconciliationTable title="Stale (30–59 days)" fulfillments={buckets.stale} tone="warning" />
         <ReconciliationTable title="Aging (14–29 days)" fulfillments={buckets.aging} tone="warning" />
         <ReconciliationTable title="On Track (0–13 days)" fulfillments={buckets.on_track} tone="success" />
+      </div>
+
+      {/* B-03-06: the only route to the void / resend controls. Deliberately outside the
+          Aging Report — these are settled, nothing is overdue — but they must be
+          reachable, because an issued tax receipt with a wrong figure on it is exactly
+          the thing an admin needs to be able to correct. */}
+      <div className="space-y-6">
+        <h2 className="text-xl font-semibold tracking-tight">Completed</h2>
+        {receiptedRows.length === 0 ? (
+          <Card>
+            <CardContent className="p-6 text-sm text-muted-foreground">
+              No receipts have been issued yet.
+            </CardContent>
+          </Card>
+        ) : (
+          <ReconciliationTable
+            title="Receipted"
+            fulfillments={receiptedRows}
+            tone="success"
+          />
+        )}
       </div>
     </div>
   )

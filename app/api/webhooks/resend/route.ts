@@ -5,6 +5,7 @@ import { Webhook } from 'svix'
 import { env } from '@/lib/env'
 import * as Sentry from '@sentry/nextjs'
 import { z } from 'zod'
+import { writeAudit } from '@/lib/audit'
 
 const resendWebhookSchema = z.object({
   type: z.string(),
@@ -183,7 +184,7 @@ export async function POST(req: Request) {
           return NextResponse.json({ success: true, duplicate: true })
         }
 
-        await supabase.from('audit_log').insert({
+        await writeAudit(supabase, {
           actor_id: null,
           action: `resend_webhook_${type}`,
           entity_type: 'emails',
@@ -234,7 +235,7 @@ export async function POST(req: Request) {
         .in('status', ['dispatched', 'delivered', 'opened'])
     }
 
-    await supabase.from('audit_log').insert({
+    await writeAudit(supabase, {
       actor_id: null,
       action: `resend_webhook_${type}`,
       entity_type: 'submissions',

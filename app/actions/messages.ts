@@ -51,6 +51,7 @@ import { isAwaitingSponsor } from '@/lib/submission-status'
 import { mapDbError } from '@/lib/errors'
 import { revalidatePath } from 'next/cache'
 import { createHash } from 'crypto'
+import { writeAudit } from '@/lib/audit'
 
 type AdminClient = ReturnType<typeof createAdminClient>
 
@@ -174,7 +175,7 @@ export async function postSponsorQuestion(data: PostMessageInput): Promise<Messa
 
   if (error) return { error: mapDbError(error, 'postSponsorQuestion.insert') }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'post_sponsor_question',
     entity_type: 'submission_messages',
@@ -261,7 +262,7 @@ export async function postCoachReply(data: PostMessageInput): Promise<MessageAct
 
   if (error) return { error: mapDbError(error, 'postCoachReply.insert') }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'post_coach_reply',
     entity_type: 'submission_messages',
@@ -319,7 +320,7 @@ export async function releaseCoachReply(data: ReleaseMessageInput): Promise<Mess
 
   const submissionId = updated[0].submission_id
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'release_coach_reply',
     entity_type: 'submission_messages',
@@ -407,7 +408,7 @@ export async function rejectCoachReply(data: RejectMessageInput): Promise<Messag
 
   const { submission_id: submissionId, author_profile_id: coachId } = updated[0]
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'reject_coach_reply',
     entity_type: 'submission_messages',
@@ -486,7 +487,7 @@ export async function reportSubmissionMessage(data: ReportMessageInput): Promise
   if (error) return { error: mapDbError(error, 'reportSubmissionMessage.update') }
 
   // The one place a reason is stored — the REPORTER's words, not a student's.
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'report_submission_message',
     entity_type: 'submission_messages',
@@ -581,7 +582,7 @@ export async function postSponsorQuestionByToken(data: PostMessageByTokenInput):
   if (error) return { error: mapDbError(error, 'postSponsorQuestionByToken.insert') }
 
   // actor_id null is the token-path convention record_sponsor_decision_atomic uses (0071:126).
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: null,
     action: 'post_sponsor_question_by_token',
     entity_type: 'submission_messages',

@@ -99,14 +99,19 @@ function PreviewPane({ submission }: { submission: Submission }) {
 
       <div className="space-y-3">
         <p className="text-xs font-medium text-foreground">Master Portfolio Data</p>
+        {/* B-03-02. These three are richTextField columns holding TipTap HTML, and they
+            were interpolated as JSX text children — so a moderator read `<p>…</p>` while
+            deciding whether to dispatch the pitch. Flattened rather than rendered,
+            matching the two pitch fields directly above: a moderator wants the substance
+            in one consistent shape, not the coach's formatting. */}
         <FieldBlock label="Mission Statement">
-          <p className="whitespace-pre-wrap text-muted-foreground leading-relaxed">{team?.mission_statement || '—'}</p>
+          <p className="whitespace-pre-wrap text-muted-foreground leading-relaxed">{htmlToPlainText(team?.mission_statement) || '—'}</p>
         </FieldBlock>
         <FieldBlock label="Technical Summary">
-          <p className="whitespace-pre-wrap text-muted-foreground leading-relaxed">{team?.technical_summary || '—'}</p>
+          <p className="whitespace-pre-wrap text-muted-foreground leading-relaxed">{htmlToPlainText(team?.technical_summary) || '—'}</p>
         </FieldBlock>
         <FieldBlock label="Outreach Summary">
-          <p className="whitespace-pre-wrap text-muted-foreground leading-relaxed">{team?.outreach_summary || '—'}</p>
+          <p className="whitespace-pre-wrap text-muted-foreground leading-relaxed">{htmlToPlainText(team?.outreach_summary) || '—'}</p>
         </FieldBlock>
         {budgetItems.length > 0 && (
           <FieldBlock label="Budget Items">

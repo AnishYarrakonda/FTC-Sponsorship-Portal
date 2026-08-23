@@ -37,7 +37,14 @@ export default async function DashboardPage() {
     supabase.from('notifications').select('*').eq('recipient_id', user.id).order('created_at', { ascending: false }).limit(50),
     supabase
       .from('submissions')
-      .select('id, status, admin_feedback, updated_at, created_at, team_id, sponsor_id, teams:team_id(team_name)')
+      // B-03-04: `season` and `requested_amount_cents` used to be missing from this list
+      // while lines below read them through an `as any` cast, so both were always
+      // undefined and both silently took their fallback. fundedAmount in
+      // dashboard-shell sums requested_amount_cents over approved submissions, so the
+      // coach's own progress bar read "$0 of $X · 0%" while the sponsor's page, admin
+      // analytics and the ledger all said otherwise. Same class as the $NaN budget-item
+      // defect in lib/dispatch.ts: a cast hiding a column that was never fetched.
+      .select('id, status, admin_feedback, updated_at, created_at, team_id, sponsor_id, season, requested_amount_cents, teams:team_id(team_name)')
       .then((res: any) => {
         if (res.error) {
           console.error('[Dashboard] Failed to fetch submissions:', res.error)
@@ -52,14 +59,21 @@ export default async function DashboardPage() {
           status: s.status,
           admin_feedback: s.admin_feedback,
           is_locked: !['draft', 'changes_requested', 'declined'].includes(s.status),
-          season: (s as any).season || '2025-26',
-          requested_amount_cents: (s as any).requested_amount_cents || 0,
+          season: s.season || '2025-26',
+          requested_amount_cents: s.requested_amount_cents ?? 0,
           created_at: s.created_at,
           updated_at: s.updated_at,
         }))
         return { data: data || [] }
       }),
-    supabase.from('funding_fulfillments').select('*, sponsors(company_name)').order('pledged_at', { ascending: false }),
+    // B-03-03: the `sponsors(company_name)` embed that used to be here silently resolved
+    // to null for every row — sponsors_select is is_admin() and sponsors_select_own is
+    // scoped to current_sponsor_ids(), so a coach matches neither. funding-tab then fell
+    // back to the literal string 'Sponsor', which is what the coach read at the exact
+    // moment they had to match an incoming check to a bank deposit. The identical trap is
+    // already documented on the recognition query below; names are resolved from
+    // v_sponsors_public in the resolver further down, the same way submissions do it.
+    supabase.from('funding_fulfillments').select('*').order('pledged_at', { ascending: false }),
     supabase.from('team_payout_profiles').select('team_id, w9_uploaded_at, w9_verified_at, w9_rejected_at, w9_rejected_reason, w9_expires_at').maybeSingle(),
     // Recognition owed. recognition_awards_select_coach scopes this to teams this coach
     // owns; the deliveries embed rides can_read_recognition_award(). No sponsors embed —
@@ -93,6 +107,30 @@ export default async function DashboardPage() {
       const byId = new Map((names ?? []).map((r: any) => [r.id, r.company_name]))
       for (const s of submissions as any[]) {
         s.company_name = byId.get(s.sponsor_id) ?? undefined
+      }
+    }
+  }
+
+  // B-03-03: resolve the payer's company name for each fulfillment, from the same
+  // v_sponsors_public view the submissions resolver above uses. Unfiltered by status on
+  // purpose — a sponsor that has since gone inactive or filled its cap still has to be
+  // nameable on a payment the coach is being asked to confirm.
+  {
+    const sponsorIds = Array.from(
+      new Set((fulfillments ?? []).map((f: any) => f.sponsor_id).filter(Boolean))
+    ) as string[]
+
+    if (sponsorIds.length > 0) {
+      const { data: names } = await supabase
+        .from('v_sponsors_public')
+        .select('id, company_name')
+        .in('id', sponsorIds)
+
+      const byId = new Map((names ?? []).map((r: any) => [r.id, r.company_name]))
+      for (const f of fulfillments as any[]) {
+        // Shaped as the embed used to be, so funding-tab's `f.sponsors?.company_name`
+        // read keeps working and there is one place that knows about the fallback.
+        f.sponsors = { company_name: byId.get(f.sponsor_id) ?? null }
       }
     }
   }

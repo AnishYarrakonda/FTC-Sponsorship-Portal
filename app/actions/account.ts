@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { requireAuth } from '@/lib/actions-utils'
 import { mapDbError } from '@/lib/errors'
 import { env } from '@/lib/env'
+import { writeAudit } from '@/lib/audit'
 
 const updateProfileSchema = z.object({
   fullName: z.string().min(2, 'Name must be at least 2 characters').max(100),
@@ -54,7 +55,7 @@ export async function updateProfile(data: { fullName: string }) {
 
   if (profileError) return { error: mapDbError(profileError, 'updateProfile') }
 
-  await createAdminClient().from('audit_log').insert({
+  await writeAudit(createAdminClient(), {
     actor_id: user.id,
     action: 'update_profile',
     entity_type: 'profiles',
@@ -98,7 +99,7 @@ export async function updatePassword(data: { newPassword: string; currentPasswor
     return { error: e instanceof Error ? e.message : 'Unable to update password.' }
   }
 
-  await createAdminClient().from('audit_log').insert({
+  await writeAudit(createAdminClient(), {
     actor_id: user.id,
     action: 'update_password',
     entity_type: 'profiles',
@@ -154,7 +155,7 @@ export async function changeEmail(data: { newEmail: string; currentPassword: str
     return { error: e instanceof Error ? e.message : 'Unable to change email.' }
   }
 
-  await createAdminClient().from('audit_log').insert({
+  await writeAudit(createAdminClient(), {
     actor_id: user.id,
     action: 'change_email_requested',
     entity_type: 'profiles',
@@ -281,7 +282,7 @@ export async function requestDataExport(): Promise<{ error?: string; message?: s
     return { error: 'We could not send your export right now. Please try again later.' }
   }
 
-  await admin.from('audit_log').insert({
+  await writeAudit(admin, {
     actor_id: user.id,
     action: 'data_export',
     entity_type: 'profiles',
