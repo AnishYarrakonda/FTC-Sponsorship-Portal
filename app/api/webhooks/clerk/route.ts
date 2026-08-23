@@ -7,6 +7,7 @@ import { isSponsorRole, reconcileMemberRole } from '@/lib/sponsor-roles'
 import { env } from '@/lib/env'
 import * as Sentry from '@sentry/nextjs'
 import { writeAudit } from '@/lib/audit'
+import { withdrawProposalsForDepartedMember, backfillOrgAdminIfHeadless } from '@/lib/sponsor-offboarding'
 
 // Clerk webhooks are Svix-signed and authenticate themselves; this route is
 // allowlisted in the root middleware (`/api/webhooks(.*)`) so it is reachable
@@ -625,12 +626,54 @@ export async function POST(req: NextRequest) {
           }
         }
 
+        /**
+         * A-12-02 + A-12-03. This branch used to delete the row and stop. Two things
+         * were left behind:
+         *
+         *  - the member's pending funding proposals, still `pending` and attributed to
+         *    someone no longer in the org, with no UI to reassign them; and
+         *  - the org itself, which could be left with no admin at all. removeSponsorMember
+         *    refuses to remove the last org_admin; SCIM deprovisioning through an IdP —
+         *    the exact path an enterprise uses — bypassed that guard entirely and left the
+         *    organization permanently headless.
+         *
+         * The webhook cannot refuse: the membership is already gone in Clerk, and a
+         * non-2xx would make Svix redeliver forever against a state that will never
+         * change. So the org is repaired rather than blocked.
+         */
+        const { withdrawn } = await withdrawProposalsForDepartedMember(
+          supabase,
+          existing.sponsor_id,
+          existing.profile_id,
+          null
+        )
+        const { promoted, headless } = await backfillOrgAdminIfHeadless(supabase, existing.sponsor_id)
+
+        if (headless || promoted) {
+          await alertAdmins(
+            supabase,
+            headless
+              ? 'A sponsor organization has no members left'
+              : 'A sponsor organization was auto-promoted a new admin',
+            headless
+              ? 'The last member of a sponsor organization was deprovisioned. It has no admin and no members — reassign an owner or decide its in-flight pitches manually.'
+              : 'The last admin of a sponsor organization was deprovisioned, so its longest-standing member was promoted automatically to keep the org usable. Confirm this is the right person.',
+            null
+          )
+        }
+
         await writeAudit(supabase, {
           actor_id: null,
           action: 'remove_sponsor_member_webhook',
           entity_type: 'sponsor_members',
           entity_id: existing.id,
-          metadata: { sponsor_id: existing.sponsor_id, profile_id: existing.profile_id },
+          metadata: {
+            sponsor_id: existing.sponsor_id,
+            profile_id: existing.profile_id,
+            proposals_withdrawn: withdrawn,
+            promoted_profile_id: promoted,
+            left_headless: headless,
+          },
         })
         break
       }
