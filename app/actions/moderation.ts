@@ -7,6 +7,7 @@ import { requireAdmin } from '@/lib/actions-utils'
 import { mapDbError } from '@/lib/errors'
 import { z } from 'zod'
 import { writeAudit } from '@/lib/audit'
+import { sponsorRecipientIds } from '@/lib/sponsor-recipients'
 
 const moderationSchema = z.object({
   submissionId: z.string().uuid(),
@@ -112,16 +113,15 @@ export async function approveSubmission(submissionId: string) {
   }
 
   if (sub?.sponsor_id) {
-    const { data: sponsorProfiles } = await adminClient
-      .from('profiles')
-      .select('id')
-      .eq('role', 'sponsor')
-      .eq('sponsor_id', sub.sponsor_id)
+    // A-05-02. Same omission as the nudge cron: profiles.sponsor_id is stamped only on
+    // the original account holder, so invited teammates were never told a pitch had
+    // arrived for their decision.
+    const sponsorProfileIds = await sponsorRecipientIds(adminClient, sub.sponsor_id)
 
     await Promise.all(
-      (sponsorProfiles || []).map((p) =>
+      sponsorProfileIds.map((recipientId) =>
         createInAppNotification({
-          recipientId: p.id,
+          recipientId,
           type: 'general',
           title: 'New submission is ready for your decision',
           body: 'A coach submission has been approved and sent to your inbox for review.',

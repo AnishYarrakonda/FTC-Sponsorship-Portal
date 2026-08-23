@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server'
+import * as Sentry from '@sentry/nextjs'
 import { requireSuperAdmin } from '@/lib/actions-utils'
 import { htmlToPlainText } from '@/lib/utils'
 // Lifted into lib/csv.ts so the impact-report routes share this exact escaping. Pure move.
-import { escapeCell, rowToCsv, CSV_PAGE_SIZE as PAGE_SIZE } from '@/lib/csv'
+import { rowToCsv, CSV_PAGE_SIZE as PAGE_SIZE } from '@/lib/csv'
+import { writeAudit } from '@/lib/audit'
 
 const CSV_HEADERS = [
   'submission_id',
@@ -77,75 +79,111 @@ export async function GET() {
     // so this is a total order.
     .order('id', { ascending: true })
 
-  // Paginate. The original query had no .range(), and PostgREST silently truncates at
-  // 1000 rows — the export would have quietly started omitting data with no error and
-  // no visible sign, which is the worst possible failure mode for a financial report.
-  const submissions: Awaited<ReturnType<typeof buildQuery>>['data'] = []
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data: page, error } = await buildQuery().range(from, from + PAGE_SIZE - 1)
-    if (error) {
-      console.error('[export] Query failed', error)
-      return NextResponse.json({ error: 'Export failed' }, { status: 500 })
-    }
-    if (!page || page.length === 0) break
-    submissions.push(...page)
-    if (page.length < PAGE_SIZE) break
-  }
+  /**
+   * A-09-04. This used to buffer every page into one `submissions` array, then build a
+   * second `lines: string[]`, then `lines.join('\n')` into a third full copy — three
+   * simultaneous copies of a file that contains the full text of every pitch and every
+   * sponsor contact email. At 10,000+ rows that exceeds the function's memory and the
+   * export fails; worse, for a financial report, it fails at size rather than at logic,
+   * so it works in testing and stops working exactly when the data matters.
+   *
+   * Streamed instead: one page in flight at a time, each row serialized and handed off
+   * immediately. Memory is now O(page) rather than O(export).
+   */
 
-  const lines: string[] = [rowToCsv(CSV_HEADERS)]
-
-  for (const s of submissions) {
-    const team = s.teams as unknown as Record<string, unknown> | null
-    const sponsor = s.sponsors as unknown as Record<string, unknown> | null
-
-    lines.push(
-      rowToCsv([
-        s.id,
-        s.status,
-        s.created_at,
-        s.requested_amount_cents,
-        htmlToPlainText(s.custom_pitch_alignment),
-        htmlToPlainText(s.specific_needs_statement),
-        team?.id,
-        team?.team_name,
-        team?.ftc_team_number,
-        team?.state,
-        team?.tax_status,
-        team?.financial_ask_cents,
-        sponsor?.id,
-        sponsor?.company_name,
-        sponsor?.contact_name,
-        sponsor?.contact_email,
-        sponsor?.funding_cap_cents,
-        sponsor?.funding_used_cents,
-      ])
-    )
-  }
-
-  const csv = lines.join('\n')
-
-  // This file contains every sponsor contact email and the full text of every pitch —
-  // the single most sensitive artifact the product can emit — and it left no trace at
-  // all. Every other privileged path in the codebase writes audit_log; this one did not.
-  const { error: auditError } = await adminClient.from('audit_log').insert({
+  // The audit row is written BEFORE the first byte, not after the last. This file is the
+  // single most sensitive artifact the product can emit, and a client that disconnects
+  // mid-download must not also erase the record that the export was run. The completion
+  // row below carries the count; this one carries the fact.
+  await writeAudit(adminClient, {
     actor_id: actorId,
     action: 'export_submissions_csv',
     entity_type: 'submissions',
     entity_id: null,
     metadata: {
-      row_count: submissions.length,
       statuses: ['approved', 'dispatched', 'delivered', 'opened'],
       includes_sponsor_contact_emails: true,
+      streamed: true,
     },
   })
-  if (auditError) {
-    console.error('[export] failed to write audit row', auditError)
-  }
 
-  return new Response(csv, {
+  const encoder = new TextEncoder()
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let rowCount = 0
+      try {
+        controller.enqueue(encoder.encode(rowToCsv(CSV_HEADERS) + '\n'))
+
+        for (let from = 0; ; from += PAGE_SIZE) {
+          const { data: page, error } = await buildQuery().range(from, from + PAGE_SIZE - 1)
+          if (error) throw new Error(error.message)
+          if (!page || page.length === 0) break
+
+          let chunk = ''
+          for (const s of page) {
+            const team = s.teams as unknown as Record<string, unknown> | null
+            const sponsor = s.sponsors as unknown as Record<string, unknown> | null
+            chunk +=
+              rowToCsv([
+                s.id,
+                s.status,
+                s.created_at,
+                s.requested_amount_cents,
+                htmlToPlainText(s.custom_pitch_alignment),
+                htmlToPlainText(s.specific_needs_statement),
+                team?.id,
+                team?.team_name,
+                team?.ftc_team_number,
+                team?.state,
+                team?.tax_status,
+                team?.financial_ask_cents,
+                sponsor?.id,
+                sponsor?.company_name,
+                sponsor?.contact_name,
+                sponsor?.contact_email,
+                sponsor?.funding_cap_cents,
+                sponsor?.funding_used_cents,
+              ]) + '\n'
+            rowCount++
+          }
+          controller.enqueue(encoder.encode(chunk))
+
+          if (page.length < PAGE_SIZE) break
+        }
+
+        controller.close()
+
+        await writeAudit(adminClient, {
+          actor_id: actorId,
+          action: 'export_submissions_csv_completed',
+          entity_type: 'submissions',
+          entity_id: null,
+          metadata: { row_count: rowCount },
+        })
+      } catch (e) {
+        console.error('[export] stream failed', e)
+        Sentry.captureException(e)
+        await writeAudit(adminClient, {
+          actor_id: actorId,
+          action: 'export_submissions_csv_failed',
+          entity_type: 'submissions',
+          entity_id: null,
+          metadata: { rows_emitted: rowCount, error: e instanceof Error ? e.message : String(e) },
+        })
+        // Abort rather than close. Headers are already sent so there is no 500 to return,
+        // and closing cleanly would hand the admin a SILENTLY TRUNCATED financial export —
+        // the one outcome worse than a failed download.
+        controller.error(e)
+      }
+    },
+  })
+
+  return new Response(stream, {
     headers: {
-      'Content-Type': 'text/csv',
+      'Content-Type': 'text/csv; charset=utf-8',
       'Content-Disposition': 'attachment; filename="sponsorship_export_2026.csv"',
+      'Cache-Control': 'no-store',
     },
   })
 }
