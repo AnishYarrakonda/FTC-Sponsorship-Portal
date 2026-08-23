@@ -27,7 +27,9 @@ export default async function CapacityAuditPage() {
 
       <div className="rounded-xl border border-border bg-card/50 px-5 py-4 text-sm text-muted-foreground">
         <p className="font-medium text-foreground">The invariant</p>
-        <pre className="mt-2 overflow-x-auto text-xs leading-relaxed">
+        {/* B-04-09. The drift formula is wider than the card on every viewport the audit
+            tested (1024, 768, 375), so a keyboard user could not read past the clip. */}
+        <pre className="mt-2 overflow-x-auto text-xs leading-relaxed" tabIndex={0} role="region" aria-label="The capacity invariant formula, scrollable">
 {`sponsors.funding_used_cents
   = SUM(submissions.reserved_amount_cents WHERE status IN ('dispatched','delivered','opened'))
   + SUM(transactions_ledger.amount_cents)`}

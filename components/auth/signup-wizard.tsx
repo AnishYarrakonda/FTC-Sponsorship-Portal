@@ -320,7 +320,7 @@ export function SignupWizard() {
             {showEmailVerify ? (
               <div className="space-y-6 text-foreground">
                 {error && (
-                  <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive">
+                  <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive-text">
                     <AlertDescription>{error}</AlertDescription>
                   </Alert>
                 )}
@@ -370,7 +370,7 @@ export function SignupWizard() {
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 text-foreground">
                 {error && (
-                  <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive">
+                  <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive-text">
                     <AlertDescription>
                       <span>{error}</span>
                       {profileFailed && (
@@ -383,7 +383,7 @@ export function SignupWizard() {
                             variant="outline"
                             onClick={retryProfileCreation}
                             disabled={isPending}
-                            className="ml-0 mt-2 block border-destructive/40 text-destructive hover:bg-destructive/10"
+                            className="ml-0 mt-2 block border-destructive/40 text-destructive-text hover:bg-destructive/10"
                           >
                             {isPending ? 'Retrying…' : 'Retry'}
                           </Button>
@@ -581,7 +581,7 @@ export function SignupWizard() {
                     {step === 3 && (
                       <>
                         {form.formState.errors.teamData?.root && (
-                          <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive">
+                          <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive-text">
                             <AlertCircle className="h-4 w-4" />
                             <AlertDescription>{form.formState.errors.teamData.root.message}</AlertDescription>
                           </Alert>

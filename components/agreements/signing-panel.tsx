@@ -169,7 +169,7 @@ export function SigningPanel({ submissionId, document }: SigningPanelProps) {
               </p>
             )}
             {showMismatchHint && (
-              <p className="text-xs text-destructive">This does not match the expected name.</p>
+              <p className="text-xs text-destructive-text">This does not match the expected name.</p>
             )}
           </div>
 

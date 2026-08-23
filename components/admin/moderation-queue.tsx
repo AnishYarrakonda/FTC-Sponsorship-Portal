@@ -512,7 +512,7 @@ export function ModerationQueue({ initialSubmissions }: { initialSubmissions: Su
             </div>
           )}
           {bulkResults.filter(r => !r.ok).map(r => (
-            <div key={r.id} className="flex items-center gap-2 text-destructive">
+            <div key={r.id} className="flex items-center gap-2 text-destructive-text">
               <AlertCircle className="h-4 w-4" strokeWidth={1.5} />
               {r.id.slice(0, 8)}…: {r.error}
             </div>

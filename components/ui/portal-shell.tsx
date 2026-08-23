@@ -110,7 +110,7 @@ export function PortalSignOut({ onSignOut }: { onSignOut: () => void }) {
   return (
     <button
       onClick={onSignOut}
-      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive-text"
     >
       <LogOut aria-hidden="true" className="h-4 w-4 shrink-0" strokeWidth={1.5} />
       Sign out

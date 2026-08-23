@@ -142,7 +142,8 @@ These are stated publicly on `/legal/accessibility` rather than being quietly he
 | Keyboard-only traversal, sponsor portal | Pass |
 | Keyboard-only funding decision on `/sponsor-view/[token]` | Pass — **covered by an automated test**, not just by hand |
 | Visible focus indicators | Pass — `app/globals.css` sets a 2px `--ring` outline on bare interactive elements; components that opt out render their own ring |
-| Dialog focus in / Escape / focus return | Pass (Radix) — pinned by a test |
+| Dialog focus in / **containment** / Escape / focus return | Pass (**base-ui**) — pinned by a test that creates its own fixture state (see B-04-12 below) |
+| Global command palette focus trap + restoration | Pass — driven live against a real signed-in session, not inferred (A-08-04 / B-04-05) |
 | Icon-only buttons have names | Pass — pinned by `lib/__tests__/icon-button-names.test.tsx` |
 | One `h1`, no skipped levels, landmarks | Pass on audited routes |
 | Reduced motion | Pass |
@@ -193,3 +194,35 @@ noting its absence explicitly rather than reporting a figure that was not taken.
 - [x] No rule globally disabled; zero suppressions of any kind
 - [x] No behavioural change to funding, submission or auth flows
 - [x] `typecheck` / `lint` / `build` / `test` green (409 unit tests)
+
+---
+
+## P2 accessibility sweep (Group D) — what changed and what was deliberately not changed
+
+Added at the close of the Gemini audit pack.
+
+| Finding | Outcome |
+|---|---|
+| **B-04-07** Read-only account fields were unlabelled `<input disabled>` | Fixed. New `components/ui/read-only-field.tsx` renders the pair as `<dl>/<dt>/<dd>`, which makes the name native instead of wiring an `id` that can drift. Applied to the account email/role and to both masked EINs on the payout form. |
+| **B-04-08** Landing page scrolled sideways at 320 px | Fixed and **measured**: `documentElement.scrollWidth` was 331 against a 320 viewport and is now 320. Cause was `min-width: auto` on grid items; `min-w-0` on both children plus `truncate` on the mock URLs. |
+| **B-04-09** Scrollable regions unreachable by keyboard | Fixed on the two genuine containers (analytics table wrapper, capacity formula `<pre>`) with `tabIndex={0}` + `role="region"` + a label. |
+| **B-04-10** Destructive text failed AA | Fixed with a new `--destructive-text` token (#B91C1C: 6.32:1 on card, 5.86:1 on app). `--destructive` itself is unchanged so destructive **button fills** are not repainted. |
+| **B-04-11** Payout status badges failed AA | Fixed. All five badges routed through the `--badge-*` token pairs. The finding named only "Awaiting W-9"; `emerald-600` (3.68:1) failed too and was fixed with it. |
+| **B-04-12** The dialog-focus E2E test could never run | Fixed. It now flips the fixture team to `incubator` in the test and restores it in a `finally`, and additionally asserts focus **containment** forwards and backwards — which the original never did. |
+| **A-08-04** Command palette focus trap | **Did not reproduce.** B-04-05 had already rebuilt the palette on the project's base-ui `Dialog`. Now verified live rather than by inspection. |
+
+### Documented exemption: `scrollable-region-focusable` on `#main-content`
+
+axe reports this rule against the admin shell's `<main>` on `/reconciliation` at 768 px and
+375 px. It is **not** fixed, on purpose:
+
+* `tabIndex={0}` there would put the whole admin page shell into the tab order ahead of its
+  own contents, on every admin page — worse for the users the rule protects.
+* The node is already programmatically focusable (`tabIndex={-1}`) because it is the
+  `<SkipToContent>` target. A keyboard user reaches it through the skip link, and a focused
+  scroll container responds to arrow keys, which satisfies WCAG 2.1.1.
+* It only has a horizontal axis at all because `overflow-y: auto` makes the other axis
+  compute to `auto`; there is no intentional horizontal scroll region there.
+
+axe tests for `tabindex >= 0` specifically, so a skip-link target is a known false positive
+for this rule. The reasoning is repeated at the element in `app/(admin)/layout.tsx`.

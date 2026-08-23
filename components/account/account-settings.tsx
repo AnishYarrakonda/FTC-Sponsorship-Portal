@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
+import { ReadOnlyField } from '@/components/ui/read-only-field'
 import { cn } from '@/lib/utils'
 import { updateProfile, updatePassword, changeEmail, deleteAccount, requestDataExport } from '@/app/actions/account'
 import { CheckCircle2, AlertCircle, Download, Trash2 } from 'lucide-react'
@@ -33,7 +34,7 @@ function SectionCard({
 function StatusMessage({ type, text }: { type: 'success' | 'error'; text: string }) {
   return (
     <div className={cn('flex items-start gap-2 rounded-md px-3 py-2.5 text-sm',
-      type === 'success' ? 'bg-emerald-500/10 text-status-success dark:text-emerald-400' : 'bg-destructive/10 text-destructive'
+      type === 'success' ? 'bg-emerald-500/10 text-status-success dark:text-emerald-400' : 'bg-destructive/10 text-destructive-text'
     )}>
       {type === 'success'
         ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.5} />
@@ -172,15 +173,14 @@ export function AccountSettings({
               onChange={e => setFullName(e.target.value)}
             />
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Email address</Label>
-            <Input value={email} disabled className="opacity-50 cursor-not-allowed" />
-            <p className="text-xs text-muted-foreground">Change your email in the section below.</p>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Role</Label>
-            <Input value={role} disabled className="opacity-50 cursor-not-allowed capitalize" />
-          </div>
+          {/* B-04-07. Were unlabelled `<input disabled>` elements — no id, no htmlFor, no
+              aria-label — while fullName beside them was labelled correctly. */}
+          <ReadOnlyField
+            label="Email address"
+            value={email}
+            hint="Change your email in the section below."
+          />
+          <ReadOnlyField label="Role" value={role} valueClassName="capitalize" />
           {nameMsg && <StatusMessage type={nameMsg.type} text={nameMsg.text} />}
           <Button onClick={handleProfileSave} disabled={nameSaving} loading={nameSaving} className="self-start">
             Save profile

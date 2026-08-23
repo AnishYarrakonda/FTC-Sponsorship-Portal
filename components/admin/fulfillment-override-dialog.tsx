@@ -143,7 +143,7 @@ export function FulfillmentOverrideDialog({ fulfillment }: { fulfillment: any })
               placeholder="Explain why this manual override is being issued..."
             />
             {reason.length > 0 && !isReasonValid && (
-              <p className="text-xs text-destructive">Reason must be at least 10 characters (currently {reason.trim().length}).</p>
+              <p className="text-xs text-destructive-text">Reason must be at least 10 characters (currently {reason.trim().length}).</p>
             )}
           </div>
 

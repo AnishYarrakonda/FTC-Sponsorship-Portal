@@ -141,7 +141,7 @@ export function MessageThread({
                   )}
 
                   {rejected && (
-                    <div className="max-w-[42rem] rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                    <div className="max-w-[42rem] rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive-text">
                       <span className="inline-flex items-center gap-1.5 font-semibold">
                         <AlertTriangle className="size-3" aria-hidden />
                         Not sent to the sponsor

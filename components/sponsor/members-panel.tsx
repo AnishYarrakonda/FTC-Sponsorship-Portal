@@ -329,7 +329,7 @@ function MemberRowActions({
           disabled={isLastAdmin || blockedByApprovalFloor || isPending}
           title={isLastAdmin ? 'An organization must keep at least one admin.' : blockedByApprovalFloor ? approvalFloorTitle : undefined}
           onClick={handleRemove}
-          className="text-destructive focus:text-destructive"
+          className="text-destructive-text focus:text-destructive-text"
         >
           Remove from organization
         </DropdownMenuItem>

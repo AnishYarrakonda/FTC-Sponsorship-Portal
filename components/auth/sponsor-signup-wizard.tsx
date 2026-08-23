@@ -301,7 +301,7 @@ export function SponsorSignupWizard() {
             {showEmailVerify ? (
               <div className="space-y-6 text-foreground">
                 {error && (
-                  <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive">
+                  <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive-text">
                     <AlertDescription>{error}</AlertDescription>
                   </Alert>
                 )}
@@ -351,7 +351,7 @@ export function SponsorSignupWizard() {
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 text-foreground">
                 {error && (
-                  <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive">
+                  <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive-text">
                     <AlertDescription>{error}</AlertDescription>
                   </Alert>
                 )}

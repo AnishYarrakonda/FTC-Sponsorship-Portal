@@ -26,6 +26,11 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  /* B-04-10. Text-only destructive red. `text-destructive` and `bg-destructive` both
+     resolved to --color-destructive, so darkening one darkened the other; this splits
+     them. Buttons keep --destructive as a FILL (white foreground on it is already fine);
+     anything rendering destructive TEXT uses text-destructive-text. */
+  --color-destructive-text: var(--destructive-text);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -186,6 +191,27 @@
   --badge-warning-text: #854D0E;
   --badge-rejected-bg: #FCE8E8;
   --badge-rejected-text: #991B1B;
+
+  /* B-04-10. `--destructive` (oklch(0.577 0.245 27.325) ≈ #E91821) is used BOTH as a
+     button background and as text. As text it fails AA on this cream palette:
+
+       #E91821 on --bg-surface #FFFCF7 (card) = 4.44:1   — needs 4.5:1
+       #E91821 on --bg-app     #F7F3EE       = 4.12:1   — needs 4.5:1
+
+     Both measured at 14px normal weight. The text that fails is the banner warning that a
+     contract template has not been reviewed by an attorney, which is the most consequential
+     sentence on an admin screen.
+
+     Darkening --destructive itself would repaint every destructive BUTTON background too,
+     where the white foreground is already correct and a darker fill is a visual regression.
+     So this is a separate text-only token, the same shape --badge-rejected-* already uses.
+
+       #B91C1C on card = 6.32:1
+       #B91C1C on app  = 5.86:1
+
+     Headroom on both rather than scraping past 4.5, so a future background tweak does not
+     silently reintroduce the failure. */
+  --destructive-text: #B91C1C;
 
   /* Dark marketing surfaces */
   --surface-charcoal: #1E1C19;

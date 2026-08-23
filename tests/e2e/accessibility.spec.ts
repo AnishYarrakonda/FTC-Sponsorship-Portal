@@ -380,30 +380,140 @@ test.describe('Accessibility — authenticated journeys', () => {
     expect(focusedId).toBe('main-content')
   })
 
+  /**
+   * B-04-12. This test used to guard on
+   *   test.skip(!(await trigger.isVisible()), 'no dialog trigger on this dashboard state')
+   * with `trigger` = the "Graduate" button, which only renders when
+   * `team.status === 'incubator'` (components/coach/dashboard-shell.tsx). The seeded
+   * fixture team is created as `existing`, so on every clean run the button was absent,
+   * the test SKIPPED, and skipped reports as a pass.
+   *
+   * docs/accessibility-audit.md cited this test as proof that dialog focus is "pinned by a
+   * test". It was not pinned at all — and the dialog implementation was migrated from Radix
+   * to base-ui while the guard was dark.
+   *
+   * It now creates the state it needs instead of skipping when the state is absent, and
+   * restores it afterwards. It also asserts focus CONTAINMENT, which the original never
+   * did: opening a dialog and finding focus inside it does not prove Tab cannot walk out
+   * the back, which is the actual failure mode the finding was about.
+   */
   test('a dialog traps focus, closes on Escape, and returns focus to its trigger', async ({ page }) => {
+    const { data: coach } = await admin.from('profiles').select('id').eq('email', COACH_EMAIL).single()
+    const { data: team } = await admin
+      .from('teams')
+      .select('id, status')
+      .eq('owner_id', coach!.id)
+      .limit(1)
+      .single()
+    const originalStatus = team!.status
+
+    // The Graduate dialog is the coach-facing dialog the audit hand-verified. Put the
+    // fixture into the state that renders it rather than skipping when it is absent.
+    await admin.from('teams').update({ status: 'incubator' }).eq('id', team!.id)
+
+    try {
+      await signIn(page, COACH_EMAIL)
+      await gotoStable(page, '/dashboard')
+
+      const trigger = page.getByRole('button', { name: /graduate/i }).first()
+      // No test.skip here on purpose. If the trigger is missing now, that is a real
+      // regression in the dashboard, and it must fail rather than silently pass.
+      await expect(trigger, 'the Graduate trigger should render for an incubator team').toBeVisible()
+
+      await trigger.focus()
+      await trigger.press('Enter')
+
+      const dialog = page.getByRole('dialog')
+      await expect(dialog).toBeVisible()
+
+      // 1. Focus moved INTO the dialog rather than staying behind it.
+      const focusInside = await page.evaluate(() => {
+        const d = document.querySelector('[role="dialog"]')
+        return !!d && !!document.activeElement && d.contains(document.activeElement)
+      })
+      expect(focusInside, 'focus did not move into the dialog on open').toBe(true)
+
+      /**
+       * 2. CONTAINMENT — the assertion this test was missing. Tab further than the dialog
+       * has focusable children and require that focus never lands outside it. A dialog
+       * that merely receives focus on open, but lets Tab escape into the page behind it,
+       * passes the check above and fails users; that is exactly what A-08-04 described for
+       * the command palette.
+       */
+      for (let i = 0; i < 12; i++) {
+        await page.keyboard.press('Tab')
+        const stillInside = await page.evaluate(() => {
+          const d = document.querySelector('[role="dialog"]')
+          return !!d && !!document.activeElement && d.contains(document.activeElement)
+        })
+        expect(stillInside, `focus escaped the dialog after ${i + 1} Tab press(es)`).toBe(true)
+      }
+
+      // 3. And backwards, which is a separate code path in every focus-trap implementation.
+      for (let i = 0; i < 12; i++) {
+        await page.keyboard.press('Shift+Tab')
+        const stillInside = await page.evaluate(() => {
+          const d = document.querySelector('[role="dialog"]')
+          return !!d && !!document.activeElement && d.contains(document.activeElement)
+        })
+        expect(stillInside, `focus escaped the dialog after ${i + 1} Shift+Tab press(es)`).toBe(true)
+      }
+
+      // 4. Escape closes it.
+      await page.keyboard.press('Escape')
+      await expect(dialog).not.toBeVisible()
+
+      // 5. …and focus came back to the control that opened it, not to <body>.
+      await expect(trigger).toBeFocused()
+    } finally {
+      await admin.from('teams').update({ status: originalStatus }).eq('id', team!.id)
+    }
+  })
+
+  /**
+   * A-08-04 / B-04-05. The global command palette was the other "does it trap focus"
+   * question, and it was only ever verified by inspection because it does not mount under
+   * the preview harnesses. It mounts for a real signed-in session, so it is driven here
+   * for real: Cmd+K, containment, Escape, focus restoration.
+   */
+  test('the global command palette traps focus and restores it on Escape', async ({ page }) => {
     await signIn(page, COACH_EMAIL)
     await gotoStable(page, '/dashboard')
 
-    const trigger = page.getByRole('button', { name: /graduate/i }).first()
-    test.skip(!(await trigger.isVisible().catch(() => false)), 'no dialog trigger on this dashboard state')
+    // Focus a known control first, so "focus was restored" is a meaningful claim rather
+    // than "focus happened to be on body both times".
+    await page.evaluate(() => {
+      const el = document.querySelector('a[href], button') as HTMLElement | null
+      el?.focus()
+    })
+    const beforeTag = await page.evaluate(() => document.activeElement?.tagName ?? null)
+    expect(beforeTag, 'no focusable control found to open the palette from').not.toBe('BODY')
 
-    await trigger.focus()
-    await trigger.press('Enter')
+    const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
+    await page.keyboard.press(`${modifier}+KeyK`)
 
     const dialog = page.getByRole('dialog')
-    await expect(dialog).toBeVisible()
+    await expect(dialog, 'Cmd/Ctrl-K did not open the command palette').toBeVisible()
 
-    // Focus moved INTO the dialog rather than staying behind it.
     const focusInside = await page.evaluate(() => {
       const d = document.querySelector('[role="dialog"]')
       return !!d && !!document.activeElement && d.contains(document.activeElement)
     })
-    expect(focusInside, 'focus did not move into the dialog on open').toBe(true)
+    expect(focusInside, 'focus did not move into the command palette').toBe(true)
+
+    for (let i = 0; i < 10; i++) {
+      await page.keyboard.press('Tab')
+      const stillInside = await page.evaluate(() => {
+        const d = document.querySelector('[role="dialog"]')
+        return !!d && !!document.activeElement && d.contains(document.activeElement)
+      })
+      expect(stillInside, `focus escaped the palette after ${i + 1} Tab press(es)`).toBe(true)
+    }
 
     await page.keyboard.press('Escape')
     await expect(dialog).not.toBeVisible()
 
-    // …and came back to the control that opened it, not to <body>.
-    await expect(trigger).toBeFocused()
+    const afterOnBody = await page.evaluate(() => document.activeElement === document.body)
+    expect(afterOnBody, 'focus was dropped to <body> when the palette closed').toBe(false)
   })
 })

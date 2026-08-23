@@ -18,7 +18,7 @@ export default async function SponsorApprovalsPage() {
   ])
 
   if ('error' in result) {
-    return <p className="text-sm text-destructive">{result.error}</p>
+    return <p className="text-sm text-destructive-text">{result.error}</p>
   }
 
   return (

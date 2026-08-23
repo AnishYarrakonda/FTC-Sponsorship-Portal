@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { payoutProfileSchema, type PayoutProfileInput } from '@/lib/schemas/payout'
 import { savePayoutProfile } from '@/app/actions/payout'
+import { ReadOnlyField } from '@/components/ui/read-only-field'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -142,15 +143,20 @@ export function PayoutProfileForm({ teamId, initialData }: Props) {
                 />
 
                 {!replaceEin && initialData?.ein_last4 ? (
-                  <FormItem>
-                    <FormLabel>EIN</FormLabel>
-                    <div className="flex items-center gap-2">
-                      <Input disabled value={`•••••-••${initialData.ein_last4}`} className="font-mono bg-muted" />
-                      <Button type="button" variant="outline" size="sm" onClick={() => setReplaceEin(true)}>
-                        Replace
-                      </Button>
-                    </div>
-                  </FormItem>
+                  /* B-04-07. A masked EIN in an unlabelled `<input disabled>` announced as
+                     "disabled edit text, bullet bullet bullet 1234" — on the one field
+                     where knowing WHICH identifier this is, is the whole question. */
+                  <div className="flex items-end gap-2">
+                    <ReadOnlyField
+                      label="EIN"
+                      value={`•••••-••${initialData.ein_last4}`}
+                      valueClassName="font-mono"
+                      className="flex-1"
+                    />
+                    <Button type="button" variant="outline" size="sm" onClick={() => setReplaceEin(true)}>
+                      Replace
+                    </Button>
+                  </div>
                 ) : (
                   <FormField
                     control={form.control}
@@ -205,15 +211,18 @@ export function PayoutProfileForm({ teamId, initialData }: Props) {
                   />
 
                   {!replaceFiscalEin && initialData?.fiscal_sponsor_ein_last4 ? (
-                    <FormItem>
-                      <FormLabel>Fiscal Sponsor EIN</FormLabel>
-                      <div className="flex items-center gap-2">
-                        <Input disabled value={`•••••-••${initialData.fiscal_sponsor_ein_last4}`} className="font-mono bg-muted" />
-                        <Button type="button" variant="outline" size="sm" onClick={() => setReplaceFiscalEin(true)}>
-                          Replace
-                        </Button>
-                      </div>
-                    </FormItem>
+                    /* B-04-07, as above. */
+                    <div className="flex items-end gap-2">
+                      <ReadOnlyField
+                        label="Fiscal Sponsor EIN"
+                        value={`•••••-••${initialData.fiscal_sponsor_ein_last4}`}
+                        valueClassName="font-mono"
+                        className="flex-1"
+                      />
+                      <Button type="button" variant="outline" size="sm" onClick={() => setReplaceFiscalEin(true)}>
+                        Replace
+                      </Button>
+                    </div>
                   ) : (
                     <FormField
                       control={form.control}

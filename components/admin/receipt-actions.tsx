@@ -89,7 +89,7 @@ export function VoidReceiptDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
         render={
-          <Button variant="outline" size="sm" className="flex items-center gap-1.5 text-xs text-destructive hover:text-destructive">
+          <Button variant="outline" size="sm" className="flex items-center gap-1.5 text-xs text-destructive-text hover:text-destructive-text">
             <Ban className="h-3.5 w-3.5" />
             Void
           </Button>
@@ -119,7 +119,7 @@ export function VoidReceiptDialog({
               placeholder="e.g. Payee legal name was listed incorrectly; reissuing under updated payout profile."
             />
             {reason.length > 0 && !isValid && (
-              <p className="text-xs text-destructive">
+              <p className="text-xs text-destructive-text">
                 Reason must be at least 10 characters ({reason.trim().length}/10).
               </p>
             )}
@@ -203,7 +203,7 @@ export function ReissueReceiptDialog({
               placeholder="e.g. Updated payee legal name and W-9 verification completed."
             />
             {reason.length > 0 && !isValid && (
-              <p className="text-xs text-destructive">
+              <p className="text-xs text-destructive-text">
                 Reason must be at least 10 characters ({reason.trim().length}/10).
               </p>
             )}

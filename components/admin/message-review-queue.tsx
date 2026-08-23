@@ -109,7 +109,7 @@ export function MessageReviewQueue({
               <Card key={m.id} className="border-destructive/40">
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 text-sm">
-                    <Flag className="size-3.5 text-destructive" aria-hidden />
+                    <Flag className="size-3.5 text-destructive-text" aria-hidden />
                     {m.company_name} → {m.team_name}
                   </CardTitle>
                 </CardHeader>

@@ -250,7 +250,7 @@ function FulfillmentCard({ fulfillment: f, isVerified }: { fulfillment: any, isV
             )}
 
             {f.status === 'cancelled' && f.cancelled_reason && (
-              <div className="text-xs text-destructive mt-2 border-l-2 border-destructive pl-2">
+              <div className="text-xs text-destructive-text mt-2 border-l-2 border-destructive pl-2">
                 Cancelled reason: {f.cancelled_reason}
               </div>
             )}

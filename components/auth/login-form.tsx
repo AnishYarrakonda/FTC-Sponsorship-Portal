@@ -456,7 +456,7 @@ export function LoginForm() {
               </Alert>
             )}
             {error && (
-              <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive mb-6">
+              <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive-text mb-6">
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}

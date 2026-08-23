@@ -94,7 +94,7 @@ function FormLabel({
     <Label
       data-slot="form-label"
       data-error={!!error}
-      className={cn("data-[error=true]:text-destructive", className)}
+      className={cn("data-[error=true]:text-destructive-text", className)}
       htmlFor={formItemId}
       {...props}
     />
@@ -147,7 +147,7 @@ function FormMessage({ className, ...props }: React.ComponentProps<"p">) {
       // visually and was never announced. role="alert" implies aria-live="assertive".
       role={error ? "alert" : undefined}
       aria-live={error ? "assertive" : undefined}
-      className={cn("text-destructive text-sm", className)}
+      className={cn("text-destructive-text text-sm", className)}
       {...props}
     >
       {body}

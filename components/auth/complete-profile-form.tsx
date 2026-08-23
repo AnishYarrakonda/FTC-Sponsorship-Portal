@@ -124,7 +124,7 @@ export function CompleteProfileForm({ email, defaultName }: { email: string; def
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
                 {error && (
-                  <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive">
+                  <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive-text">
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>{error}</AlertDescription>
                   </Alert>

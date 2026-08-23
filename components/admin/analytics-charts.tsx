@@ -133,7 +133,7 @@ export default function AnalyticsCharts() {
   }, [])
 
   if (loading) return <div className="text-muted-foreground text-sm py-8">Loading charts...</div>
-  if (loadError) return <div className="text-destructive text-sm py-8" role="alert">{loadError}</div>
+  if (loadError) return <div className="text-destructive-text text-sm py-8" role="alert">{loadError}</div>
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (!active || !payload?.length) return null
@@ -266,7 +266,8 @@ export default function AnalyticsCharts() {
       {/* Row 3: Detailed Sponsor Table */}
       <div className="rounded-xl border border-border bg-card p-6 shadow-sm overflow-hidden">
         <h3 className="text-[15px] font-medium text-foreground tracking-tight mb-4">Sponsor Funding Breakdown</h3>
-        <div className="overflow-x-auto">
+        {/* B-04-09. See app/(admin)/analytics/page.tsx — same rule, same fix. */}
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Sponsor funding breakdown table, scrollable">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">

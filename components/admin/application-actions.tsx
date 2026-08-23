@@ -28,7 +28,7 @@ export function ApplicationActions({ applicationId }: { applicationId: string })
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {error && <p className="text-xs text-destructive mr-2">{error}</p>}
+      {error && <p className="text-xs text-destructive-text mr-2">{error}</p>}
       {warning && (
         <div className="w-full">
           <ActionWarning>{warning}</ActionWarning>

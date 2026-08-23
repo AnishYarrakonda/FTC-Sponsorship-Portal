@@ -122,7 +122,7 @@ export function InFlightSubmissions({ submissions }: { submissions: InFlightSubm
               )}
 
               {errors[s.id] && (
-                <p className="text-sm text-destructive">{errors[s.id]}</p>
+                <p className="text-sm text-destructive-text">{errors[s.id]}</p>
               )}
 
               {sent[s.id] ? (

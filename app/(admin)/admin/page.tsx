@@ -159,7 +159,7 @@ export default async function AdminDashboardPage() {
                     <div key={s.id}>
                       <div className="mb-1 flex justify-between text-sm">
                         <span className="font-medium text-foreground">{s.company_name}</span>
-                        <span className={pct >= 95 ? 'text-destructive' : 'text-status-warning'}>{pct}%</span>
+                        <span className={pct >= 95 ? 'text-destructive-text' : 'text-status-warning'}>{pct}%</span>
                       </div>
                       <div className="h-1 w-full rounded-full bg-muted">
                         <div className={cn('h-1 rounded-full transition-all', pct >= 95 ? 'bg-destructive' : 'bg-amber-500')} style={{ width: `${pct}%` }} />

@@ -148,7 +148,12 @@ export default async function AnalyticsPage() {
           Recent Activity
         </div>
         <div className="rounded-xl border border-border bg-card overflow-hidden">
-          <div className="overflow-x-auto">
+          {/* B-04-09. A container that scrolls horizontally is functionality, and WCAG
+              2.1.1 Keyboard (A) requires functionality to be operable from a keyboard.
+              This was not in the tab order and carried no role or name, so a keyboard-only
+              user could not scroll to the clipped columns at all (axe:
+              scrollable-region-focusable, serious). */}
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Recent activity table, scrollable">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 border-b border-border">
                 <tr>

@@ -112,7 +112,7 @@ function ChipInput({
               <button
                 type="button"
                 aria-label={`Remove ${name}`}
-                className="text-muted-foreground hover:text-destructive transition-colors"
+                className="text-muted-foreground hover:text-destructive-text transition-colors"
                 onClick={() => onChange(value.filter((n) => n !== name))}
               >
                 <X className="h-3 w-3" />
@@ -363,7 +363,7 @@ export function PortfolioTab({ team, achievements }: { team: Team, achievements:
               </Button>
             </div>
             {errorCount > 0 && (
-              <p className="text-[10px] text-destructive font-medium animate-pulse">
+              <p className="text-[10px] text-destructive-text font-medium animate-pulse">
                 Please fix {errorCount} error{errorCount > 1 ? 's' : ''} above
               </p>
             )}
@@ -375,25 +375,35 @@ export function PortfolioTab({ team, achievements }: { team: Team, achievements:
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Payout &amp; tax details</h3>
+              {/* B-04-11. These five were hand-rolled with raw Tailwind palette classes
+                  while every other status badge in the app uses the --badge-* tokens.
+                  Measured over --bg-surface #FFFCF7: amber-600 3.11:1 and emerald-600
+                  3.68:1 both fail AA for this 12px text (and the finding measured the
+                  amber one at ~2.8:1 over the composited tint). The token pairs measure
+                  warning 6.32:1, success 5.24:1, pending 4.84:1, rejected 7.06:1.
+
+                  The finding named only the amber badge; the other four are the same
+                  defect in the same element and are fixed together rather than left to be
+                  refiled. */}
               {payoutStatus === 'not_started' && (
                 <span className="rounded-full bg-muted border border-border px-2.5 py-0.5 text-xs font-medium text-muted-foreground">Not started</span>
               )}
               {payoutStatus === 'awaiting_upload' && (
-                <span className="rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 text-xs font-medium text-amber-600">Awaiting W-9</span>
+                <span className="rounded-full border px-2.5 py-0.5 text-xs font-medium bg-[var(--badge-warning-bg)] border-[var(--badge-warning-text)]/25 text-[var(--badge-warning-text)]">Awaiting W-9</span>
               )}
-              {/* B-03-13. Verified, document purged. Emerald, not amber: the verification
+              {/* B-03-13. Verified, document purged. Success, not warning: the verification
                   stands and no payment is blocked — only the copy asks for a re-upload. */}
               {payoutStatus === 'verified_purged' && (
-                <span className="rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 text-xs font-medium text-emerald-600">Verified · re-upload requested</span>
+                <span className="rounded-full border px-2.5 py-0.5 text-xs font-medium bg-[var(--badge-success-bg)] border-[var(--badge-success-text)]/25 text-[var(--badge-success-text)]">Verified · re-upload requested</span>
               )}
               {payoutStatus === 'in_review' && (
-                <span className="rounded-full bg-blue-500/10 border border-blue-500/20 px-2.5 py-0.5 text-xs font-medium text-blue-600">In review</span>
+                <span className="rounded-full border px-2.5 py-0.5 text-xs font-medium bg-[var(--badge-pending-bg)] border-[var(--badge-pending-text)]/25 text-[var(--badge-pending-text)]">In review</span>
               )}
               {payoutStatus === 'verified' && (
-                <span className="rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 text-xs font-medium text-emerald-600">Verified</span>
+                <span className="rounded-full border px-2.5 py-0.5 text-xs font-medium bg-[var(--badge-success-bg)] border-[var(--badge-success-text)]/25 text-[var(--badge-success-text)]">Verified</span>
               )}
               {payoutStatus === 'rejected' && (
-                <span className="rounded-full bg-red-500/10 border border-red-500/20 px-2.5 py-0.5 text-xs font-medium text-red-600">Needs attention (rejected)</span>
+                <span className="rounded-full border px-2.5 py-0.5 text-xs font-medium bg-[var(--badge-rejected-bg)] border-[var(--badge-rejected-text)]/25 text-[var(--badge-rejected-text)]">Needs attention (rejected)</span>
               )}
             </div>
             <p className="text-xs text-muted-foreground">
@@ -505,7 +515,7 @@ export function PortfolioTab({ team, achievements }: { team: Team, achievements:
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-9 w-9 text-muted-foreground hover:text-destructive transition-colors"
+                    className="h-9 w-9 text-muted-foreground hover:text-destructive-text transition-colors"
                     onClick={() => removeAch(index)}
                   >
                     <Trash aria-hidden="true" className="h-4 w-4" />
@@ -671,7 +681,7 @@ export function PortfolioTab({ team, achievements }: { team: Team, achievements:
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="h-9 w-9 text-muted-foreground hover:text-destructive transition-colors"
+                  className="h-9 w-9 text-muted-foreground hover:text-destructive-text transition-colors"
                   onClick={() => removePress(index)}
                 >
                   <Trash aria-hidden="true" className="h-4 w-4" />
@@ -841,7 +851,7 @@ export function PortfolioTab({ team, achievements }: { team: Team, achievements:
                     <div className="col-span-1 flex justify-center">
                       <button
                         type="button"
-                        className="text-muted-foreground hover:text-destructive transition-colors"
+                        className="text-muted-foreground hover:text-destructive-text transition-colors"
                         onClick={() => {
                           // eslint-disable-next-line @typescript-eslint/no-explicit-any
                           const newItems = field.value.filter((_: any, i: number) => i !== index)

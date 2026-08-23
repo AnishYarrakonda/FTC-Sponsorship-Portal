@@ -7,7 +7,7 @@ export default async function SponsorMembersPage() {
 
   if ('error' in result) {
     if (result.error === 'Unauthorized' || result.error === 'Forbidden') redirect('/login')
-    return <p className="text-sm text-destructive">{result.error}</p>
+    return <p className="text-sm text-destructive-text">{result.error}</p>
   }
 
   return (

@@ -51,8 +51,8 @@ export function SaveIndicator({ state, className }: SaveIndicatorProps) {
           )}
           {state === 'error' && (
             <>
-              <AlertCircle className="h-3.5 w-3.5 text-destructive shrink-0" />
-              <span className="text-destructive">Autosave failed</span>
+              <AlertCircle className="h-3.5 w-3.5 text-destructive-text shrink-0" />
+              <span className="text-destructive-text">Autosave failed</span>
             </>
           )}
         </motion.span>

@@ -291,7 +291,7 @@ export function PortfolioForm({ initialSubmission, initialValues, sponsors = [],
             {!readOnly && (
               <div className="flex flex-col items-end gap-4 pt-6 border-t">
                 {Object.keys(form.formState.errors).length > 0 && (
-                  <p className="text-xs text-destructive font-medium animate-pulse">
+                  <p className="text-xs text-destructive-text font-medium animate-pulse">
                     Please fix {Object.keys(form.formState.errors).length} validation error{Object.keys(form.formState.errors).length > 1 ? 's' : ''} below
                   </p>
                 )}

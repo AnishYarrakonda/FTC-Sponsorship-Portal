@@ -24,8 +24,14 @@ export function ProductShowcase({
 }) {
   return (
     <section className="mx-auto max-w-[1440px] px-6 py-24">
+      {/* B-04-08. `min-w-0` on both grid children. Grid items default to
+          `min-width: auto`, so a child cannot shrink below its MIN-CONTENT width — here
+          the mock's monospace URL line and its mock table. At a 320px viewport that forced
+          documentElement.scrollWidth to 331px and the landing page scrolled sideways by
+          11px, failing WCAG 1.4.10 Reflow (AA). Every other public page measured exactly
+          320 and did not scroll, so this section was the only offender. */}
       <div className={cn('grid gap-12 lg:grid-cols-2 lg:gap-16 items-center', flipped && 'lg:[&>*:first-child]:order-2')}>
-        <FadeUp>
+        <FadeUp className="min-w-0">
           {eyebrow && <p className="text-xs font-mono uppercase tracking-[0.15em] text-primary">{eyebrow}</p>}
           <h2 className="mt-3 text-3xl sm:text-4xl font-semibold tracking-tight text-foreground">{title}</h2>
           <p className="mt-4 text-muted-foreground leading-relaxed">{body}</p>
@@ -41,7 +47,7 @@ export function ProductShowcase({
           </ul>
         </FadeUp>
 
-        <FadeUp delay={0.1}>{visual}</FadeUp>
+        <FadeUp delay={0.1} className="min-w-0">{visual}</FadeUp>
       </div>
     </section>
   )
@@ -53,7 +59,9 @@ export function PortfolioMock() {
     <div className="relative rounded-2xl border border-border bg-background/80 p-3 shadow-xl shadow-foreground/5 backdrop-blur">
       <div className="flex items-center gap-1.5 px-2 py-1.5">
         <WindowDots />
-        <span className="ml-3 font-mono text-xs text-muted-foreground">app.ftcpitfund.com/portfolio</span>
+        {/* B-04-08. `truncate` + `min-w-0` keeps this long URL inside the mock instead of
+            setting the grid column's min-content width. */}
+        <span className="ml-3 min-w-0 truncate font-mono text-xs text-muted-foreground">app.ftcpitfund.com/portfolio</span>
       </div>
       <div className="rounded-lg border border-border bg-card p-5 space-y-4">
         <div className="flex items-center justify-between">
@@ -95,7 +103,8 @@ export function ModerationMock() {
     <div className="relative rounded-2xl border border-border bg-background/80 p-3 shadow-xl shadow-foreground/5 backdrop-blur">
       <div className="flex items-center justify-between px-2 py-1.5">
         <WindowDots />
-        <span className="font-mono text-xs text-muted-foreground">app.ftcpitfund.com/admin/review</span>
+        {/* B-04-08, same as PortfolioMock above. */}
+        <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">app.ftcpitfund.com/admin/review</span>
       </div>
       <div className="rounded-lg border border-border bg-card">
         {/* submission header */}

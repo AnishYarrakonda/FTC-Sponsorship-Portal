@@ -123,7 +123,7 @@ export function CompleteSponsorApplicationForm({ email, defaultName }: { email: 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5 text-foreground">
             {error && (
-              <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive">
+              <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive-text">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
@@ -140,7 +140,10 @@ export function CompleteSponsorApplicationForm({ email, defaultName }: { email: 
               )} />
               <FormItem>
                 <FormLabel>Work Email Address</FormLabel>
-                <FormControl><Input type="email" value={email} disabled readOnly /></FormControl>
+                {/* B-04-07. Read-only, so it is a value not a control. Left inside
+                    FormItem/FormLabel, which DOES associate the label — unlike the bare
+                    disabled inputs elsewhere — but readOnly + aria-readonly states it. */}
+                <FormControl><Input type="email" value={email} disabled readOnly aria-readonly="true" /></FormControl>
               </FormItem>
             </div>
 
