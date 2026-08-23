@@ -13,6 +13,7 @@ import {
   orgApprovalSettingsSchema,
 } from '@/lib/schemas/sponsor-approvals'
 
+import { writeAudit } from '@/lib/audit'
 export async function confirmFundingProposal(data: { proposalId: string; note?: string }) {
   const parsed = confirmProposalSchema.safeParse(data)
   if (!parsed.success) {
@@ -107,7 +108,7 @@ export async function rejectFundingProposal(data: { proposalId: string; note: st
     return { error: 'This approval request has already been resolved.' }
   }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'reject_sponsor_funding',
     entity_type: 'sponsor_decision_proposals',
@@ -168,7 +169,7 @@ export async function withdrawFundingProposal(data: { proposalId: string }) {
     return { error: 'This approval request has already been resolved.' }
   }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'withdraw_sponsor_funding',
     entity_type: 'sponsor_decision_proposals',
@@ -230,7 +231,7 @@ export async function updateOrgApprovalSettings(data: { approvalRequiredAboveCen
   })
   if (updateError) return { error: mapDbError(updateError, 'updateOrgApprovalSettings.update') }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'update_org_approval_settings',
     entity_type: 'sponsors',

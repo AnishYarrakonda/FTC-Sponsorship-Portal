@@ -2,6 +2,7 @@
 
 import { requireAdmin } from '@/lib/actions-utils'
 import { mapDbError } from '@/lib/errors'
+import { writeAudit } from '@/lib/audit'
 
 export type CapacityDriftRow = {
   sponsor_id: string
@@ -51,7 +52,7 @@ export async function runCapacityAudit(): Promise<
     .from('sponsors')
     .select('id', { count: 'exact', head: true })
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'capacity_audit_run',
     entity_type: 'sponsors',

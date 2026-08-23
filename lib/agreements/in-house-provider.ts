@@ -26,7 +26,7 @@ export class InHouseSignatureProvider implements SignatureProvider {
 
     const { data: template, error: templateError } = await adminClient
       .from('agreement_templates')
-      .select('id, key, version, title, body, consent_text')
+      .select('id, key, version, title, body, consent_text, needs_legal_review')
       .eq('key', TEMPLATE_KEY)
       .eq('status', 'effective')
       .maybeSingle()
@@ -75,6 +75,7 @@ export class InHouseSignatureProvider implements SignatureProvider {
       consentText: template.consent_text,
       consentTextHash,
       expectedSignerName: signerProfile?.full_name ?? '',
+      needsLegalReview: template.needs_legal_review === true,
     }
   }
 

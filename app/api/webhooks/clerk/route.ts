@@ -6,12 +6,40 @@ import { createInAppNotification } from '@/lib/notify'
 import { isSponsorRole, reconcileMemberRole } from '@/lib/sponsor-roles'
 import { env } from '@/lib/env'
 import * as Sentry from '@sentry/nextjs'
+import { writeAudit } from '@/lib/audit'
 
 // Clerk webhooks are Svix-signed and authenticate themselves; this route is
 // allowlisted in the root middleware (`/api/webhooks(.*)`) so it is reachable
 // without a session. Profile *creation* is owned by the signup server actions
 // (createCoachProfile / createSponsorApplication), so user.created is a no-op
 // here. This handler keeps `profiles` in sync on deletion and email changes.
+
+/**
+ * Notify every admin, in-app and by email.
+ *
+ * The webhook has no acting user, so there is nobody to return an error to — an
+ * unrecoverable event here is only ever seen if it is pushed to someone. Best-effort by
+ * design: a notification failure must never turn a handled event into a Svix retry loop,
+ * which is the exact failure mode A-01-02 is about.
+ */
+async function alertAdmins(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  title: string,
+  body: string,
+  excludeProfileId: string | null
+): Promise<void> {
+  try {
+    const { data: admins } = await supabase.from('profiles').select('id').eq('role', 'admin')
+    for (const admin of (admins ?? []) as { id: string }[]) {
+      if (excludeProfileId && admin.id === excludeProfileId) continue
+      await createInAppNotification({ recipientId: admin.id, type: 'general', title, body })
+    }
+  } catch (e) {
+    console.error('[clerk-webhook] failed to alert admins:', title, e)
+    Sentry.captureException(e)
+  }
+}
 
 export async function POST(req: NextRequest) {
   let evt
@@ -37,6 +65,71 @@ export async function POST(req: NextRequest) {
         const clerkUserId = evt.data.id
         if (!clerkUserId) break
 
+        /**
+         * A-01-02 pre-flight. `assert_super_admin_floor` (0084) raises 23514 rather than
+         * let the platform reach zero super admins, so deleting the last one makes the
+         * profiles DELETE permanently impossible. The old order — purge storage, then
+         * delete, then 500 on failure — meant Svix retried forever against a delete that
+         * could never succeed, while the user's government ID had ALREADY been
+         * irrecoverably destroyed on the first attempt.
+         *
+         * Storage genuinely must be purged before the row (see below), so the only safe
+         * fix is to find out beforehand. Checked here, nothing destructive has happened
+         * yet, and the answer is stable: the floor cannot un-trip on retry.
+         */
+        const { data: doomedProfile } = await supabase
+          .from('profiles')
+          .select('id, role, admin_level, email')
+          .eq('clerk_user_id', clerkUserId)
+          .maybeSingle()
+
+        if (doomedProfile?.role === 'admin' && doomedProfile.admin_level === 'super_admin') {
+          const { count: superAdminCount } = await supabase
+            .from('profiles')
+            .select('id', { count: 'exact', head: true })
+            .eq('role', 'admin')
+            .eq('admin_level', 'super_admin')
+
+          if ((superAdminCount ?? 0) <= 1) {
+            console.error('[clerk-webhook] user.deleted refused: last super_admin', clerkUserId)
+            await writeAudit(supabase, {
+              actor_id: null,
+              action: 'account_delete_blocked_super_admin_floor',
+              entity_type: 'profiles',
+              entity_id: doomedProfile.id,
+              metadata: { clerk_user_id: clerkUserId, super_admin_count: superAdminCount ?? 0 },
+            })
+            await alertAdmins(
+              supabase,
+              'An account deletion was blocked',
+              'A Clerk account was deleted, but it belongs to the platform\'s last super admin, so the profile cannot be removed. ' +
+                'Promote another admin to super admin, then delete the profile manually. No files were purged.',
+              doomedProfile.id
+            )
+            // 200, not 500: Svix must stop retrying. The floor will not un-trip on its own,
+            // and nothing destructive has run.
+            return NextResponse.json({ success: true, blocked: 'super_admin_floor' })
+          }
+        }
+
+        /**
+         * A-01-01. sponsor_members.profile_id is ON DELETE CASCADE, so the memberships
+         * vanish with the profile — read them now or they are unrecoverable. If this was
+         * an org's last member, the sponsors row survives with nobody able to act on it,
+         * and every pitch dispatched to that org sits pending until it expires, holding
+         * capacity and the coach's season hostage.
+         */
+        const orgIdsToCheck: string[] = []
+        if (doomedProfile?.id) {
+          const { data: memberships } = await supabase
+            .from('sponsor_members')
+            .select('sponsor_id')
+            .eq('profile_id', doomedProfile.id)
+          for (const m of (memberships ?? []) as { sponsor_id: string }[]) {
+            if (m.sponsor_id) orgIdsToCheck.push(m.sponsor_id)
+          }
+        }
+
         // Storage BEFORE the row. Deleting the profile first orphans every file the
         // user uploaded — the objects are keyed by Clerk id, but nothing is left to
         // tell us the id ever existed, so "delete my account" quietly kept their
@@ -60,12 +153,85 @@ export async function POST(req: NextRequest) {
         if (error) {
           console.error('[clerk-webhook] failed to delete profile', error)
           Sentry.captureException(error)
+
+          // A-01-02 backstop. 23514 is assert_super_admin_floor — a refusal, not a
+          // transient failure, so retrying cannot ever succeed. The pre-flight above
+          // should have caught it; if a concurrent demotion slipped past, stop the loop
+          // here rather than redelivering forever.
+          if ((error as { code?: string }).code === '23514') {
+            await writeAudit(supabase, {
+              actor_id: null,
+              action: 'account_delete_blocked_super_admin_floor',
+              entity_type: 'profiles',
+              entity_id: doomedProfile?.id ?? null,
+              metadata: { clerk_user_id: clerkUserId, detected: 'post_delete', db_error: error.message },
+            })
+            await alertAdmins(
+              supabase,
+              'An account deletion was blocked',
+              'A Clerk account was deleted but its profile could not be removed: it is the last super admin. ' +
+                'Promote another admin to super admin, then delete the profile manually. Their uploaded files have already been purged.',
+              doomedProfile?.id ?? null
+            )
+            return NextResponse.json({ success: true, blocked: 'super_admin_floor' })
+          }
+
           // P0-12: this used to fall through to the {success:true} below. Svix treats
           // any 2xx as delivered and NEVER retries, so a transient DB failure left the
           // Clerk identity deleted and the profile, team, submissions and personal data
           // orphaned — unreachable by any UI, because nothing can resolve a dead
           // clerk_user_id. Returning 500 makes Svix retry with backoff.
           return NextResponse.json({ error: 'profile delete failed' }, { status: 500 })
+        }
+
+        // A-01-01: the cascade has now run. Any org this user was the last member of is
+        // unmanned — deactivate it so no further pitch is dispatched into a dead end, and
+        // tell the admins, who are the only people who can reassign it.
+        for (const sponsorId of orgIdsToCheck) {
+          const { count: remaining } = await supabase
+            .from('sponsor_members')
+            .select('id', { count: 'exact', head: true })
+            .eq('sponsor_id', sponsorId)
+
+          if ((remaining ?? 0) > 0) continue
+
+          // A legacy owner is linked by profiles.sponsor_id rather than a member row, and
+          // is just as capable of acting — an org with one is not orphaned.
+          const { count: legacyOwners } = await supabase
+            .from('profiles')
+            .select('id', { count: 'exact', head: true })
+            .eq('sponsor_id', sponsorId)
+            .eq('role', 'sponsor')
+
+          if ((legacyOwners ?? 0) > 0) continue
+
+          const { data: orphan } = await supabase
+            .from('sponsors')
+            .select('id, company_name, status')
+            .eq('id', sponsorId)
+            .maybeSingle()
+
+          // Deactivating is deliberately conservative: it stops NEW dispatch without
+          // touching reservations or in-flight submissions, which carry money state that
+          // only expiry or an admin decision may release.
+          if (orphan && orphan.status !== 'inactive') {
+            await supabase.from('sponsors').update({ status: 'inactive' } as never).eq('id', sponsorId)
+          }
+
+          await writeAudit(supabase, {
+            actor_id: null,
+            action: 'sponsor_org_orphaned_deactivated',
+            entity_type: 'sponsors',
+            entity_id: sponsorId,
+            metadata: { clerk_user_id: clerkUserId, company_name: orphan?.company_name ?? null },
+          })
+          await alertAdmins(
+            supabase,
+            'A sponsor organization has no members left',
+            `${orphan?.company_name ?? 'A sponsor organization'} lost its last member when an account was deleted, so it has been set to inactive. ` +
+              'Any pitches already dispatched to it will sit unanswered until they expire — reassign an owner or decide them manually.',
+            null
+          )
         }
         break
       }
@@ -120,7 +286,7 @@ export async function POST(req: NextRequest) {
           // the retry never succeeds and just buries the signal. Record it, alert admins,
           // and stop, rather than looping for hours. No orphan member is created.
           console.error('[clerk-webhook] organizationMembership.created: no sponsor for clerk_org_id', clerkOrgId)
-          await supabase.from('audit_log').insert({
+          await writeAudit(supabase, {
             actor_id: null,
             action: 'sponsor_member_sync_orphan_org',
             entity_type: 'sponsor_members',
@@ -167,7 +333,7 @@ export async function POST(req: NextRequest) {
             .maybeSingle()
 
           if (emailTwin) {
-            await supabase.from('audit_log').insert({
+            await writeAudit(supabase, {
               actor_id: null,
               action: 'sso_jit_provision_conflict',
               entity_type: 'profiles',
@@ -212,7 +378,7 @@ export async function POST(req: NextRequest) {
         }
 
         if (profile.role !== 'sponsor') {
-          await supabase.from('audit_log').insert({
+          await writeAudit(supabase, {
             actor_id: null,
             action: 'sponsor_member_sync_rejected',
             entity_type: 'sponsor_members',
@@ -235,7 +401,7 @@ export async function POST(req: NextRequest) {
           .maybeSingle()
 
         if ((profile.sponsor_id && profile.sponsor_id !== sponsor.id) || otherMembership) {
-          await supabase.from('audit_log').insert({
+          await writeAudit(supabase, {
             actor_id: null,
             action: 'sponsor_member_sync_rejected',
             entity_type: 'sponsor_members',
@@ -292,7 +458,7 @@ export async function POST(req: NextRequest) {
           // an enterprise-SSO first login apart from an invitation acceptance — both are
           // the same just-in-time path — so this one action covers both, with the domain
           // recorded so an SSO cohort is identifiable after the fact.
-          await supabase.from('audit_log').insert({
+          await writeAudit(supabase, {
             actor_id: null,
             action: 'sso_jit_provision',
             entity_type: 'sponsor_members',
@@ -442,7 +608,7 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        await supabase.from('audit_log').insert({
+        await writeAudit(supabase, {
           actor_id: null,
           action: 'remove_sponsor_member_webhook',
           entity_type: 'sponsor_members',

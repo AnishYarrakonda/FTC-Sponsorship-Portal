@@ -16,6 +16,7 @@ import {
   clearLegalReviewFlagSchema,
 } from '@/lib/schemas/agreement'
 
+import { writeAudit } from '@/lib/audit'
 export async function createAgreementDraft(data: {
   key: string
   title: string
@@ -79,7 +80,7 @@ export async function createAgreementDraft(data: {
   }
   if (error) return { error: mapDbError(error, 'createAgreementDraft.insert') }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'agreement_template_created',
     entity_type: 'agreement_templates',
@@ -146,7 +147,7 @@ export async function updateAgreementDraft(data: {
     return { error: mapDbError(error, 'updateAgreementDraft.update') }
   }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'agreement_template_updated',
     entity_type: 'agreement_templates',
@@ -235,7 +236,7 @@ export async function clearLegalReviewFlag(data: {
   if (error) return { error: mapDbError(error, 'clearLegalReviewFlag.update') }
 
   // 4. AUDIT
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'agreement_template_legal_review_cleared',
     entity_type: 'agreement_templates',

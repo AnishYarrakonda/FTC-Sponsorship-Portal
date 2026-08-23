@@ -24,6 +24,7 @@ import {
   createInAppNotification,
 } from '@/lib/notify'
 
+import { writeAudit } from '@/lib/audit'
 // ---------------------------------------------------------------------------
 // Vercel BotID (Basic mode)
 // ---------------------------------------------------------------------------
@@ -384,7 +385,7 @@ export async function createSponsorApplication(
   if (!gate.allowed) {
     // Log the DOMAIN and the category, never the full address: audit_log is admin-readable
     // but it is also what /api/admin/export dumps to CSV.
-    await adminClient.from('audit_log').insert({
+    await writeAudit(adminClient, {
       actor_id: existingProfile?.id ?? null,
       action: 'sponsor_application_blocked',
       entity_type: 'sponsor_applications',

@@ -23,6 +23,17 @@ export interface PreparedDocument {
   consentText: string
   consentTextHash: string
   expectedSignerName: string
+  /**
+   * B-03-08. True while the effective template still carries needs_legal_review — today
+   * the sponsorship agreement's Section 11 (Governing Law) is literally
+   * "TODO(legal): jurisdiction to be set by counsel."
+   *
+   * The admin /agreements page already flags this. The signer never saw it, and the
+   * signer is the one executing the document under ESIGN/UETA with a SHA-256 of the
+   * exact bytes stored as evidence. Surfacing it is not a substitute for counsel writing
+   * the clause — it is what stops someone signing while believing one exists.
+   */
+  needsLegalReview: boolean
 }
 
 export interface CaptureInput {

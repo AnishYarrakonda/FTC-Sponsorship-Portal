@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation'
 import { requireAuth, requireVerifiedCoach } from '@/lib/actions-utils'
 import { createInAppNotification } from '@/lib/notify'
 import { mapDbError } from '@/lib/errors'
+import { writeAudit } from '@/lib/audit'
 
 const DUPLICATE_SUBMISSION_MESSAGE = 'You already have an active pitch to this sponsor.'
 
@@ -158,7 +159,7 @@ export async function saveSubmission(
   // Audit log for draft→pending transition (material state change)
   if (status === 'pending') {
     const admin = createAdminClient()
-    await admin.from('audit_log').insert({
+    await writeAudit(admin, {
       actor_id: user.id,
       action: 'submit_submission',
       entity_type: 'submissions',

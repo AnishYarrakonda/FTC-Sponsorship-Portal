@@ -13,6 +13,7 @@ import {
   adminOverrideFulfillmentStatusSchema,
 } from '@/lib/schemas/fulfillment'
 
+import { writeAudit } from '@/lib/audit'
 function mapFulfillmentError(error: string): string {
   switch (error) {
     case 'unauthorized': return 'You do not have permission to perform this action.'
@@ -23,7 +24,20 @@ function mapFulfillmentError(error: string): string {
     case 'illegal_transition': return 'Invalid status transition.'
     case 'payment_details_required': return 'Payment method is required to mark as sent.'
     case 'future_date': return 'Cannot use a future date.'
-    default: return error
+    // B-03-05. This is the most likely error in the entire fulfillment flow — every
+    // pledge must be countersigned before payment — and it was the one error with no
+    // human-readable message, so the sponsor was shown the literal string
+    // `agreement_not_signed`. The copy names the next step because the sign link is not
+    // on the funding page the sponsor is standing on.
+    case 'agreement_not_signed':
+      return 'The sponsorship agreement has not been signed yet. Both your organization and the coach must sign before a payment can be marked as sent.'
+    case 'insufficient_org_role':
+      return 'Only an approver or organization admin can do that. Ask a teammate with that access.'
+    default:
+      // Never hand a raw database error code to the user. Log it instead, so an unmapped
+      // code shows up as a fixable gap rather than as leaked internals on someone's screen.
+      console.error('[fulfillment] unmapped transition error code:', error)
+      return 'That action could not be completed. Refresh the page and try again, or contact support if it persists.'
   }
 }
 
@@ -66,7 +80,7 @@ export async function markPaymentSent(data: z.input<typeof markPaymentSentSchema
   if (rpcError) return { error: rpcError.message }
   if (rpcData && !rpcData.ok) return { error: mapFulfillmentError(rpcData.error || 'Unknown error') }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'mark_payment_sent',
     entity_type: 'funding_fulfillments',
@@ -138,7 +152,7 @@ export async function confirmPaymentReceived(data: z.input<typeof confirmPayment
   if (rpcError) return { error: rpcError.message }
   if (rpcData && !rpcData.ok) return { error: mapFulfillmentError(rpcData.error || 'Unknown error') }
 
-  await localAdminClient.from('audit_log').insert({
+  await writeAudit(localAdminClient, {
     actor_id: user.id,
     action: 'confirm_payment_received',
     entity_type: 'funding_fulfillments',
@@ -228,7 +242,7 @@ export async function adminOverrideFulfillmentStatus(data: z.input<typeof adminO
   if (rpcError) return { error: rpcError.message }
   if (rpcData && !rpcData.ok) return { error: mapFulfillmentError(rpcData.error || 'Unknown error') }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'admin_override_fulfillment',
     entity_type: 'funding_fulfillments',

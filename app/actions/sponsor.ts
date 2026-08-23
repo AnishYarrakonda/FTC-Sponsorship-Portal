@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { requireAdmin, requireSuperAdmin } from '@/lib/actions-utils'
 import { mapDbError } from '@/lib/errors'
+import { writeAudit } from '@/lib/audit'
 
 /**
  * What a sponsor write records in audit_log — the identity of the company and the
@@ -89,7 +90,7 @@ export async function adminCreateSponsor(data: SponsorInput) {
   // entity_id, not just metadata: without it the create and every later cap change on the
   // same company cannot be joined in the audit log — which is the one question this trail
   // exists to answer.
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'create_sponsor',
     entity_type: 'sponsors',
@@ -155,7 +156,7 @@ export async function adminUpdateSponsor(id: string, data: SponsorInput) {
 
   // parsed output, never the raw `data` argument: audit_log has no expiry and this used to
   // record whatever a caller sent, unvalidated, including the contact email.
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'update_sponsor',
     entity_type: 'sponsors',
@@ -195,7 +196,7 @@ export async function deleteSponsor(id: string): Promise<{ success?: true; error
   const { error } = await adminClient.from('sponsors').delete().eq('id', parsed.data.id)
   if (error) return { error: mapDbError(error, 'deleteSponsor.delete') }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'delete_sponsor',
     entity_type: 'sponsors',
@@ -263,7 +264,7 @@ export async function adminToggleSponsorStatus(id: string, newStatus: 'active' |
 
   if (error) return { error: mapDbError(error, 'adminToggleSponsorStatus.update') }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'toggle_sponsor_status',
     entity_type: 'sponsors',

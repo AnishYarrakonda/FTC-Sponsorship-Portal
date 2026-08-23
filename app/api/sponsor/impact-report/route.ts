@@ -3,6 +3,7 @@ import { requireSponsor } from '@/lib/actions-utils'
 import { createClient } from '@/lib/supabase/server'
 import { rowToCsv } from '@/lib/csv'
 import type { SponsorImpactPayload } from '@/lib/impact-report/build'
+import { writeAudit } from '@/lib/audit'
 
 /**
  * GET /api/sponsor/impact-report?year=YYYY&format=json|csv
@@ -33,7 +34,7 @@ export async function GET(req: Request) {
 
   const requestedSponsor = url.searchParams.get('sponsorId')
   if (requestedSponsor && !sponsorIds.includes(requestedSponsor)) {
-    await adminClient.from('audit_log').insert({
+    await writeAudit(adminClient, {
       actor_id: user.id,
       action: 'impact_report_cross_tenant_attempt',
       entity_type: 'impact_report_snapshots',
@@ -70,7 +71,7 @@ export async function GET(req: Request) {
     )
   }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'export_sponsor_impact_report',
     entity_type: 'impact_report_snapshots',

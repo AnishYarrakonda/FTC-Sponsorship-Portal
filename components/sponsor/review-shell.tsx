@@ -5,24 +5,14 @@ import Link from 'next/link'
 import { isAwaitingSponsor, isTerminal } from '@/lib/submission-status'
 import { statusLabel } from '@/components/ui/status-badge'
 import { useRouter } from 'next/navigation'
-import {
-  Building2,
-  MapPin,
-  Target,
-  Award,
-  ChevronLeft,
-  CheckCircle2,
-  XCircle,
-  MessageSquare,
-  ExternalLink,
-  History,
-  ShieldCheck,
-} from 'lucide-react'
+import { Award, Building2, CheckCircle2, ChevronLeft, ExternalLink, History, MapPin, MessageSquare, ShieldCheck, Target, Wallet, XCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
+import { RichText } from '@/components/ui/rich-text'
 import { cn, htmlToPlainText } from '@/lib/utils'
 import { sponsorUpdateSubmissionStatus } from '@/app/actions/sponsor-decision'
 import { toast } from 'sonner'
@@ -106,10 +96,23 @@ export function SponsorReviewShell({
   const [feedback, setFeedback] = useState('')
   const [showConfirm, setShowConfirm] = useState<'approved' | 'declined' | 'changes_requested' | null>(null)
   const [pendingApprovalResult, setPendingApprovalResult] = useState<{ amountCents?: number } | null>(null)
+  // B-03-07: the partial-offer step, mirroring the token page's SponsorDecisionPanel.
+  const [showPartial, setShowPartial] = useState(false)
+  const [partialAmount, setPartialAmount] = useState('')
   const sponsorCompany = submissionData?.sponsors?.company_name || 'your company'
 
   const amountCents = submissionData?.requested_amount_cents ?? 0
   const willNeedApproval = requiresApproval(amountCents, approvalThresholdCents)
+
+  // B-03-07 partial-offer validation, matching SponsorDecisionPanel on the token page so
+  // the two surfaces cannot disagree about what a sponsor may offer.
+  const partialCents = Math.round(parseFloat(partialAmount || '0') * 100)
+  const partialExceedsAsk = partialCents > amountCents && amountCents > 0
+  const partialIsValid = Number.isFinite(partialCents) && partialCents > 0 && !partialExceedsAsk
+  const partialNeedsApproval = requiresApproval(
+    partialIsValid ? partialCents : amountCents,
+    approvalThresholdCents
+  )
 
   const achievements = teamData?.team_achievements ?? []
   const pastSponsors = teamData?.past_sponsors ?? []
@@ -128,12 +131,16 @@ export function SponsorReviewShell({
   ].filter(Boolean) as string[]
   const githubUrl = safeHttpUrl(teamData?.github_link)
 
-  const handleDecision = (status: 'approved' | 'declined' | 'changes_requested') => {
+  const handleDecision = (
+    status: 'approved' | 'declined' | 'changes_requested',
+    offerCents?: number
+  ) => {
     startTransition(async () => {
       const result = await sponsorUpdateSubmissionStatus(
         submissionData.id,
         status,
-        feedback
+        feedback,
+        offerCents
       )
 
       if ('success' in result && result.success) {
@@ -258,7 +265,20 @@ export function SponsorReviewShell({
               {storyFacts.length > 0 && (
                 <p className="text-[13px] font-medium text-foreground">{storyFacts.join(' • ')}</p>
               )}
-              <p className="text-[15px] leading-relaxed text-foreground">{teamData?.mission_statement || 'No mission statement provided.'}</p>
+              {/* B-03-02. Rendered, not flattened: this is the sponsor's money-decision
+                  surface and it must agree with app/sponsor-view/[token]/page.tsx, which
+                  shows the same field to the same reader via RichText. Two surfaces for
+                  one reader disagreeing about the same field is the actual defect.
+                  (community_endorsements below stays flattened on purpose — it is styled
+                  as a pull-quote, not as authored prose.) */}
+              {teamData?.mission_statement ? (
+                <RichText
+                  html={teamData.mission_statement}
+                  className="text-[15px] leading-relaxed text-foreground"
+                />
+              ) : (
+                <p className="text-[15px] leading-relaxed text-foreground">No mission statement provided.</p>
+              )}
               {teamData?.coach_experience && (
                 <p className="text-[13px] leading-relaxed text-muted-foreground">
                   <span className="font-medium text-foreground">Coaching: </span>
@@ -431,6 +451,81 @@ export function SponsorReviewShell({
                       )}
                       {willNeedApproval ? 'Send for approval' : 'Approve Sponsorship'}
                     </Button>
+                    {/* B-03-07. "Offer Partial Amount" existed only on the emailed
+                        bearer link. A sponsor who never received that email — the case the
+                        moderation queue itself flags — had exactly two choices in the
+                        portal: fund in full, or decline. Both RPCs already accepted a
+                        partial amount; only this console and the action hardcoded 0. */}
+                    {!showPartial ? (
+                      <Button
+                        variant="outline"
+                        className="w-full border-border hover:bg-accent text-foreground"
+                        disabled={isPending}
+                        onClick={() => setShowPartial(true)}
+                      >
+                        <Wallet className="mr-2 h-4 w-4" />
+                        Offer Partial Amount…
+                      </Button>
+                    ) : (
+                      <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
+                        <p className="text-[13px] text-muted-foreground">
+                          The full request is ${(amountCents / 100).toLocaleString()}. Enter what your
+                          organization can commit.
+                        </p>
+                        {/* A label, not a placeholder: a placeholder is not reliably exposed
+                            as an accessible name and vanishes once the field has a value.
+                            This is the field that decides how much money a team receives. */}
+                        <Label htmlFor="portal-partial-amount" className="text-[13px] text-foreground">
+                          Amount to offer (US dollars)
+                        </Label>
+                        <div className="flex">
+                          <span
+                            aria-hidden="true"
+                            className="flex items-center rounded-l-md border border-r-0 border-input bg-muted px-3 text-sm text-muted-foreground"
+                          >
+                            $
+                          </span>
+                          <Input
+                            id="portal-partial-amount"
+                            type="number"
+                            min="1"
+                            step="0.01"
+                            inputMode="decimal"
+                            value={partialAmount}
+                            onChange={(e) => setPartialAmount(e.target.value)}
+                            className="rounded-l-none"
+                            aria-invalid={partialExceedsAsk || undefined}
+                            aria-describedby={partialExceedsAsk ? 'portal-partial-amount-error' : undefined}
+                          />
+                        </div>
+                        {partialExceedsAsk && (
+                          <p id="portal-partial-amount-error" role="alert" className="text-xs text-status-warning">
+                            A partial offer can&apos;t exceed the full request of $
+                            {(amountCents / 100).toLocaleString()}.
+                          </p>
+                        )}
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            className="flex-1"
+                            disabled={isPending}
+                            onClick={() => {
+                              setShowPartial(false)
+                              setPartialAmount('')
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            className="flex-1 bg-primary hover:bg-primary-hover text-primary-foreground"
+                            disabled={isPending || !partialIsValid}
+                            onClick={() => handleDecision('approved', partialCents)}
+                          >
+                            {partialNeedsApproval ? 'Send for approval' : 'Confirm Partial Offer'}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-3">
                       <Button
                         variant="outline"

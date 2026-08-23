@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import type { SponsorImpactPayload } from '@/lib/impact-report/build'
 import { isRecognitionBenefitType, recognitionBenefitLabel } from '@/lib/recognition'
+import { RichText } from '@/components/ui/rich-text'
 
 /**
  * The print-optimised report body. A Server Component: it renders a stored payload and
@@ -136,7 +137,9 @@ export function ImpactReportView({ payload }: { payload: SponsorImpactPayload })
                       <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
                         Mission
                       </p>
-                      <p className="mt-1 text-sm leading-relaxed">{t.mission_statement}</p>
+                      {/* B-03-02. The CSR audience for a year-end report should not be
+                          shown raw markup. Rendered, matching the sponsor-facing pitch. */}
+                      <RichText html={t.mission_statement} className="mt-1 text-sm leading-relaxed" />
                     </div>
                   )}
 

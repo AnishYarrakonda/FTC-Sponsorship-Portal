@@ -9,6 +9,7 @@ import {
   IMPACT_PAYLOAD_SCHEMA_VERSION,
 } from '@/lib/impact-report/build'
 import { findForbiddenKeys } from '@/lib/impact-report/projection'
+import { writeAudit } from '@/lib/audit'
 
 /**
  * Impact report administration.
@@ -89,7 +90,7 @@ export async function regenerateImpactSnapshot(input: {
   if (rpcError) return { error: rpcError.message }
   if (!result || result.ok !== true) return { error: mapImpactError(result?.error) }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'admin_regenerate_impact_snapshot',
     entity_type: 'impact_report_snapshots',
@@ -124,7 +125,7 @@ export async function closeImpactYear(input: { year: number }): Promise<ImpactAc
   if (rpcError) return { error: rpcError.message }
   if (!result || result.ok !== true) return { error: mapImpactError(result?.error) }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'admin_close_impact_year',
     entity_type: 'impact_report_snapshots',
@@ -161,7 +162,7 @@ export async function reopenImpactYear(input: {
   if (rpcError) return { error: rpcError.message }
   if (!result || result.ok !== true) return { error: mapImpactError(result?.error) }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'admin_reopen_impact_year',
     entity_type: 'impact_report_snapshots',
@@ -208,7 +209,7 @@ export async function confirmPortfolioMediaNoMinors(input: {
   if (!updated || updated.length === 0) return { error: 'Team not found.' }
 
   const { createAdminClient } = await import('@/lib/supabase/admin')
-  await createAdminClient().from('audit_log').insert({
+  await writeAudit(createAdminClient(), {
     actor_id: user.id,
     action: 'confirm_portfolio_media_no_minors',
     entity_type: 'teams',

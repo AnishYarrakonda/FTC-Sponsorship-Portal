@@ -6,6 +6,7 @@ import { validateCredentialFile } from '@/app/actions/auth'
 import { sendCredentialUploadAlert } from '@/lib/notify'
 import { mapDbError } from '@/lib/errors'
 import { enqueueStorageDeletion, CREDENTIALS_BUCKET } from '@/lib/credentials-retention'
+import { writeAudit } from '@/lib/audit'
 
 /**
  * Coach credential (photo ID) upload / re-upload. Replaces the old
@@ -85,7 +86,7 @@ export async function uploadCredentials(
   }
 
   // 4. AUDIT
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'upload_credentials',
     entity_type: 'profiles',

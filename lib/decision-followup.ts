@@ -1,6 +1,7 @@
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createInAppNotification, sendHandshakeEmail, sendSubmissionDecisionEmail } from '@/lib/notify'
+import { writeAudit } from '@/lib/audit'
 
 /**
  * Shared by sponsor-decision.ts and sponsor-approvals.ts. Lives here rather than in
@@ -145,7 +146,7 @@ export async function notifyEligibleApprovers({
       recipients = legacyOwner?.id ? [legacyOwner.id] : []
     } else {
       recipients = fallback
-      await adminClient.from('audit_log').insert({
+      await writeAudit(adminClient, {
         actor_id: excludeProfileId,
         action: 'proposal_no_eligible_approver',
         entity_type: 'sponsor_decision_proposals',

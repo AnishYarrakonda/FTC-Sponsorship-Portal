@@ -23,6 +23,7 @@ import {
 import type { Database } from '@/lib/supabase/types'
 import type { createAdminClient } from '@/lib/supabase/admin'
 import { z } from 'zod'
+import { writeAudit } from '@/lib/audit'
 
 type TeamStatus = Database['public']['Enums']['team_status']
 type TaxStatus = Database['public']['Enums']['tax_status_type']
@@ -140,7 +141,7 @@ export async function verifyCoach(coachId: string, verified: boolean) {
 
   if (error) return { error: mapDbError(error, 'verifyCoach.update') }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: verified ? 'verify_coach' : 'unverify_coach',
     entity_type: 'profiles',
@@ -273,7 +274,7 @@ export async function verifyCoach(coachId: string, verified: boolean) {
     )
 
     if (purge.purged && coachProfile?.coach_credentials_url) {
-      await adminClient.from('audit_log').insert({
+      await writeAudit(adminClient, {
         actor_id: user.id,
         action: 'purge_coach_credentials',
         entity_type: 'profiles',
@@ -357,7 +358,7 @@ export async function denyCoach(coachId: string, reason: string) {
 
   if (error) return { error: mapDbError(error, 'denyCoach.update') }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'deny_coach',
     entity_type: 'profiles',
@@ -510,7 +511,7 @@ export async function approveSponsorApplication(applicationId: string) {
     }
   }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'approve_sponsor_application',
     entity_type: 'sponsor_applications',
@@ -598,7 +599,7 @@ export async function retryCreateSponsorOrganization(sponsorId: string) {
   const result = await createClerkOrgForSponsor(adminClient, sponsor, applicant)
   if (!result.ok) return { error: result.warning }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'retry_create_sponsor_organization',
     entity_type: 'sponsors',
@@ -656,7 +657,7 @@ export async function rejectSponsorApplication(applicationId: string) {
 
   if (error) return { error: mapDbError(error, 'rejectSponsorApplication.update') }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'reject_sponsor_application',
     entity_type: 'sponsor_applications',
@@ -772,7 +773,7 @@ export async function overrideTeamVerification(input: {
     }
   }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'override_team_verification',
     entity_type: 'team_verification_records',
@@ -877,7 +878,7 @@ export async function setAdminLevel(input: SetAdminLevelInput) {
   if (error) return { error: mapAdminLevelError(error, 'setAdminLevel.update') }
   if (!updated) return { error: 'That account is no longer an admin. Refresh the page.' }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'set_admin_level',
     entity_type: 'profiles',
@@ -970,7 +971,7 @@ export async function provisionAdmin(input: ProvisionAdminInput) {
 
   const warning = await mirrorRoleIntoClerk(profile.clerk_user_id, 'admin')
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'provision_admin',
     entity_type: 'profiles',
@@ -1029,7 +1030,7 @@ export async function demoteAdmin(input: DemoteAdminInput) {
 
   const warning = await mirrorRoleIntoClerk(target.clerk_user_id, parsed.data.newRole)
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'demote_admin',
     entity_type: 'profiles',
@@ -1104,7 +1105,7 @@ export async function adminSetEmailDomainRule(input: EmailDomainRuleInput) {
 
   if (error) return { error: mapDbError(error, 'adminSetEmailDomainRule.upsert') }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'set_email_domain_rule',
     entity_type: 'email_domain_rules',
@@ -1146,7 +1147,7 @@ export async function adminDeleteEmailDomainRule(domain: string) {
 
   if (error) return { error: mapDbError(error, 'adminDeleteEmailDomainRule.delete') }
 
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'delete_email_domain_rule',
     entity_type: 'email_domain_rules',

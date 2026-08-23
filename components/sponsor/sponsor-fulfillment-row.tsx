@@ -1,13 +1,25 @@
 'use client'
 
 import { useState } from 'react'
-import { TrendingUp, Eye, EyeOff } from 'lucide-react'
+import Link from 'next/link'
+import { TrendingUp, Eye, EyeOff, FileSignature, Clock } from 'lucide-react'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { MarkPaymentSentDialog } from '@/components/sponsor/mark-payment-sent-dialog'
 import { ageInDays } from '@/lib/fulfillment-aging'
 import { canTransition } from '@/lib/fulfillment-status'
+import { buttonVariants } from '@/components/ui/button'
+import { hasSponsorRole, type SponsorRole } from '@/lib/sponsor-roles'
+import { cn } from '@/lib/utils'
 
-export function SponsorFulfillmentRow({ fulfillment: f }: { fulfillment: any }) {
+export function SponsorFulfillmentRow({
+  fulfillment: f,
+  signatures = { sponsor: false, coach: false },
+  memberRole = null,
+}: {
+  fulfillment: any
+  signatures?: { sponsor: boolean; coach: boolean }
+  memberRole?: SponsorRole | null
+}) {
   const [showRef, setShowRef] = useState(false)
   const teamName = (f.teams as any)?.team_name ?? 'Team no longer on the platform'
   const isTerminal = f.status === 'receipted' || f.status === 'cancelled'
@@ -75,9 +87,35 @@ export function SponsorFulfillmentRow({ fulfillment: f }: { fulfillment: any }) 
             </div>
           )}
         </div>
-        {canTransition(f.status, 'payment_sent', 'sponsor') && (
+        {/* B-03-05. record_fulfillment_transition refuses payment_sent until BOTH
+            signatures exist. Offering an enabled "Mark Payment Sent" regardless meant the
+            most likely error in the whole fulfillment flow — every pledge is countersigned
+            before payment — was also the only one with no human-readable message and no
+            route to unblock it. The sign link lives on the pitch detail page the sponsor
+            has already left, so it is surfaced here instead. */}
+        {canTransition(f.status, 'payment_sent', 'sponsor') && !signatures.sponsor ? (
+          hasSponsorRole(memberRole, 'approver') ? (
+            <Link
+              href={`/sponsor/submissions/${f.submission_id}/sign`}
+              className={cn(buttonVariants({ size: 'sm' }), 'gap-1.5')}
+            >
+              <FileSignature className="h-3.5 w-3.5" aria-hidden="true" />
+              Sign agreement
+            </Link>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+              <FileSignature className="h-3.5 w-3.5" aria-hidden="true" />
+              An approver must sign the agreement
+            </span>
+          )
+        ) : canTransition(f.status, 'payment_sent', 'sponsor') && !signatures.coach ? (
+          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+            Waiting on the coach&apos;s signature
+          </span>
+        ) : canTransition(f.status, 'payment_sent', 'sponsor') ? (
           <MarkPaymentSentDialog fulfillmentId={f.id} />
-        )}
+        ) : null}
       </div>
     </div>
   )

@@ -193,7 +193,10 @@ describe('INVARIANT: no proof URL escapes into an audit or notification payload'
   const actions = read('app/actions/recognition.ts')
 
   it('audit_log inserts carry has_proof/benefit_type, never the URL', () => {
-    const inserts = Array.from(actions.matchAll(/audit_log'\)\.insert\(\{([\s\S]*?)\n  \}\)/g))
+    // A-03-05 moved every audit write behind writeAudit(client, { … }). The invariant is
+    // unchanged — a proof URL must never reach audit_log — only the call shape moved, so
+    // the matcher follows it rather than the invariant being dropped.
+    const inserts = Array.from(actions.matchAll(/writeAudit\([^,]+,\s*\{([\s\S]*?)\n  \}\)/g))
     expect(inserts.length).toBeGreaterThan(0)
     for (const m of inserts) {
       expect(m[1]).not.toMatch(/proof_url|proofUrl|publicUrl/)

@@ -10,6 +10,7 @@ import {
   IMPACT_PAYLOAD_SCHEMA_VERSION,
 } from '@/lib/impact-report/build'
 import { findForbiddenKeys } from '@/lib/impact-report/projection'
+import { writeAudit } from '@/lib/audit'
 
 /**
  * Vercel cron: 04:00 UTC daily (configured in vercel.json), two hours after the expiry
@@ -148,7 +149,7 @@ export async function runImpactRollup(): Promise<CronJobResult> {
 
   // Vercel Hobby retains about an hour of logs, so without this row "did it run?" is
   // unanswerable — the same reasoning the expiry sweep records.
-  await supabase.from('audit_log').insert({
+  await writeAudit(supabase, {
     actor_id: null,
     action: 'cron_impact_rollup',
     entity_type: 'impact_report_snapshots',

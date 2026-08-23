@@ -12,6 +12,7 @@ import {
   removeSponsorMemberSchema,
 } from '@/lib/schemas/sponsor-members'
 
+import { writeAudit } from '@/lib/audit'
 /** role gate shared by every mutating action in this file. Throws, like every other
  *  require* guard in lib/actions-utils.ts — callers catch and return { error }. */
 function requireOrgAdmin() {
@@ -127,7 +128,7 @@ export async function inviteSponsorMember(data: { email: string; role: SponsorRo
   }
 
   // 4. AUDIT
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'invite_sponsor_member',
     entity_type: 'sponsor_members',
@@ -240,7 +241,7 @@ export async function updateSponsorMemberRole(data: { memberId: string; role: Sp
   if (updateError) return { error: mapDbError(updateError, 'updateSponsorMemberRole.update') }
 
   // 4. AUDIT
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: callerId,
     action: 'update_sponsor_member_role',
     entity_type: 'sponsor_members',
@@ -366,7 +367,7 @@ export async function removeSponsorMember(data: { memberId: string }) {
   }
 
   // 4. AUDIT
-  await adminClient.from('audit_log').insert({
+  await writeAudit(adminClient, {
     actor_id: callerId,
     action: 'remove_sponsor_member',
     entity_type: 'sponsor_members',

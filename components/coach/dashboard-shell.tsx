@@ -24,7 +24,7 @@ import {
   DialogTrigger,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { cn } from '@/lib/utils'
+import { cn, htmlToPlainText } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -468,9 +468,12 @@ function OverviewTab({
             <CardTitle>Portfolio Snapshot</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
+            {/* B-03-02. Flattened, not rendered: this is a three-line preview and
+                `line-clamp-3` needs the text to be a direct child. RichText would emit a
+                nested <p> per paragraph and the clamp would stop working. */}
             {team.mission_statement ? (
               <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">
-                {team.mission_statement}
+                {htmlToPlainText(team.mission_statement)}
               </p>
             ) : (
               <p className="text-sm text-muted-foreground italic">Add a mission statement to strengthen your pitches.</p>
