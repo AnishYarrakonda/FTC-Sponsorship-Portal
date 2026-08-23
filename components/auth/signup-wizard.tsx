@@ -493,18 +493,22 @@ export function SignupWizard() {
                           <FormItem>
                             <FormLabel className="text-foreground/80">Photo ID (School ID or Government ID)</FormLabel>
                             <FormControl>
-                              <div
-                                className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-border rounded-lg bg-background/50 hover:bg-accent transition-colors cursor-pointer"
-                                onClick={() => fileInputRef.current?.click()}
+                              {/* A-08-01. Same fix as /upload-credentials: a <label> plus
+                                  an sr-only input, so the control is reachable by Tab,
+                                  announced with its name, and shows focus on the visible
+                                  box. `hidden` took it out of the tab order completely. */}
+                              <label
+                                htmlFor="signup-photo-id"
+                                className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-border rounded-lg bg-background/50 hover:bg-accent transition-colors cursor-pointer focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
                               >
-                                <UploadCloud className="w-7 h-7 text-muted-foreground mb-1.5" />
+                                <UploadCloud className="w-7 h-7 text-muted-foreground mb-1.5" aria-hidden="true" />
                                 <p className="text-sm text-muted-foreground">
                                   {file
                                     ? <span className="font-semibold text-foreground">{file.name}</span>
                                     : <span>Click to upload PDF, JPG, or PNG (max 5 MB)</span>}
                                 </p>
-                                <input type="file" ref={fileInputRef} className="hidden" accept=".pdf,image/jpeg,image/png" onChange={handleFileChange} />
-                              </div>
+                                <input id="signup-photo-id" type="file" ref={fileInputRef} className="sr-only" accept=".pdf,image/jpeg,image/png" onChange={handleFileChange} />
+                              </label>
                             </FormControl>
                             <FormMessage />
                           </FormItem>

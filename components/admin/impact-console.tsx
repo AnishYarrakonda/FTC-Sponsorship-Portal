@@ -106,8 +106,11 @@ export function ImpactConsole({
                 onChange={(e) => setReopenYear(e.target.value)}
               />
             </div>
+            {/* A-08-03: placeholder-only, and it sits beside a labelled year field, so
+                a screen reader announced two adjacent inputs with only one name. */}
             <Input
               className="max-w-sm"
+              aria-label="Reason for reopening the year (recorded in the audit log)"
               placeholder="Reason (min 10 characters) — recorded in the audit log"
               value={reopenReason}
               onChange={(e) => setReopenReason(e.target.value)}

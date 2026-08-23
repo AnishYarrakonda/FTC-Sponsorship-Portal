@@ -176,7 +176,12 @@
   --badge-success-bg: #E9F1EC;
   --badge-success-text: #1F6F5C;
   --badge-pending-bg: #E7E1D6;
-  --badge-pending-text: #6B6459;
+  /* B-04-02: was #6B6459, which computes to 4.493:1 on --badge-pending-bg (#E7E1D6) —
+     under AA's 4.5:1 by 0.007. One step darker gives 4.84:1 with real headroom, and the
+     badge stays visually in the same family. Token change, not a component change: this
+     colour is shared, so fixing it at the component would have left every other user of
+     the token failing. */
+  --badge-pending-text: #665F55;
   --badge-warning-bg: #FDF5E6;
   --badge-warning-text: #854D0E;
   --badge-rejected-bg: #FCE8E8;
@@ -252,6 +257,39 @@
   summary:focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
+  }
+
+  /* B-04-01 — WCAG 1.4.11 / 2.4.7 in forced-colors (Windows High Contrast) mode.
+     The rule above paints the ring with `var(--ring)`, an authored colour. Forced-colors
+     mode REPLACES author colours with the user's system palette, and it does so silently:
+     the outline is still emitted, it is simply painted in a colour that may be identical
+     to the background. The result is a keyboard user with no visible focus anywhere in
+     the app — the users most likely to be navigating by keyboard in the first place.
+     `Highlight` is a system keyword, so the browser substitutes whatever the user's own
+     high-contrast theme uses for selection, which is the only colour guaranteed to be
+     distinguishable for them. */
+  @media (forced-colors: active) {
+    a:focus-visible,
+    button:focus-visible,
+    [role='button']:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible,
+    summary:focus-visible,
+    [tabindex]:focus-visible {
+      outline: 3px solid Highlight;
+      outline-offset: 2px;
+    }
+
+    /* Components that opt out of the shared ring draw their own with box-shadow, which
+       forced-colors also discards. forced-color-adjust:none is deliberately NOT used —
+       that would keep the authored colours and defeat the user's theme. Re-asserting a
+       system-coloured outline is the accessible answer. */
+    [class*='focus-visible:ring']:focus-visible,
+    [class*='focus-within:ring']:focus-within {
+      outline: 3px solid Highlight;
+      outline-offset: 2px;
+    }
   }
 
   /* WCAG 2.2 — 2.4.1 Bypass Blocks.
