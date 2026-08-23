@@ -1,5 +1,6 @@
 'use server'
 
+import * as Sentry from '@sentry/nextjs'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { teamOnboardingSchema, teamOnboardingBaseSchema, type TeamOnboardingInput } from '@/lib/schemas/team'
@@ -7,7 +8,7 @@ import { achievementSchema, type AchievementInput } from '@/lib/schemas/achievem
 import { verifyFTCTeamIdentity, lookupFTCTeamWithSource, type FTCTeam } from '@/lib/ftc-roster'
 import { deriveTeamSlug, uniquifyTeamSlug } from '@/lib/team-slug'
 import { redirect } from 'next/navigation'
-import { requireAuth } from '@/lib/actions-utils'
+import { requireAuth, requireVerifiedCoach } from '@/lib/actions-utils'
 import { createInAppNotification } from '@/lib/notify'
 import { mapDbError } from '@/lib/errors'
 import { validateUploadedFile, IMAGE_MIMES } from '@/lib/file-validation'
@@ -94,10 +95,45 @@ export async function lookupFTCTeam(
   // an unauthenticated server action doing that is an open relay. Signup-wizard callers
   // already have an active Clerk session by the time they reach the team step (email
   // verification happens first), so this guard costs the legitimate path nothing.
+  let clerkUserId: string
   try {
-    await requireAuth()
+    ({ clerkUserId } = await requireAuth())
   } catch (e: any) {
     return { error: e.message }
+  }
+
+  // A-10-02. requireAuth() alone made this an authenticated open relay: one account can
+  // loop distinct team numbers and proxy unbounded traffic at the FIRST API under the
+  // platform's credentials, which is an IP-ban risk for every coach on the platform.
+  // The roster cache does not help — a relay walks NEW numbers, which always miss.
+  //
+  // 30/hour is far above any real signup wizard (a coach looks up one number, maybe
+  // retries a typo) and far below useful relay volume. Keyed on the Clerk id rather than
+  // IP because the session is already required, so the id is the harder thing to rotate.
+  //
+  // FAILS OPEN on an RPC error, matching the documented posture of the sponsor-apply and
+  // domain-gate throttles: a database hiccup must not break signup. console.error as
+  // well as Sentry, because Sentry has no DSN in any Vercel environment today.
+  try {
+    const adminClient = createAdminClient()
+    const { data: allowed, error: throttleError } = await adminClient.rpc('check_throttle', {
+      p_key: `ftc-lookup:${clerkUserId}`,
+      p_limit: 30,
+      p_window: '1 hour',
+    })
+    if (throttleError) {
+      const err = new Error(`[lookupFTCTeam] throttle check failed (failing OPEN): ${throttleError.message}`)
+      console.error(err.message, throttleError)
+      Sentry.captureException(err)
+    } else if (allowed === false) {
+      return {
+        error:
+          'Too many team lookups. Wait an hour and try again, or contact support if you are stuck.',
+      }
+    }
+  } catch (e) {
+    console.error('[lookupFTCTeam] throttle threw (failing OPEN)', e)
+    Sentry.captureException(e)
   }
 
   const result = await lookupFTCTeamWithSource(parsed.data)
@@ -290,14 +326,18 @@ export async function createTeam(data: TeamOnboardingInput) {
 }
 
 export async function uploadTeamLogo(teamId: string, formData: FormData) {
+  // Same gate as updateTeam (B-01-3). The logo is portfolio surface and writes to
+  // teams.logo_url through the same teams_update policy, so leaving it on requireAuth()
+  // would just move the hole one function over — and after 0102 it would fail with a raw
+  // RLS error instead of a CTA the coach can act on.
   let user, supabase, clerkUserId
   try {
-    const auth = await requireAuth()
+    const auth = await requireVerifiedCoach()
     user = auth.user
     supabase = auth.supabase
     clerkUserId = auth.clerkUserId
-  } catch {
-    return { error: 'Not authenticated' }
+  } catch (e: any) {
+    return { error: e.message as string, code: e.code as string | undefined }
   }
 
   const file = formData.get('file') as File | null
@@ -367,13 +407,19 @@ export async function updateTeam(id: string, data: Partial<TeamOnboardingInput>)
   // Build from parsed.data, never from the raw input — otherwise validation is decorative.
   const clean = parsed.data
 
+  // B-01-3. This was requireAuth(), which only proves a Clerk session exists. The
+  // teams_insert RLS policy requires is_coach_verified() but teams_update did NOT, so a
+  // coach whose verification was revoked after they created their team could still edit
+  // the whole portfolio — the exact surface an admin revokes verification to shut off.
+  // (0102 closes the RLS half; this is the half that returns a usable error.)
+  // NEEDS_VERIFICATION lets the caller render the verification CTA instead of a raw error.
   let user, supabase
   try {
-    const auth = await requireAuth()
+    const auth = await requireVerifiedCoach()
     user = auth.user
     supabase = auth.supabase
-  } catch {
-    return { error: 'Not authenticated' }
+  } catch (e: any) {
+    return { error: e.message as string, code: e.code as string | undefined }
   }
 
   // Graduation enforcement: status -> 'existing' or a changed ftc_team_number both mean

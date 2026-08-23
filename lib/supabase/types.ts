@@ -1413,6 +1413,42 @@ export type Database = {
           },
         ]
       }
+      pending_storage_deletions: {
+        Row: {
+          id: string
+          bucket: string
+          path: string
+          reason: string
+          created_at: string
+          attempts: number
+          last_attempt_at: string | null
+          last_error: string | null
+          deleted_at: string | null
+        }
+        Insert: {
+          id?: string
+          bucket: string
+          path: string
+          reason: string
+          created_at?: string
+          attempts?: number
+          last_attempt_at?: string | null
+          last_error?: string | null
+          deleted_at?: string | null
+        }
+        Update: {
+          id?: string
+          bucket?: string
+          path?: string
+          reason?: string
+          created_at?: string
+          attempts?: number
+          last_attempt_at?: string | null
+          last_error?: string | null
+          deleted_at?: string | null
+        }
+        Relationships: []
+      }
       team_payout_profiles: {
         Row: {
           team_id: string

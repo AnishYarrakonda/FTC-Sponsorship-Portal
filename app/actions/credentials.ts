@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { validateCredentialFile } from '@/app/actions/auth'
 import { sendCredentialUploadAlert } from '@/lib/notify'
 import { mapDbError } from '@/lib/errors'
+import { enqueueStorageDeletion, CREDENTIALS_BUCKET } from '@/lib/credentials-retention'
 
 /**
  * Coach credential (photo ID) upload / re-upload. Replaces the old
@@ -73,12 +74,14 @@ export async function uploadCredentials(
     return { error: mapDbError(updateError, 'uploadCredentials.profileUpdate') }
   }
 
-  // Best-effort cleanup of the superseded file (never block on it).
+  // A-06-02. This used to be a bare remove() whose failure was a console.error. The
+  // pointer had already moved, so a failed delete left a government ID in storage that
+  // nothing referenced — invisible to sweepUnpurgedCredentials(), which only walks live
+  // pointers, and therefore retained indefinitely with no alarm. Now the path is
+  // recorded before it stops being reachable and retried by the nightly sweep.
+  // Still never blocks the upload.
   if (previousPath && previousPath !== filePath) {
-    const { error: removeError } = await adminClient.storage
-      .from('coach-credentials')
-      .remove([previousPath])
-    if (removeError) console.error('[uploadCredentials] old file cleanup failed:', removeError)
+    await enqueueStorageDeletion(adminClient, CREDENTIALS_BUCKET, previousPath, 'superseded_credentials')
   }
 
   // 4. AUDIT

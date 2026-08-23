@@ -7,6 +7,7 @@ import { StatusBadge } from '@/components/ui/status-badge'
 import { EmptyState } from '@/components/ui/empty-state'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { isInternationalizedHost } from '@/lib/email-domain'
 import { ApplicationActions } from '@/components/admin/application-actions'
 
 export default async function ApplicationsPage() {
@@ -75,6 +76,18 @@ export default async function ApplicationsPage() {
                           >
                             {app.website}
                           </a>
+                        </p>
+                      )}
+                      {/* Advisory only (A-10-01). An internationalized domain is not
+                          illegitimate, but homograph registration is cheap and this card
+                          is where an impersonation would land in front of a human. The
+                          stored email_domain is already punycode, so the reviewer sees
+                          the ASCII form rather than the lookalike. */}
+                      {isInternationalizedHost(app.email_domain) && (
+                        <p className="mt-2 inline-flex flex-wrap items-center gap-1.5 rounded-full bg-[var(--badge-warning-bg)] px-2.5 py-1 text-xs font-medium text-[var(--badge-warning-text)]">
+                          <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+                          Internationalized email domain — check for a lookalike
+                          <span className="font-normal">({app.email_domain})</span>
                         </p>
                       )}
                       {/* Advisory only — a mismatch is never an auto-rejection (0090). */}

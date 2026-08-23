@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   insertMock: vi.fn(),
   captureMock: vi.fn(),
   sweepCredentialsMock: vi.fn(),
+  sweepPendingDeletionsMock: vi.fn(),
   sweepW9Mock: vi.fn(),
 }))
 
@@ -64,7 +65,13 @@ vi.mock('@/lib/supabase/server', () => ({
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => makeClient() }))
 
 vi.mock('@/lib/notify', () => ({ createInAppNotification: vi.fn().mockResolvedValue({ success: true }) }))
-vi.mock('@/lib/credentials-retention', () => ({ sweepUnpurgedCredentials: mocks.sweepCredentialsMock }))
+vi.mock('@/lib/credentials-retention', () => ({
+  sweepUnpurgedCredentials: mocks.sweepCredentialsMock,
+  // A-06-02 added a second sweep to this cron. Omitting it here made the module export
+  // undefined, which the route then called — a 500 that looked like a drift-check
+  // regression rather than a missing mock.
+  sweepPendingStorageDeletions: mocks.sweepPendingDeletionsMock,
+}))
 vi.mock('@/lib/payout-retention', () => ({ sweepExpiringW9s: mocks.sweepW9Mock }))
 vi.mock('@sentry/nextjs', () => ({ captureException: mocks.captureMock }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
@@ -120,6 +127,7 @@ beforeEach(() => {
   mocks.captureMock.mockReset()
   mocks.sweepCredentialsMock.mockResolvedValue({ purged: 0, failed: 0 })
   mocks.sweepW9Mock.mockResolvedValue({ notified: 0, failed: 0 })
+  mocks.sweepPendingDeletionsMock.mockResolvedValue({ scanned: 0, deleted: 0, failed: 0, skippedStillLive: 0 })
   vi.spyOn(console, 'error').mockImplementation(() => {})
   vi.spyOn(console, 'log').mockImplementation(() => {})
 })
