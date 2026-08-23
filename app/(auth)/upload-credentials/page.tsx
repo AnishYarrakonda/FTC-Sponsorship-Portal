@@ -103,13 +103,23 @@ export default function UploadCredentialsPage() {
             </Alert>
           )}
 
-          <div
-            className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-border rounded-xl bg-background/50 hover:bg-accent transition-colors cursor-pointer"
-            onClick={() => !isPending && fileInputRef.current?.click()}
+          {/* A-08-01 / B-04-16. This was a <div onClick> with the real <input type="file">
+              hidden by `className="hidden"`. display:none removes an element from the tab
+              order entirely, so the page had exactly ONE tab stop and a keyboard-only
+              coach could never reach the control that uploads their ID — the mandatory
+              step of onboarding.
+
+              A <label> is the fix rather than tabIndex/role/onKeyDown on the div: the
+              label makes the whole area clickable, `sr-only` keeps the input in the tab
+              order and announced with its accessible name, and focus-within paints the
+              ring on the visible box instead of on an invisible input. */}
+          <label
+            htmlFor="credential-file"
+            className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-border rounded-xl bg-background/50 hover:bg-accent transition-colors cursor-pointer focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
             aria-disabled={isPending}
           >
             <div className="flex flex-col items-center justify-center pt-5 pb-6">
-              <UploadCloud className="w-10 h-10 text-muted-foreground mb-2" />
+              <UploadCloud className="w-10 h-10 text-muted-foreground mb-2" aria-hidden="true" />
               <p className="text-sm text-muted-foreground px-4 text-center">
                 {file ? (
                   <span className="font-semibold text-foreground">{file.name}</span>
@@ -119,18 +129,30 @@ export default function UploadCredentialsPage() {
               </p>
             </div>
             <input
+              id="credential-file"
               type="file"
               ref={fileInputRef}
-              className="hidden"
+              className="sr-only"
               accept=".pdf,image/jpeg,image/png"
               onChange={handleFileChange}
               disabled={isPending}
             />
-          </div>
+          </label>
+          {/* Announced on selection: a sighted user sees the filename replace the prompt,
+              a screen-reader user previously got nothing at all. */}
+          <p id="credential-file-status" className="sr-only" role="status" aria-live="polite">
+            {file ? `Selected file: ${file.name}` : 'No file selected'}
+          </p>
         </CardContent>
         <CardFooter>
+          {/* B-04-16. `disabled` also removes the button from the tab order, so a
+              keyboard user who could not reach the file input met a page with ONE tab
+              stop and no way to progress. The dropzone fix above is what unblocks that;
+              aria-describedby is what explains the remaining disabled state instead of
+              leaving it unexplained. */}
           <Button
             className="w-full"
+            aria-describedby="credential-file-status"
             disabled={!file || isPending}
             loading={isPending}
             onClick={handleUpload}

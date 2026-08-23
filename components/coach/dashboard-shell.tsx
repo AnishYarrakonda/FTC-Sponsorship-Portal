@@ -272,9 +272,13 @@ function OverviewTab({
             </div>
 
             <Dialog open={showGraduation} onOpenChange={setShowGraduation}>
-              <DialogTrigger
-                className="inline-flex items-center justify-center whitespace-nowrap rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary-hover focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
-              >
+              {/* B-04-06. Hand-styled, and it carried `focus-visible:outline-none`
+                  WITHOUT a replacement ring — so it opted out of the global focus outline
+                  in globals.css and drew nothing in its place. A keyboard user tabbing
+                  the coach dashboard simply lost track of where they were. Rendered
+                  through the shared Button, which is the pattern every other trigger in
+                  this file already uses and which owns a correct focus ring. */}
+              <DialogTrigger render={<Button />}>
                 I have a team now
               </DialogTrigger>
               <DialogContent className="sm:max-w-[425px] bg-card border-border">

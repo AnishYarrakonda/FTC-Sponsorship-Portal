@@ -75,8 +75,11 @@ export function MarkPaymentSentDialog({ fulfillmentId, children }: { fulfillment
           )}
           
           <div className="space-y-3">
-            <Label>Payment Method</Label>
-            <RadioGroup value={method} onValueChange={setMethod} className="flex gap-4">
+            {/* A-08-03. The radio group's own label needs to be associated with the
+                GROUP, not with an input — htmlFor would be wrong here, so the group is
+                named via aria-labelledby instead. */}
+            <Label id="payment-method-label">Payment Method</Label>
+            <RadioGroup value={method} onValueChange={setMethod} className="flex gap-4" aria-labelledby="payment-method-label">
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="check" id="method-check" />
                 <Label htmlFor="method-check">Check</Label>
@@ -97,8 +100,9 @@ export function MarkPaymentSentDialog({ fulfillmentId, children }: { fulfillment
           </div>
           
           <div className="space-y-2">
-            <Label>Check number / ACH trace / wire reference</Label>
+            <Label htmlFor="payment-reference">Check number / ACH trace / wire reference</Label>
             <Input 
+              id="payment-reference"
               value={reference} 
               onChange={e => setReference(e.target.value)} 
               maxLength={LIMITS.paymentReference} 
@@ -110,8 +114,9 @@ export function MarkPaymentSentDialog({ fulfillmentId, children }: { fulfillment
           </div>
           
           <div className="space-y-2">
-            <Label>Date Sent</Label>
+            <Label htmlFor="payment-date-sent">Date Sent</Label>
             <Input 
+              id="payment-date-sent"
               type="date"
               max={today}
               value={sentOn}
@@ -120,8 +125,9 @@ export function MarkPaymentSentDialog({ fulfillmentId, children }: { fulfillment
           </div>
           
           <div className="space-y-2">
-            <Label>Note</Label>
+            <Label htmlFor="payment-note">Note</Label>
             <Textarea 
+              id="payment-note"
               value={note}
               onChange={e => setNote(e.target.value)}
               maxLength={LIMITS.fulfillmentNote}

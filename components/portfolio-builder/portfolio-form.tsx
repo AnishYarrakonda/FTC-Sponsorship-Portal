@@ -23,6 +23,7 @@ import {
 import type { Submission } from '@/lib/supabase/types'
 import { describeActionError } from '@/lib/client-errors'
 
+import { LIMITS } from '@/lib/schemas/limits'
 const AUTOSAVE_DELAY_MS = 2000
 
 type Sponsor = { id: string; company_name: string; status: string; funding_cap_cents: number; funding_used_cents: number }
@@ -186,9 +187,15 @@ export function PortfolioForm({ initialSubmission, initialValues, sponsors = [],
                   <FormItem>
                     <FormLabel>Custom Pitch Alignment</FormLabel>
                     <FormControl>
+                      {/* A-07-02. No maxLength, so a coach could type past the schema's
+                          cap and only discover it when the save was rejected — after the
+                          writing was done. maxLength comes from LIMITS rather than a
+                          literal, per conventions.md, so the input and the Zod field
+                          cannot drift apart. */}
                       <Textarea
                         placeholder="Explain why your team aligns with this company..."
                         className="min-h-[140px]"
+                        maxLength={LIMITS.customPitchAlignment}
                         disabled={readOnly}
                         value={field.value ?? ''}
                         onChange={field.onChange}
@@ -212,6 +219,7 @@ export function PortfolioForm({ initialSubmission, initialValues, sponsors = [],
                       <Textarea
                         placeholder="Detail your specific financial or material needs..."
                         className="min-h-[140px]"
+                        maxLength={LIMITS.specificNeeds}
                         disabled={readOnly}
                         value={field.value ?? ''}
                         onChange={field.onChange}
@@ -235,6 +243,7 @@ export function PortfolioForm({ initialSubmission, initialValues, sponsors = [],
                       <Textarea
                         placeholder="Any local connections to this sponsor?"
                         className="min-h-[80px]"
+                        maxLength={LIMITS.localConnection}
                         disabled={readOnly}
                         {...field}
                       />

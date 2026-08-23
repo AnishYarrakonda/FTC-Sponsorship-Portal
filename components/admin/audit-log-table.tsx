@@ -132,7 +132,16 @@ export function AuditLogTable({ logs, uniqueActions, currentAction, page, pageSi
     <div className="flex flex-col gap-4">
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
+        {/* B-04-04. The select had no id, no label and no aria-label, so its accessible
+            name was whatever option happened to be selected — "All actions" one moment
+            and "sponsor decide submission" the next. A control whose name changes when
+            you use it cannot be found again. A visible label also tells sighted users
+            what the dropdown filters, which was equally unstated. */}
+        <label htmlFor="audit-action-filter" className="text-xs text-muted-foreground">
+          Filter by action
+        </label>
         <select
+          id="audit-action-filter"
           value={currentAction ?? ''}
           onChange={(e) => navigate({ action: e.target.value || undefined, page: undefined })}
           className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"

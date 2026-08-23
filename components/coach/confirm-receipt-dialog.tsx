@@ -124,8 +124,12 @@ export function ConfirmReceiptDialog({
           )}
           
           <div className="space-y-2">
-            <Label>Date Received</Label>
+            {/* A-08-03: <Label> with no htmlFor is a visual label only — a screen reader
+                announces the field as an unnamed date input. Visual proximity is not an
+                association. */}
+            <Label htmlFor="receipt-date-received">Date Received</Label>
             <Input 
+              id="receipt-date-received"
               type="date"
               max={today}
               value={receivedOn}
@@ -134,8 +138,9 @@ export function ConfirmReceiptDialog({
           </div>
           
           <div className="space-y-2">
-            <Label>Note (Optional)</Label>
+            <Label htmlFor="receipt-note">Note (Optional)</Label>
             <Textarea 
+              id="receipt-note"
               value={note}
               onChange={e => setNote(e.target.value)}
               maxLength={LIMITS.fulfillmentNote}

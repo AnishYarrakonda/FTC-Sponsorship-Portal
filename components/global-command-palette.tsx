@@ -6,6 +6,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { LayoutDashboard, BookOpen, Target, Inbox, Settings, LogOut, Building2, Users, Search } from 'lucide-react'
 import { useClerk } from '@clerk/nextjs'
 import { cn } from '@/lib/utils'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
 
 interface RunCtx {
   router: ReturnType<typeof useRouter>
@@ -61,27 +62,36 @@ export function GlobalCommandPalette({ role }: Props) {
         e.preventDefault()
         setOpen((o) => !o)
       }
-      if (e.key === 'Escape') setOpen(false)
+      // Escape is handled by the Dialog now (and it also restores focus to the
+      // opener). Keeping a second handler here would close the palette before the
+      // Dialog could run its own restore.
     }
     document.addEventListener('keydown', down)
     return () => document.removeEventListener('keydown', down)
   }, [])
 
-  if (!open) return null
-
+  /**
+   * B-04-05 (1, 2, 3). This was a bare `fixed inset-0` div: no role="dialog", no
+   * aria-modal, no accessible name, no focus containment and no focus restoration.
+   * Querying `[role="dialog"]` while it was open returned null, Tab walked straight out
+   * into the page behind it while the palette stayed on top, and Escape left focus on
+   * whatever background nav link Tab had reached.
+   *
+   * Rendered through the project's own base-ui Dialog rather than hand-rolling a focus
+   * trap: that component already contains focus and restores it to the trigger, and it
+   * was measured doing so correctly in the same audit. A hand-rolled trap is exactly the
+   * kind of thing that works in a demo and fails on the one control nobody tested.
+   */
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] px-4"
-      onClick={() => setOpen(false)}
-    >
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" aria-hidden />
-
-      {/* Panel */}
-      <div
-        className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent
+        showCloseButton={false}
+        aria-label="Command palette"
+        className="top-[15vh] left-1/2 w-full max-w-lg -translate-x-1/2 translate-y-0 gap-0 overflow-hidden rounded-2xl border border-border bg-card p-0 shadow-2xl sm:max-w-lg"
       >
+        {/* The visible chrome lives inside the dialog popup, so the popup itself is the
+            focus scope — the panel div no longer needs to exist. */}
+        <div className="w-full">
         <Command className="flex flex-col" shouldFilter>
           <div className="flex items-center gap-2 border-b border-border px-4 py-3">
             <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -103,11 +113,19 @@ export function GlobalCommandPalette({ role }: Props) {
             {(['Navigate', 'Account'] as const).map((group) => {
               const items = allActions.filter((a) => a.group === group)
               if (items.length === 0) return null
+              // B-04-05 (4). The extra <span> sat DIRECTLY inside cmdk's role="listbox",
+              // which may only contain option/group children — axe flags it
+              // aria-required-children (critical), and the consequence is real: option
+              // count and position stop being conveyed, so a screen reader cannot say
+              // "2 of 5". CommandGroup's own `heading` prop already renders this text
+              // with the correct role, so the span was pure duplication. Styled through
+              // cmdk's heading part instead.
               return (
-                <CommandGroup key={group} heading={group} className="px-2">
-                  <span className="px-2 py-1.5 text-[10px] font-mono uppercase tracking-widest text-muted-foreground block">
-                    {group}
-                  </span>
+                <CommandGroup
+                  key={group}
+                  heading={group}
+                  className="px-2 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-mono [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-muted-foreground"
+                >
                   {items.map((action) => (
                     <CommandItem
                       key={action.label}
@@ -135,7 +153,8 @@ export function GlobalCommandPalette({ role }: Props) {
             <span><kbd className="font-mono">esc</kbd> close</span>
           </div>
         </Command>
-      </div>
-    </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }

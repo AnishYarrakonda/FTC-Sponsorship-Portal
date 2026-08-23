@@ -93,7 +93,13 @@ export function ProofReviewQueue({ rows }: { rows: ProofRow[] }) {
                 </p>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row">
+                {/* A-08-03. A placeholder is not an accessible name: it is not exposed
+                    as one by every AT and it disappears the moment the field has a value,
+                    so a screen-reader user returning to a half-typed reason hears only
+                    the text they typed. There is no room for a visible label in this row,
+                    so the name is given explicitly and scoped to the row it belongs to. */}
                 <Input
+                  aria-label={`Reason for removing the proof photo from ${row.team_name ?? 'this team'}`}
                   placeholder="Reason (min 10 characters) — shown to the coach"
                   value={reasons[row.id] ?? ''}
                   maxLength={500}

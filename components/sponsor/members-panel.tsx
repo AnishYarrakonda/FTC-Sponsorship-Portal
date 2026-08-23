@@ -127,6 +127,7 @@ export function MembersPanel({
                       {!member.pending && member.profileId && (
                         <MemberRowActions
                           memberId={member.id}
+                          memberName={member.fullName ?? member.email ?? 'this member'}
                           role={member.role}
                           isLastAdmin={member.role === 'org_admin' && adminCount <= 1}
                           isLastEligibleApprover={
@@ -254,11 +255,13 @@ function InviteDialog() {
 
 function MemberRowActions({
   memberId,
+  memberName,
   role,
   isLastAdmin,
   isLastEligibleApprover,
 }: {
   memberId: string
+  memberName: string
   role: SponsorRole
   isLastAdmin: boolean
   isLastEligibleApprover: boolean
@@ -293,8 +296,13 @@ function MemberRowActions({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" disabled={isPending}>
-          <MoreHorizontal className="h-4 w-4" />
+        {/* B-04-03. The trigger renders only an icon, so it had no accessible name at
+            all — a screen-reader user heard "button" and nothing else. The name is
+            per-row on purpose: three identical "Options" buttons in a members table are
+            still unusable, because nothing tells you WHICH member you are about to act
+            on. */}
+        <Button variant="ghost" size="icon" disabled={isPending} aria-label={`Actions for ${memberName}`}>
+          <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
