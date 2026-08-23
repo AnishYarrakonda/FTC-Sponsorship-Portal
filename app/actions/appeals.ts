@@ -426,9 +426,16 @@ export async function resolveAppeal(data: ResolveAppealInput): Promise<AppealAct
       // text there would hand a sponsor the coach's appeal outcome and the admin's private
       // moderation reasoning. The coach already gets the notes three other ways: the
       // notification below, the appeal detail page, and the dashboard status pill.
+      //
+      // B-03-15. admin_feedback IS, however, CLEARED. It held the original decline reason —
+      // the justification for a decision a second administrator has just reversed. Leaving
+      // it put the pitch in "Changes requested" carrying text that requests nothing, and by
+      // this comment's own reasoning (the column survives re-approval and is passed whole
+      // into a client component) that reversed reasoning would later reach the sponsor.
+      // Clearing removes the stale text without writing appeal content in its place.
       const { data: moved, error: subjectError } = await adminClient
         .from('submissions')
-        .update({ status: 'changes_requested', reviewed_at: null })
+        .update({ status: 'changes_requested', reviewed_at: null, admin_feedback: null })
         .eq('id', appeal.subject_id)
         .eq('status', 'declined')
         .select('id')

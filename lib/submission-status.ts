@@ -23,16 +23,23 @@ export const AWAITING_SPONSOR_STATUSES = ['dispatched', 'delivered', 'opened'] a
 /** Waiting on an ADMIN moderation decision. */
 export const AWAITING_ADMIN_STATUSES = ['pending'] as const
 
-/** Terminal — no further decision is possible by anyone. */
+/**
+ * Terminal — no further decision is possible by anyone.
+ *
+ * B-03-12 adds `withdrawn`: the coach pulled the pitch before the sponsor answered, so no
+ * sponsor decision will ever land on it. It is terminal for the SPONSOR while still being
+ * coach-editable below — the same shape `declined` already has.
+ */
 export const TERMINAL_STATUSES = [
   'approved',
   'declined',
   'expired',
   'bounced',
+  'withdrawn',
 ] as const
 
 /** A coach may still edit these. */
-export const COACH_EDITABLE_STATUSES = ['draft', 'declined', 'changes_requested'] as const
+export const COACH_EDITABLE_STATUSES = ['draft', 'declined', 'changes_requested', 'withdrawn'] as const
 
 export type AwaitingSponsorStatus = (typeof AWAITING_SPONSOR_STATUSES)[number]
 

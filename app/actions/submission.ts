@@ -3,12 +3,23 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { submissionSchema, type SubmissionInput } from '@/lib/schemas/submission'
 import { redirect } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
+import { z } from 'zod'
 import { requireAuth, requireVerifiedCoach } from '@/lib/actions-utils'
 import { createInAppNotification } from '@/lib/notify'
 import { mapDbError } from '@/lib/errors'
 import { writeAudit } from '@/lib/audit'
+import { isAwaitingSponsor } from '@/lib/submission-status'
+import { revokeSubmissionAccessTokens } from '@/lib/decision-followup'
+import { sponsorRecipientProfiles } from '@/lib/sponsor-recipients'
+import { LIMITS } from '@/lib/schemas/limits'
 
 const DUPLICATE_SUBMISSION_MESSAGE = 'You already have an active pitch to this sponsor.'
+
+const withdrawSchema = z.object({
+  submissionId: z.string().uuid(),
+  reason: z.string().trim().max(LIMITS.feedback).optional(),
+})
 
 const EDITABLE_SUBMISSION_STATUSES = ['draft', 'declined', 'changes_requested'] as const
 
@@ -185,6 +196,108 @@ export async function saveSubmission(
 
     redirect('/dashboard')
   }
+  return { success: true }
+}
+
+/**
+ * B-03-12. Retract a pitch the sponsor has not decided on yet.
+ *
+ * Before this there was no exit from `dispatched` other than a sponsor decision or the
+ * 14-day expiry cron: a coach who sent the wrong amount, the wrong sponsor, or text that
+ * breaches the no-student-information rule could not pull it back, and the sponsor's
+ * reserved capacity stayed locked for the full fortnight.
+ *
+ * Routed through `release_submission_reservation`, the same RPC the expiry cron and the
+ * bounce handler use, so capacity comes back through code that is already pinned by
+ * scripts/verify-capacity-invariant.mjs. The RPC itself re-checks that the submission is in
+ * an awaiting-sponsor state, so a race against a sponsor deciding at the same moment loses
+ * cleanly with `not_releasable` rather than double-releasing.
+ */
+export async function withdrawSubmission(
+  submissionId: string,
+  reason?: string
+): Promise<{ success?: boolean; error?: string }> {
+  const parsed = withdrawSchema.safeParse({ submissionId, reason })
+  if (!parsed.success) {
+    return { error: 'Validation failed: ' + parsed.error.issues.map((i) => i.message).join(', ') }
+  }
+
+  let user, supabase
+  try {
+    ({ user, supabase } = await requireVerifiedCoach())
+  } catch (e: any) {
+    return { error: e.message }
+  }
+
+  // Ownership through the team, read under RLS — a coach must not be able to withdraw
+  // another team's pitch by guessing an id.
+  const { data: submission } = await supabase
+    .from('submissions')
+    .select('id, status, sponsor_id, reserved_amount_cents, teams:team_id(owner_id, team_name)')
+    .eq('id', parsed.data.submissionId)
+    .maybeSingle()
+
+  if (!submission || (submission.teams as { owner_id?: string } | null)?.owner_id !== user.id) {
+    return { error: 'Pitch not found.' }
+  }
+  if (!isAwaitingSponsor(submission.status)) {
+    return { error: 'This pitch is not awaiting a sponsor decision, so it cannot be withdrawn.' }
+  }
+
+  const adminClient = createAdminClient()
+  const { data: rpcResult, error: rpcError } = await adminClient.rpc('release_submission_reservation', {
+    p_submission_id: parsed.data.submissionId,
+    p_new_status: 'withdrawn',
+    p_reason: parsed.data.reason ?? 'withdrawn_by_coach',
+  })
+  if (rpcError) return { error: mapDbError(rpcError, 'withdrawSubmission.rpc') }
+
+  const result = rpcResult as { ok: boolean; error?: string; released_cents?: number }
+  if (!result?.ok) {
+    if (result?.error === 'not_releasable') {
+      return { error: 'The sponsor has already responded to this pitch, so it can no longer be withdrawn.' }
+    }
+    return { error: 'This pitch could not be withdrawn. Refresh and check its current status.' }
+  }
+
+  // B-03-11 applies here too: the emailed bearer link must not keep rendering the full
+  // portfolio for a pitch that has been pulled.
+  await revokeSubmissionAccessTokens(adminClient, parsed.data.submissionId, 'withdrawn_by_coach')
+
+  await writeAudit(adminClient, {
+    actor_id: user.id,
+    action: 'submission_withdrawn_by_coach',
+    entity_type: 'submissions',
+    entity_id: parsed.data.submissionId,
+    metadata: {
+      sponsor_id: submission.sponsor_id,
+      released_cents: result.released_cents ?? 0,
+      reason: parsed.data.reason ?? null,
+    },
+  })
+
+  /**
+   * Tell the sponsor. The direction on this finding was explicit that a withdrawal must not
+   * leave a sponsor with a pitch that silently vanished from their inbox — they may already
+   * have been reading it.
+   */
+  if (submission.sponsor_id) {
+    const teamName = (submission.teams as { team_name?: string } | null)?.team_name ?? 'A team'
+    const recipients = await sponsorRecipientProfiles(adminClient, submission.sponsor_id)
+    for (const recipient of recipients) {
+      await createInAppNotification({
+        recipientId: recipient.id,
+        type: 'general',
+        title: `${teamName} withdrew their pitch`,
+        body: `${teamName} has withdrawn their sponsorship request before a decision was made. No action is needed, and the amount they had reserved against your cap has been released.`,
+      })
+    }
+  }
+
+  revalidatePath('/dashboard')
+  revalidatePath(`/submissions/${parsed.data.submissionId}`)
+  revalidatePath('/sponsor/inbox')
+  revalidatePath('/sponsor/dashboard')
   return { success: true }
 }
 

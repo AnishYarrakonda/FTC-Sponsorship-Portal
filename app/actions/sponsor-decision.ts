@@ -6,7 +6,12 @@ import { revalidatePath } from 'next/cache'
 import { createInAppNotification, sendHandshakeEmail, sendSubmissionDecisionEmail } from '@/lib/notify'
 import { requireSponsorRole } from '@/lib/actions-utils'
 import { mapDbError } from '@/lib/errors'
-import { runDecisionFollowUp, mapDecisionError, notifyEligibleApprovers } from '@/lib/decision-followup'
+import {
+  runDecisionFollowUp,
+  mapDecisionError,
+  notifyEligibleApprovers,
+  revokeSubmissionAccessTokens,
+} from '@/lib/decision-followup'
 import { requiresApproval } from '@/lib/sponsor-roles'
 import { z } from 'zod'
 
@@ -160,7 +165,18 @@ export async function sponsorUpdateSubmissionStatus(
       body: normalizedFeedback,
     })
 
+    /**
+     * A-03-03, corrected. The finding claimed the two SETTLE branches return success
+     * without revalidating; they do not — both call runDecisionFollowUp, which issues
+     * four revalidatePath calls. The real gap is the inverse: this PROPOSAL branch
+     * revalidated only /sponsor/approvals, while creating a pending proposal also changes
+     * what /sponsor/inbox and /sponsor/dashboard must render (the pitch moves out of
+     * "awaiting your decision" into "awaiting approval").
+     */
     revalidatePath('/sponsor/approvals')
+    revalidatePath('/sponsor/inbox')
+    revalidatePath('/sponsor/dashboard')
+    revalidatePath(`/sponsor/submissions/${submissionId}`)
     return {
       success: true,
       pendingApproval: true,
@@ -303,6 +319,17 @@ export async function recordSponsorDecision(
   }
 
   const submissionId = context?.submission_id
+
+  /**
+   * B-03-11. The RPC sets `used_at` on the token it consumed, but a submission can hold
+   * more than one token — 0070 re-mints on resend — and `used_at` is not what
+   * `/sponsor-view/[token]` gates on. Revoke every outstanding token for this submission,
+   * matching the portal path in runDecisionFollowUp.
+   */
+  if (submissionId) {
+    await revokeSubmissionAccessTokens(adminClient, submissionId, `token_decision_${decision}`)
+  }
+
   const recipientId = (context?.submissions as { teams?: { owner_id?: string } } | null)?.teams?.owner_id
   const sponsorName = (context?.submissions as { sponsors?: { company_name?: string } } | null)?.sponsors?.company_name ?? 'your sponsor'
 

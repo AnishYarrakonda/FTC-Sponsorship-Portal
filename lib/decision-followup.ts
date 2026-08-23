@@ -34,6 +34,39 @@ export function mapDecisionError(code: string | undefined): string {
 }
 
 /**
+ * B-03-11. `/sponsor-view/<token>` is an UNAUTHENTICATED bearer credential to a team's full
+ * portfolio — mission, robot and engineering detail, budget breakdown, endorsements, media.
+ * It arrives by email, so it is forwardable. The page gates only on `revoked_at` /
+ * `expires_at`, and no decision path ever wrote `revoked_at`: a decision taken in the
+ * signed-in portal set neither column, so the link kept rendering the whole portfolio to
+ * anyone holding the URL for the remainder of its 14 days.
+ *
+ * A settled pitch has no remaining need for a *bearer* view. Revoking here — in the shared
+ * TypeScript fan-out rather than inside the RPC — is deliberate: it covers every
+ * application surface that settles (portal, approvals confirm, token), while leaving the
+ * RPC-level `already_decided` ledger guard independently testable. That guard is the real
+ * double-settle defence and `scripts/verify-capacity-invariant.mjs` scenario 6 pins it by
+ * calling the RPC directly in SQL; revoking in the RPC would have made that test unable to
+ * distinguish "the ledger guard works" from "the token was gone".
+ *
+ * Best-effort: a settled decision must not fail because a token row could not be updated.
+ */
+export async function revokeSubmissionAccessTokens(
+  adminClient: ReturnType<typeof createAdminClient>,
+  submissionId: string,
+  reason: string
+): Promise<void> {
+  const { error } = await adminClient
+    .from('submission_access_tokens')
+    .update({ revoked_at: new Date().toISOString() })
+    .eq('submission_id', submissionId)
+    .is('revoked_at', null)
+  if (error) {
+    console.error('[decision] could not revoke access tokens', { submissionId, reason, error })
+  }
+}
+
+/**
  * The post-decision fan-out shared by every path that settles a sponsor decision: the
  * coach notification, the handshake + decision emails, and the four dashboard
  * revalidations. Originally lived inline in sponsorUpdateSubmissionStatus
@@ -61,6 +94,12 @@ export async function runDecisionFollowUp(
 
   const recipientId = (submission?.teams as { owner_id?: string } | null)?.owner_id
   const sponsorName = (submission?.sponsors as { company_name?: string } | null)?.company_name ?? 'your sponsor'
+
+  // B-03-11. `approved` and `declined` are terminal; `changes_requested` returns the pitch
+  // to the coach for another round, so the sponsor's link must survive it.
+  if (status === 'approved' || status === 'declined') {
+    await revokeSubmissionAccessTokens(adminClient, submissionId, `decision_${status}`)
+  }
 
   if (recipientId) {
     await createInAppNotification({

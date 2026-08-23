@@ -11,6 +11,7 @@ import { StatusBadge } from '@/components/ui/status-badge'
 import { ConfirmReceiptDialog } from './confirm-receipt-dialog'
 import { ageInDays } from '@/lib/fulfillment-aging'
 import { canTransition } from '@/lib/fulfillment-status'
+import { formatTransactionDate, formatTransactionDateShort } from '@/lib/format-dates'
 
 export function FundingTab({
   teams,
@@ -210,10 +211,10 @@ function FulfillmentCard({ fulfillment: f, isVerified }: { fulfillment: any, isV
   const maskedRef = rawRef.length > 4 ? `•••• ${rawRef.slice(-4)}` : '••••'
 
   let timeline = ''
-  if (f.pledged_at) timeline += `Pledged ${new Date(f.pledged_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
-  if (f.payment_sent_at) timeline += ` · Sent ${new Date(f.payment_sent_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
-  if (f.payment_received_at) timeline += ` · Received ${new Date(f.payment_received_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
-  if (f.cancelled_at) timeline += ` · Cancelled ${new Date(f.cancelled_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
+  if (f.pledged_at) timeline += `Pledged ${formatTransactionDateShort(f.pledged_at)}`
+  if (f.payment_sent_at) timeline += ` · Sent ${formatTransactionDateShort(f.payment_sent_at)}`
+  if (f.payment_received_at) timeline += ` · Received ${formatTransactionDateShort(f.payment_received_at)}`
+  if (f.cancelled_at) timeline += ` · Cancelled ${formatTransactionDateShort(f.cancelled_at)}`
 
   return (
     <Card className="shadow-xs">
@@ -230,7 +231,7 @@ function FulfillmentCard({ fulfillment: f, isVerified }: { fulfillment: any, isV
             {f.status === 'payment_sent' && f.payment_method && (
               <div className="text-xs text-muted-foreground mt-1">
                 Sent by <span className="font-medium uppercase">{f.payment_method}</span>
-                {f.payment_sent_at && ` on ${new Date(f.payment_sent_at).toLocaleDateString()}`}
+                {f.payment_sent_at && ` on ${formatTransactionDate(f.payment_sent_at)}`}
               </div>
             )}
 

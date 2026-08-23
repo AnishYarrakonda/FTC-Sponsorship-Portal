@@ -50,8 +50,13 @@ export function SigningPanel({ submissionId, document }: SigningPanelProps) {
   const nameMatches = typedNameMatches(typedName, document.expectedSignerName)
   const showMismatchHint = typedName.trim().length > 0 && !nameMatches
 
-  const controlsDisabled = !scrolledToBottom || isPending
-  const canSubmit = scrolledToBottom && consentChecked && nameMatches && !isPending
+  // A-04-02. needs_legal_review is a hard gate in sign_agreement_atomic (0106), so the
+  // consent controls stay inert too — collecting a typed legal signature for a request the
+  // database will refuse is worse than disabling the form.
+  const blockedByLegalReview = document.needsLegalReview
+  const controlsDisabled = !scrolledToBottom || isPending || blockedByLegalReview
+  const canSubmit =
+    scrolledToBottom && consentChecked && nameMatches && !isPending && !blockedByLegalReview
 
   function handleSubmit() {
     setError(null)
@@ -79,26 +84,32 @@ export function SigningPanel({ submissionId, document }: SigningPanelProps) {
 
   return (
     <div className="space-y-6">
-      {/* B-03-08. Section 11 of the effective sponsorship agreement currently reads
-          "TODO(legal): jurisdiction to be set by counsel." The admin /agreements page
-          already flags the template; the person actually executing it did not see that
-          anywhere. The clause itself is content for counsel to write — inventing a
-          jurisdiction here would be worse than the gap, because the executed record
-          attests to the exact bytes shown. This makes the gap visible to the signer
-          instead. Remove the flag on the template (see approveAgreementTemplate) and this
-          banner disappears on its own. */}
+      {/* B-03-08 / A-04-02. Section 11 of the effective sponsorship agreement currently
+          reads "TODO(legal): jurisdiction to be set by counsel." The clause itself is
+          content for counsel to write — inventing a jurisdiction here would be worse than
+          the gap, because the executed record attests to the exact bytes shown.
+
+          The P1 sweep surfaced the gap to the signer but still let them sign. A-04-02
+          showed that was the wrong call and migration 0079's own header agrees: "an
+          attorney must review it and an admin must clear the flag before this platform
+          relies on it in a real transaction." Migration 0106 now enforces that in
+          sign_agreement_atomic, so the submit path would fail anyway — this blocks in the
+          UI too rather than letting the signer complete the whole ceremony and hit a
+          server error at the end. Clearing the flag (approveAgreementTemplate) removes the
+          banner and re-enables the button on its own. */}
       {document.needsLegalReview && (
         <div
-          role="status"
+          role="alert"
           className="flex items-start gap-3 rounded-md border border-[var(--badge-warning-text)]/30 bg-[var(--badge-warning-bg)] px-4 py-3 text-sm text-[var(--badge-warning-text)]"
         >
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <div className="space-y-1">
-            <p className="font-medium">This agreement has not been reviewed by counsel.</p>
+            <p className="font-medium">This agreement cannot be signed yet.</p>
             <p className="font-normal">
-              At least one clause is still a placeholder — the governing-law section does not
-              yet name a jurisdiction. You can sign, and the signature is legally recorded,
-              but review the text with your own legal advisor first.
+              It has not been reviewed by counsel — the governing-law section does not yet
+              name a jurisdiction. Signing is blocked until the platform administrator
+              publishes the reviewed version. You can read the full text below; we will
+              email you when it is ready to sign.
             </p>
           </div>
         </div>
@@ -185,7 +196,11 @@ export function SigningPanel({ submissionId, document }: SigningPanelProps) {
         </CardContent>
         <CardFooter className="flex flex-col items-stretch gap-3">
           <Button onClick={handleSubmit} disabled={!canSubmit} className="w-full">
-            {isPending ? 'Signing…' : 'Sign agreement'}
+            {isPending
+              ? 'Signing…'
+              : blockedByLegalReview
+                ? 'Awaiting legal review'
+                : 'Sign agreement'}
           </Button>
           <p className="text-center font-mono text-[10px] text-muted-foreground break-all">
             {document.sha256}

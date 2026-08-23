@@ -11,6 +11,7 @@ import {
   PlayCircle,
   Send,
   TimerOff,
+  Undo2,
   XCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -47,6 +48,8 @@ export const STATUS_CONFIG: Record<string, { label: string; tone: Tone; icon: Lu
   changes_requested: { label: 'Changes requested', tone: 'warning', icon: AlertCircle },
   expired: { label: 'Expired', tone: 'neutral', icon: TimerOff },
   bounced: { label: 'Bounced', tone: 'rejected', icon: MailWarning },
+  // B-03-12. Coach-initiated retraction. Neutral, not `rejected` — nobody said no.
+  withdrawn: { label: 'Withdrawn', tone: 'neutral', icon: Undo2 },
   // Sponsor directory
   active: { label: 'Active', tone: 'success', icon: PlayCircle },
   paused: { label: 'Paused', tone: 'warning', icon: PauseCircle },

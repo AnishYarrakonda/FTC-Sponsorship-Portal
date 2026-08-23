@@ -12,6 +12,7 @@ import { StatusBadge } from '@/components/ui/status-badge'
 import { MarkPaymentSentDialog } from '@/components/sponsor/mark-payment-sent-dialog'
 import { SponsorFulfillmentRow } from '@/components/sponsor/sponsor-fulfillment-row'
 import { ageInDays } from '@/lib/fulfillment-aging'
+import { formatTransactionDate } from '@/lib/format-dates'
 
 export default async function SponsorFundingPage() {
   /**
@@ -223,11 +224,16 @@ export default async function SponsorFundingPage() {
                           {r.receipt_number}
                         </Link>
                       </td>
+                      {/* B-03-14. Both columns through the one UTC formatter: `issued_at`
+                          used to be converted to the viewer's timezone (so it disagreed
+                          with the document it links to) and `contribution_date` was
+                          printed raw, so the two columns were also in two different
+                          formats. */}
                       <td className="px-4 py-3 text-muted-foreground">
-                        {new Date(r.issued_at).toLocaleDateString()}
+                        {formatTransactionDate(r.issued_at)}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
-                        {r.contribution_date}
+                        {formatTransactionDate(r.contribution_date)}
                       </td>
                       <td className="px-4 py-3 font-medium">
                         {r.payee_legal_name || r.teams?.team_name || 'Team'}

@@ -2571,6 +2571,7 @@ export type Database = {
         | "delivered"
         | "expired"
         | "dispatched"
+        | "withdrawn"
       tax_status_type: "501c3" | "School" | "None"
       team_status: "existing" | "incubator"
       user_role: "coach" | "admin" | "sponsor"
@@ -2723,6 +2724,7 @@ export const Constants = {
         "delivered",
         "expired",
         "dispatched",
+        "withdrawn",
       ],
       tax_status_type: ["501c3", "School", "None"],
       team_status: ["existing", "incubator"],

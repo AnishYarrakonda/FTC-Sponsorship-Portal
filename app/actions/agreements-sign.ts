@@ -39,6 +39,14 @@ function mapSignError(code: string): string {
     case 'template_not_effective':
     case 'template_changed':
       return 'This document was updated since you opened it. Please reload the page and try again.'
+    /**
+     * A-04-02. The template still carries needs_legal_review, which migration 0079 defines
+     * as "an attorney must review it and an admin must clear the flag before this platform
+     * relies on it in a real transaction". 0106 turned that from documentation into a gate.
+     * The signer cannot resolve this themselves, so name who can.
+     */
+    case 'template_needs_legal_review':
+      return 'This agreement is still awaiting review by counsel and cannot be signed yet. The platform administrator has been notified — you will be emailed when it is ready.'
     case 'document_changed':
       return 'This document changed since you opened it. Please reload the page and try again.'
     case 'submission_not_found':

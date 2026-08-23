@@ -8,6 +8,8 @@ import { requireAuth } from '@/lib/actions-utils'
 import { mapDbError } from '@/lib/errors'
 import { env } from '@/lib/env'
 import { writeAudit } from '@/lib/audit'
+import { sponsorRecipientProfiles } from '@/lib/sponsor-recipients'
+import { createInAppNotification } from '@/lib/notify'
 
 const updateProfileSchema = z.object({
   fullName: z.string().min(2, 'Name must be at least 2 characters').max(100),
@@ -31,7 +33,19 @@ const changeEmailSchema = z.object({
 const deleteAccountSchema = z.object({
   confirmEmail: z.string().trim().toLowerCase().email('Enter a valid email address'),
   currentPassword: z.string().min(1, 'Current password is required'),
+  /**
+   * B-03-16. Set only after the caller has been shown, and explicitly acknowledged, the
+   * live sponsorship commitments their deletion will orphan. Optional so the first call
+   * can discover them; the second call carries it.
+   */
+  acknowledgeCommitments: z.boolean().optional(),
 })
+
+/**
+ * B-03-16. Non-terminal fulfillment statuses — a commitment still in motion. `receipted`
+ * and `cancelled` are terminal and need no warning.
+ */
+const IN_FLIGHT_FULFILLMENT_STATUSES = ['pledged', 'agreement_signed', 'payment_sent', 'payment_received'] as const
 
 export async function updateProfile(data: { fullName: string }) {
   const result = updateProfileSchema.safeParse(data)
@@ -169,7 +183,11 @@ export async function changeEmail(data: { newEmail: string; currentPassword: str
   }
 }
 
-export async function deleteAccount(data: { confirmEmail: string; currentPassword: string }) {
+export async function deleteAccount(data: {
+  confirmEmail: string
+  currentPassword: string
+  acknowledgeCommitments?: boolean
+}) {
   const parsed = deleteAccountSchema.safeParse(data)
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? 'Invalid account deletion request' }
@@ -201,8 +219,77 @@ export async function deleteAccount(data: { confirmEmail: string; currentPasswor
     return { error: 'Re-authentication failed. Check your current password and try again.' }
   }
 
-  // Deleting the Clerk user fires a `user.deleted` webhook, which removes the
-  // corresponding profiles row (and DB-cascaded data).
+  /**
+   * B-03-16. Deleting the Clerk user fires `user.deleted`, which removes the profile and
+   * lets the database cascade take the team and its submissions with it. That cascade is
+   * safe for capacity (the 0067 BEFORE DELETE trigger gives reservations back, and
+   * detect_capacity_drift stays at zero) and the ESIGN record survives because the
+   * signature row snapshots signer_legal_name / signer_email / typed_name. What it did
+   * NOT do was tell anybody: a coach could leave with an executed agreement and a sponsor
+   * who had actually mailed a cheque, and the sponsor would learn nothing.
+   *
+   * This is a hard warning rather than a block. Refusing deletion outright would make a
+   * user's ability to leave the platform contingent on a third party's payment workflow,
+   * which is the wrong trade for an account-erasure control. So: enumerate the live
+   * commitments, make the caller acknowledge them explicitly, then notify the sponsor side
+   * on the way out.
+   */
+  const adminClient = createAdminClient()
+  const { data: liveFulfillments } = await adminClient
+    .from('funding_fulfillments')
+    .select('id, sponsor_id, amount_cents, status, submission_id, teams:team_id(team_name, owner_id)')
+    .in('status', [...IN_FLIGHT_FULFILLMENT_STATUSES])
+
+  const ownCommitments = (liveFulfillments ?? []).filter(
+    (f) => (f.teams as { owner_id?: string } | null)?.owner_id === user.id
+  )
+
+  if (ownCommitments.length > 0 && !parsed.data.acknowledgeCommitments) {
+    const total = ownCommitments.reduce((sum, f) => sum + (f.amount_cents ?? 0), 0)
+    return {
+      requiresCommitmentAcknowledgement: true,
+      commitmentCount: ownCommitments.length,
+      commitmentTotalCents: total,
+      error:
+        `Your team has ${ownCommitments.length} sponsorship commitment${ownCommitments.length === 1 ? '' : 's'} ` +
+        `still in progress, worth ${(total / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}. ` +
+        'Deleting your account removes your team and its pitches. Any payment already sent to you will ' +
+        'no longer be tracked here, and the sponsors involved will be notified that you have left.',
+    }
+  }
+
+  // Notify the sponsor side BEFORE the profile disappears — afterwards the team name and
+  // the fulfillment's link back to a submission are gone.
+  for (const commitment of ownCommitments) {
+    if (!commitment.sponsor_id) continue
+    const teamName = (commitment.teams as { team_name?: string } | null)?.team_name ?? 'A team you sponsor'
+    const recipients = await sponsorRecipientProfiles(adminClient, commitment.sponsor_id)
+    for (const recipient of recipients) {
+      await createInAppNotification({
+        recipientId: recipient.id,
+        type: 'general',
+        title: `${teamName} has left the platform`,
+        body:
+          `The coach for ${teamName} has deleted their account while a sponsorship commitment of ` +
+          `${((commitment.amount_cents ?? 0) / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} ` +
+          `was still in progress (status: ${commitment.status}). No further payment should be sent. ` +
+          'Cancel the commitment from your Funding page to release the reserved capacity, or contact support.',
+      })
+    }
+  }
+
+  await writeAudit(adminClient, {
+    actor_id: user.id,
+    action: 'delete_account',
+    entity_type: 'profiles',
+    entity_id: user.id,
+    metadata: {
+      in_flight_commitments: ownCommitments.length,
+      in_flight_total_cents: ownCommitments.reduce((sum, f) => sum + (f.amount_cents ?? 0), 0),
+      acknowledged: parsed.data.acknowledgeCommitments === true,
+    },
+  })
+
   try {
     await clerk.users.deleteUser(clerkUserId)
   } catch (e) {

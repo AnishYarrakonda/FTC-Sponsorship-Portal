@@ -6,6 +6,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { AgreementStatusRow } from '@/components/agreements/agreement-status-row'
 import { COACH_EDITABLE_STATUSES, isAwaitingSponsor } from '@/lib/submission-status'
+import { WithdrawPitchButton } from '@/components/coach/withdraw-pitch-button'
 import { CoachThreadPanel } from '@/components/messages/thread-panels'
 import type { ThreadMessage } from '@/components/messages/thread'
 import { cn } from '@/lib/utils'
@@ -89,9 +90,17 @@ export default async function CoachSubmissionDetailPage({ params }: { params: Pr
               Edit pitch
             </Link>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              This pitch is no longer editable in its current status.
-            </p>
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                This pitch is no longer editable in its current status.
+              </p>
+              {/* B-03-12. While the sponsor still has it, the coach can pull it back —
+                  which is also the only way to free the capacity it reserves before the
+                  14-day expiry. */}
+              {isAwaitingSponsor(submission.status) && (
+                <WithdrawPitchButton submissionId={id} sponsorName={sponsorName} />
+              )}
+            </div>
           )}
         </CardContent>
       </Card>

@@ -147,6 +147,43 @@ function assertUsed(expected, label) {
 
 const SCENARIOS = [
   {
+    /**
+     * A-11-06 — the NEGATIVE CONTROL, and it runs first on purpose.
+     *
+     * Every other scenario ends in `assertUsed`, half of which is "detect_capacity_drift()
+     * stayed silent". Silence only means something if the detector can speak. A detector
+     * that returned zero rows unconditionally — because a predicate inverted, because a
+     * join dropped, because someone revoked its EXECUTE grant and the error was swallowed
+     * — would let all seven scenarios pass while reporting a clean database that was not.
+     *
+     * The finding filed this as "the script asserts what it computed", which is not quite
+     * right: `assertUsed` does compare funding_used_cents against an independently stated
+     * figure. But the detector half genuinely was unfalsifiable, and that half is what the
+     * admin capacity page and the post-deploy check both rely on.
+     *
+     * So: reserve a known amount, corrupt the cached counter by a known delta, and require
+     * the detector to report THAT sponsor with THAT drift. Then put it back and require
+     * silence again — proving the detector tracks the data rather than always firing.
+     */
+    name: '0. Negative control — a deliberately corrupted counter IS caught by the detector',
+    body: `${APPROVE}
+  -- Corrupt the cache: funding_used_cents no longer matches the open reservation.
+  UPDATE sponsors SET funding_used_cents = funding_used_cents + 33300 WHERE id = v_sponsor;
+
+  SELECT d.drift_cents INTO v_drift FROM detect_capacity_drift() d WHERE d.sponsor_id = v_sponsor;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'negative control: detect_capacity_drift() did NOT report a sponsor whose funding_used_cents was inflated by 33300 -- the detector is broken, and every "zero drift" result in this script is meaningless';
+  END IF;
+  IF v_drift <> 33300 THEN
+    RAISE EXCEPTION 'negative control: expected drift of 33300 cents, detector reported %', v_drift;
+  END IF;
+
+  -- Put it back; the detector must fall silent again. A detector that always fires is as
+  -- useless as one that never does.
+  UPDATE sponsors SET funding_used_cents = funding_used_cents - 33300 WHERE id = v_sponsor;
+${assertUsed('v_ask', 'negative control (restored)')}`,
+  },
+  {
     name: '1. Decline — sponsor declines in the portal, reservation returns to the cap',
     body: `${APPROVE}
   v_result := sponsor_decide_submission_atomic(v_sub, v_sponsor_user, 'declined', 'not this season', 0);
@@ -220,19 +257,34 @@ ${assertUsed('0', 'bounce')}`,
 ${assertUsed('0', 'account-deletion cascade')}`,
   },
   {
-    name: '6. Double settle — token path after a portal settle returns already_decided (0084 regression test)',
+    name: '6. Double settle — token path after a portal settle is refused (0071 status guard / 0084 ledger guard)',
     body: `${APPROVE}
   v_result := sponsor_decide_submission_atomic(v_sub, v_sponsor_user, 'approved', NULL, 0);
   IF (v_result ->> 'ok') <> 'true' THEN
     RAISE EXCEPTION 'portal settle returned %', v_result;
   END IF;
 
-  -- The emailed link is still live: the portal path never touches submission_access_tokens.
-  -- Before 0084 this call had no ledger guard and the single-use token was the only thing
-  -- standing between here and a second settlement.
+  -- The emailed link is still live at the DATABASE level: the portal RPC never touches
+  -- submission_access_tokens. (The application layer now revokes them in
+  -- runDecisionFollowUp for B-03-11, but this scenario calls the RPCs directly, which is
+  -- the point — it tests the database's own defences with the token still valid.)
+  --
+  -- CORRECTED EXPECTATION. This asserted already_decided, copied from the worked example
+  -- in 0084's header comment (line ~446). That expectation was never reachable: migration
+  -- 0071 -- 0071_token_decision_check_status_first.sql, which says so in its filename --
+  -- had already moved the status guard ahead of everything else. A portal settle leaves
+  -- the submission at approved, so the status guard refuses first and invalid_status
+  -- is the correct, by-design answer; 0084's ledger guard is the second line of defence
+  -- behind it, for a race where two calls interleave while the status is still dispatched.
+  --
+  -- What this scenario actually exists to protect is unchanged and is asserted below: a
+  -- second settlement cannot happen, no second ledger row appears, the token is not burned
+  -- by the rejected call, and the money is right. Pinning WHICH guard fires made the test
+  -- fail on correct behaviour, so it now accepts either refusal and checks the outcomes.
   v_jresult := record_sponsor_decision_atomic(v_token_hash, 'full', 0);
-  IF (v_jresult ->> 'ok') <> 'false' OR (v_jresult ->> 'error') <> 'already_decided' THEN
-    RAISE EXCEPTION 'token path after a portal settle: expected already_decided, got %', v_jresult;
+  IF (v_jresult ->> 'ok') <> 'false'
+     OR (v_jresult ->> 'error') NOT IN ('invalid_status', 'already_decided') THEN
+    RAISE EXCEPTION 'token path after a portal settle: expected a refusal (invalid_status or already_decided), got %', v_jresult;
   END IF;
 
   SELECT count(*) INTO v_ledger FROM transactions_ledger WHERE submission_id = v_sub;
@@ -248,7 +300,35 @@ ${assertUsed('0', 'account-deletion cascade')}`,
 ${assertUsed('v_ask', 'double settle')}`,
   },
   {
-    name: '7. No double refund — releasing twice moves the money once',
+    /**
+     * B-03-12. The coach-initiated withdraw added in 0107 travels the same release path as
+     * expiry and bounce, so it belongs in the same invariant suite: capacity is a Core
+     * Mandate and this is a new way for money to move.
+     */
+    name: '7. Withdraw — a coach retracts a dispatched pitch and the reservation returns',
+    body: `${APPROVE}
+  v_result := release_submission_reservation(v_sub, 'withdrawn', 'withdrawn_by_coach');
+  IF (v_result ->> 'ok') <> 'true' THEN
+    RAISE EXCEPTION 'withdraw returned %', v_result;
+  END IF;
+  IF (v_result ->> 'released_cents')::bigint <> v_ask THEN
+    RAISE EXCEPTION 'withdraw: expected % released, got %', v_ask, v_result ->> 'released_cents';
+  END IF;
+
+  SELECT status, reserved_amount_cents INTO v_status, v_reserved FROM submissions WHERE id = v_sub;
+  IF v_status <> 'withdrawn' OR v_reserved <> 0 THEN
+    RAISE EXCEPTION 'withdraw: expected status withdrawn / reserved 0, got % / %', v_status, v_reserved;
+  END IF;
+
+  -- No ledger row: a withdrawal is not a settlement, so nothing was ever funded.
+  SELECT count(*) INTO v_ledger FROM transactions_ledger WHERE submission_id = v_sub;
+  IF v_ledger <> 0 THEN
+    RAISE EXCEPTION 'withdraw: expected 0 ledger rows, found %', v_ledger;
+  END IF;
+${assertUsed('0', 'withdraw')}`,
+  },
+  {
+    name: '8. No double refund — releasing twice moves the money once',
     body: `${APPROVE}
   v_result := release_submission_reservation(v_sub, 'declined', 'first_release');
   IF (v_result ->> 'ok') <> 'true' THEN

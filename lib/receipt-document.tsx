@@ -3,6 +3,7 @@ import { createHash } from 'crypto'
 import { render } from '@react-email/render'
 import { Section, Text, Hr } from '@react-email/components'
 import { receiptCopy, ReceiptVariant } from '@/lib/receipt-copy'
+import { formatTransactionDate } from '@/lib/format-dates'
 
 export interface ReceiptDocumentContext {
   receiptNumber: string
@@ -66,11 +67,16 @@ export function ReceiptDocumentBody(ctx: ReceiptDocumentContext): React.ReactEle
         <Text style={summaryRowStyle}>
           <strong>Receipt Number:</strong> {ctx.receiptNumber}
         </Text>
+        {/* B-03-14. Same formatter the receipts table on /sponsor/funding uses, so one
+            receipt reports one issue date wherever it is read. Both values are already
+            UTC calendar days (lib/receipts.ts derives them with toISOString), and
+            formatTransactionDate keeps them in UTC rather than re-interpreting them in
+            whichever timezone happens to be rendering. */}
         <Text style={summaryRowStyle}>
-          <strong>Issue Date:</strong> {ctx.issuedAt}
+          <strong>Issue Date:</strong> {formatTransactionDate(ctx.issuedAt)}
         </Text>
         <Text style={summaryRowStyle}>
-          <strong>Contribution Date:</strong> {ctx.contributionDate}
+          <strong>Contribution Date:</strong> {formatTransactionDate(ctx.contributionDate)}
         </Text>
         <Text style={summaryRowStyle}>
           <strong>Payee Legal Name:</strong> {ctx.payeeLegalName}

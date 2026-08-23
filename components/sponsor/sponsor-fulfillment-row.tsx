@@ -9,6 +9,7 @@ import { ageInDays } from '@/lib/fulfillment-aging'
 import { canTransition } from '@/lib/fulfillment-status'
 import { buttonVariants } from '@/components/ui/button'
 import { hasSponsorRole, type SponsorRole } from '@/lib/sponsor-roles'
+import { formatTransactionDate, formatTransactionDateShort } from '@/lib/format-dates'
 import { cn } from '@/lib/utils'
 
 export function SponsorFulfillmentRow({
@@ -29,10 +30,10 @@ export function SponsorFulfillmentRow({
   const maskedRef = rawRef.length > 4 ? `•••• ${rawRef.slice(-4)}` : '••••'
 
   let timeline = ''
-  if (f.pledged_at) timeline += `Pledged ${new Date(f.pledged_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
-  if (f.payment_sent_at) timeline += ` · Sent ${new Date(f.payment_sent_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
-  if (f.payment_received_at) timeline += ` · Received ${new Date(f.payment_received_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
-  if (f.cancelled_at) timeline += ` · Cancelled ${new Date(f.cancelled_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
+  if (f.pledged_at) timeline += `Pledged ${formatTransactionDateShort(f.pledged_at)}`
+  if (f.payment_sent_at) timeline += ` · Sent ${formatTransactionDateShort(f.payment_sent_at)}`
+  if (f.payment_received_at) timeline += ` · Received ${formatTransactionDateShort(f.payment_received_at)}`
+  if (f.cancelled_at) timeline += ` · Cancelled ${formatTransactionDateShort(f.cancelled_at)}`
 
   return (
     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 py-4 border-b border-border last:border-0">

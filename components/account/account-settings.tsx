@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
 import { updateProfile, updatePassword, changeEmail, deleteAccount, requestDataExport } from '@/app/actions/account'
 import { CheckCircle2, AlertCircle, Download, Trash2 } from 'lucide-react'
@@ -76,6 +77,9 @@ export function AccountSettings({
   const [confirmEmail, setConfirmEmail] = useState('')
   const [deletePw, setDeletePw] = useState('')
   const [deleteMsg, setDeleteMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  // B-03-16
+  const [commitmentWarning, setCommitmentWarning] = useState<string | null>(null)
+  const [commitmentsAcknowledged, setCommitmentsAcknowledged] = useState(false)
 
   // Per-section transitions so one submitting section doesn't put every other
   // button into a loading state.
@@ -130,10 +134,25 @@ export function AccountSettings({
     })
   }
 
+  /**
+   * B-03-16. The first call discovers live sponsorship commitments and comes back with
+   * `requiresCommitmentAcknowledgement`. Nothing is deleted on that pass — the coach is
+   * shown what their departure orphans and must tick the acknowledgement before a second
+   * call proceeds, which then notifies the sponsors involved.
+   */
   function handleDelete() {
     setDeleteMsg(null)
     startDeleteTransition(async () => {
-      const res = await deleteAccount({ confirmEmail, currentPassword: deletePw })
+      const res = await deleteAccount({
+        confirmEmail,
+        currentPassword: deletePw,
+        acknowledgeCommitments: commitmentsAcknowledged,
+      })
+      if (res && 'requiresCommitmentAcknowledgement' in res && res.requiresCommitmentAcknowledgement) {
+        setCommitmentWarning(res.error ?? 'Your team has sponsorship commitments still in progress.')
+        setDeleteMsg(null)
+        return
+      }
       if (res?.error) setDeleteMsg({ type: 'error', text: res.error })
     })
   }
@@ -306,11 +325,36 @@ export function AccountSettings({
               placeholder="Enter your current password"
             />
           </div>
+          {/* B-03-16. Live sponsorship commitments this deletion will orphan. */}
+          {commitmentWarning && (
+            <div
+              role="alert"
+              className="flex flex-col gap-3 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm"
+            >
+              <p className="text-foreground">{commitmentWarning}</p>
+              <div className="flex items-start gap-2">
+                <Checkbox
+                  id="acknowledge-commitments"
+                  checked={commitmentsAcknowledged}
+                  onCheckedChange={(v) => setCommitmentsAcknowledged(v === true)}
+                  className="mt-0.5"
+                />
+                <Label htmlFor="acknowledge-commitments" className="text-sm font-normal leading-snug">
+                  I understand, and I still want to delete my account.
+                </Label>
+              </div>
+            </div>
+          )}
           {deleteMsg && <StatusMessage type={deleteMsg.type} text={deleteMsg.text} />}
           <Button
             variant="destructive"
             onClick={handleDelete}
-            disabled={deleting || confirmEmail !== email || !deletePw}
+            disabled={
+              deleting ||
+              confirmEmail !== email ||
+              !deletePw ||
+              (!!commitmentWarning && !commitmentsAcknowledged)
+            }
             loading={deleting}
             className="self-start gap-2"
           >

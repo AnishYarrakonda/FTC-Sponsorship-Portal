@@ -361,10 +361,19 @@ describe('resolveAppeal', () => {
     expect(r).toEqual({ success: true })
     expect(submissionUpdates()).toHaveLength(1)
     expect(submissionUpdates()[0].payload.status).toBe('changes_requested')
-    // admin_feedback is deliberately NOT written: it survives re-approval and the sponsor
-    // portal ships the whole submission row to a client component, so appeal text there
-    // would reach the sponsor's browser once the pitch is resubmitted and approved.
-    expect(submissionUpdates()[0].payload).not.toHaveProperty('admin_feedback')
+    /**
+     * B-03-15 sharpened this. admin_feedback is CLEARED, not left alone: it held the
+     * original decline reason — the justification for a decision a second administrator
+     * has just reversed — so the pitch landed in "Changes requested" carrying text that
+     * requested nothing.
+     *
+     * The original invariant this line pinned still holds and is the assertion below it:
+     * appeal *content* is never written here, because the column survives re-approval and
+     * the sponsor portal ships the whole submission row into a client component, so
+     * anything stored here reaches the sponsor's browser.
+     */
+    expect(submissionUpdates()[0].payload.admin_feedback).toBeNull()
+    expect(submissionUpdates()[0].payload.admin_feedback).not.toBe(VALID_NOTES)
     // reviewed_by is NOT touched — it records who made the original decision.
     expect(submissionUpdates()[0].payload).not.toHaveProperty('reviewed_by')
     expect(mocks.notifyMock).toHaveBeenCalledTimes(1)
