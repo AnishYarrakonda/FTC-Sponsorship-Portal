@@ -1,29 +1,27 @@
 # Next session — start here
 
-**Written:** 2026-08-21, at the end of the session that deployed and closed the `qa-thread` gap.
-**Branch:** `main`. Working tree clean, **pushed to `origin/main`**.
-**Production is current** — deployed 2026-08-21 (`dpl_5Rkqdx7GgLMD9nDavPHhn8XgbjfQ`), aliased
-to `ftc-sponsorship-portal.vercel.app`. `verify-backlog` against it: **65 pass / 1 fail**, the
-one failure being DMARC (registrar-side, item 1 below).
+**Written:** 2026-08-23, at the end of the session that executed the P0 sweep of the Gemini
+audit pack.
+**Branch:** `fix/audit-p0-sweep`, merged to `main`.
+**Production:** the code half of the P0 sweep is deployed. **Migrations `0098`, `0099`, `0100`
+are NOT applied to production** — see "What is actually owed" below. Until `0098` lands, anyone
+holding the public anon key can forge notifications to any user.
 
 ---
 
 ## State of the world
 
-All 18 prompts in this folder are **shipped, audited, and now covered by a green E2E suite.**
-Both audit sweeps (`revamp/_AUDIT-01-10.md`, `revamp/_AUDIT-11-18.md`) are closed except three rows:
+The 18 revamp prompts are shipped, audited, and covered by a green E2E suite. The 16-part
+Gemini audit pack has been **run in full** (102 findings: 9 P0, 48 P1, 30 P2, 16 P3) and its
+**P0 tier is closed** — 7 fixed, 2 phantoms. See `prompts/audits/_ORCHESTRATOR-STATE.md` for
+the per-finding record.
 
-| Row | Why it is still open |
-|---|---|
-| `F-02` approver rejection doesn't decline the submission | **By design.** An internal org decision is not a submission decline; capacity releases at the 14-day expiry. Only reopen if the product decision changes. |
-| `F-11` `as never` casts on `.update()` | Documented Supabase-types workaround (`team.ts:153`). Cosmetic. |
-| `F-15` FIRST API credentials | Yours — see the checklist below. Running correctly on the FTCScout fallback. |
+Gate at close: typecheck ✅ · lint **0 errors / 340 warnings** ✅ · **437/437** Vitest ✅ · build ✅.
 
-Gate at close: typecheck ✅ · lint **0 errors / 340 warnings** ✅ · **419/419** Vitest ✅ ·
-build ✅ · **E2E 174 passed / 0 failed / 2 skipped** (chromium, 176 total, 5.7m).
-
-CI at `.github/workflows/ci.yml` runs the same four-command gate on every push and PR with
-inert placeholder env. It deliberately does **not** run the E2E job — that needs Docker.
+The audit's own `findings/` and `handoff/` output is **deliberately gitignored** — those files
+enumerate 93 still-unfixed findings with working repro steps, which is the same document class
+as the `*QA-REPORT*` / `*REMEDIATION*` patterns already excluded. The audit *prompts* stay
+committed; the evidence does not.
 
 ### The E2E sweep is DONE — do not re-litigate it
 
@@ -33,22 +31,32 @@ Seven harness defects had to be fixed first; they are catalogued in `revamp/_AUD
 
 ---
 
-## What is actually left
+## What is actually owed
 
-### 1. Nothing is owed in code
+### 1. Three migrations, unapplied in production — start here
 
-Both former items are closed. Production is deployed and verified, and the `qa-thread`
-coverage gap is shut: `tests/e2e/qa-thread.spec.ts` now seeds its own world in `beforeAll`
-and tears it down in `afterAll`, so `0085`'s database enforcement actually executes.
-The remaining **2** skips are legitimate: one dialog-focus a11y test, one reviewer
-funding-cap test.
+`prompts/audits/_RESUME-AFTER-RESTART.md` is the runbook. It is not optional reading: `0099`
+and `0100` are `CREATE OR REPLACE` bodies authored from **local** dumps, so they must be
+diffed against the **production** `pg_get_functiondef` output before they are applied.
+Replacing a drifted body has silently deleted later fixes three times in this repo.
 
-### 2. Nothing else in `prompts/` is owed
+Production DB access is blocked by the auto-mode classifier regardless of the `Bash(psql *)`
+allow-rule. `npx supabase migration list --linked` is the one read path that survives it, and
+it reports the ledger stopping at **0075** — but that ledger is not evidence, because
+`psql -f` never stamps it.
 
-Every prompt `01`–`18` is implemented. What remains is not engineering — it is the
-registrar/dashboard/counsel list below.
+### 2. The 48 P1 findings
 
----
+Grouped and ordered in the approved plan. Group 1 (security/RLS/money) first:
+`A-02-02`/`-03`, `A-06-02`, `A-10-01`…`-04`, `B-01-3`.
+
+**Reproduce before fixing.** The P0 pass ran 2-in-9 phantom, and `A-04-01`'s stated mechanism
+was wrong even though the bug underneath it was real — and worse than described.
+
+### 3. Nothing else in `prompts/revamp/` is owed
+
+Every prompt `01`–`18` is implemented. What remains there is the registrar/dashboard/counsel
+list below.
 
 ## Re-running the E2E suite (the recipe, already paid for)
 
