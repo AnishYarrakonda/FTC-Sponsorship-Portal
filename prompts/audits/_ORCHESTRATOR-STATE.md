@@ -203,20 +203,35 @@ Production is pre-launch: 0 submissions, 0 teams, 1 profile, 3 sponsors, 1 fulfi
 | P2-A money/capacity/state | 9 | 7 fixed · 1 partial (A-11-06) · **1 wrong mechanism (A-03-03)** |
 | P2-B security/access | 5 | 4 fixed · **1 did not reproduce (A-01-03)** |
 | P2-C coach/sponsor journeys | 7 | 7 fixed |
-| P2-D accessibility | 7 | 6 fixed · **1 did not reproduce (A-08-04)** |
+| P2-D accessibility | 7 | 7 fixed (A-08-04 was **first called a phantom, then reproduced live**) |
 | P2-E enterprise | 2 | 2 built |
 | P3 | 16 | 14 fixed · 2 were not what the pack said |
 | Phase 4 deferred | 5 | 2 built · 3 closed |
 
 **New migrations: `0106`–`0110`**, all applied to production with post-conditions asserted.
 
-### What did NOT reproduce (the phantom rate is itself a finding about the pack)
+### Where the pack was wrong — and one place this sweep was wrong about the pack
+
+(The phantom rate is itself a finding about the pack. So is A-08-04, which runs the other
+way: a real defect nearly closed as a phantom because it was assessed by reading rather than
+by running.)
 
 - **A-01-03** — claims `requireSponsor` falls back to `LEGACY_MEMBER_ROLE` when the membership
   read fails. It does not: the error is checked and thrown. Already fixed; now pinned by a test.
-- **A-08-04** — claims the command palette is a hand-rolled overlay with no focus trap. B-04-05 in
-  the P1 sweep had already rebuilt it on the project's base-ui `Dialog`. Now verified LIVE rather
-  than by inspection.
+- **A-08-04 — NOT a phantom. This entry previously said it was, and that was wrong.**
+  It was judged "did not reproduce" by inspection: the palette really does render through the
+  project's base-ui `Dialog`, which is documented to trap and restore focus. Driving it with a
+  keyboard disproved that on both halves.
+  *Containment*: Tab left the popup at press 4 and reached the page behind at press 6 —
+  `input → input → Cancel → Close → focus guard → <body> → "Skip to main content" → "FTC
+  Pitfund" → "Dashboard"`; Shift+Tab escaped onto "View Inbox". base-ui 1.4.0's `markOthers`
+  uses `ariaHidden: modal` and never sets native `inert`, and `aria-hidden` removes nothing
+  from the tab order.
+  *Restoration*: Escape left `document.activeElement === document.body`; confirmed
+  pre-existing by disabling the fix and re-running.
+  Fixed by a local Tab wrap in `components/ui/dialog.tsx` and by passing the captured opener
+  to base-ui as `finalFocus` from the palette. **"The library handles it" is a claim about
+  observable behaviour and can only be settled by observing it.**
 - **A-03-03** — stated mechanism is WRONG in the opposite direction. Both settle branches DO
   revalidate, via `runDecisionFollowUp`. The real gap was the proposal branch. Fixed that.
 - **A-11-06** — partial. The script did assert independently-stated figures, so "asserts what it
@@ -245,6 +260,70 @@ Production is pre-launch: 0 submissions, 0 teams, 1 profile, 3 sponsors, 1 fulfi
    reproducing it at the session's starting commit.
 5. A fourth UPDATE policy with a null `with_check` (on `storage.objects`) that the A-02-04 sweep
    found and the pack did not name.
+6. **`/sponsor-view/[token]` 404'd the sponsor who had just decided.** B-03-11 (P1 sweep) revokes
+   every outstanding access token for a submission once a decision lands, and its
+   `.is('revoked_at', null)` filter does not exclude the token just consumed. The page then
+   returned `notFound()` on any revoked token. So: press "Confirm Decline" → the action revokes
+   your own link → `revalidatePath` re-renders the route → **404**, with no confirmation that the
+   decision was recorded. Two individually-correct changes, composed into a defect.
+   Surfaced by the Phase 5 keyboard-journey E2E test, and note *how*: the decision itself
+   succeeded, so every assertion about the database passed and **only the assertion about what
+   the sponsor sees failed**. Fixed by `if (row.revoked_at && !row.used_at)` — `used_at` marks
+   the token as the record of this visitor's own decision rather than a leaked link.
+
+### Phase 5 — what counting the E2E skips turned up
+
+The definition of done said "0 failures, **every skip explained**". Explaining them was not
+paperwork; it was where most of this session's remaining defects were.
+
+The first sweep read **118 passed · 58 skipped · 1 failed**. Eight suites — five of them
+entirely — had never executed on any normal local run:
+
+| Suite | Was | After |
+|---|---|---|
+| `agreement-signing` | 10 skipped | 11 pass |
+| `sponsor-approvals` | 15 skipped | 15 pass |
+| `sponsor-organizations` | 12 skipped | 12 pass |
+| `team-verification` | 6 skipped | 9 pass |
+| `agreements-admin` | 1 skipped | passes |
+| `admin-levels` (reviewer block) | 5 skipped | 7 pass |
+| `denial-flow` | 2 skipped | 2 pass |
+| `fulfillment-transitions` | 1 fail + 6 skipped | 7 pass |
+
+**The cause was one mistake repeated.** Each gated `test.skip` on a RAW environment variable
+(`!process.env.ADMIN_EMAIL`, `!process.env.REVIEWER_EMAIL`, `DENIAL_COACH_EMAIL ?? ''`) while
+every account it actually uses is a DEFAULTED constant
+(`process.env.X ?? 'x+clerk_test@example.com'`). The guard therefore tested something the code
+below does not depend on. The accounts were seeded and present; the suites would have passed;
+they skipped, and **skipped reads as a pass**. Same class as B-04-12. The gate is now the local
+stack itself.
+
+Turning them on surfaced five further defects:
+
+1. **`0106`'s legal-review gate had no test and blocked the entire signing suite.** The
+   effective `sponsorship_agreement` carries `needs_legal_review = true`, so
+   `sign_agreement_atomic` correctly refused everything. The suite now ASSERTS the refusal
+   first, then clears the flag for the remaining tests and restores it in `afterAll` — the one
+   guarantee stopping a real sponsor from executing an agreement with no governing-law clause
+   is not something to quietly switch off.
+2. **The fulfillment fixture built ORPHANS.** `pledge()` defaults `submissionId`/`teamId` to
+   null, so every fulfillment this suite created had no submission — exactly what A-04-03
+   refuses. The gate was right; the fixture was not. Worse, its "a coach who doesn't own it"
+   boundary passed only because *nobody* owned it: with no `team_id`, the assertion would have
+   held against a function with no coach-ownership check at all. It now builds a real team,
+   submission and executed agreement, and a genuinely different coach.
+3. **Two identically-named "Save" buttons on `/sponsor/settings`** — the fiscal-year card built
+   this session for A-12-04 landed beside the approval-policy card. A real a11y defect (WCAG
+   2.4.6 / 2.5.3), fixed with distinct accessible names rather than by scoping the selector
+   around it.
+4. **`admin-levels` skipped with a false reason.** "No sponsor rows seeded to edit" — with five
+   sponsors in the table. The link to the edit page is the COMPANY NAME, so
+   `getByRole('link', { name: /edit/i })` matched nothing on any run, whatever the data. The
+   assertion that a reviewer cannot change a funding cap had never run. It does now, and passes.
+5. **`team-verification` had no cleanup**, so `team_verification_records` accumulated across
+   runs (twelve by the time this looked). The override step takes `.first()` of the pending
+   rows, which after any previous run is someone else's record — it passed in isolation and
+   timed out in the full sweep, which is what residue always looks like.
 
 ### The one thing that is NOT an engineering task
 

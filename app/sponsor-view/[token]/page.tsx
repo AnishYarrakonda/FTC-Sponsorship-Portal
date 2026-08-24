@@ -53,7 +53,25 @@ export default async function SponsorViewPage({ params }: Props) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const row = accessToken as any
-  if (row.revoked_at) return notFound()
+
+  /**
+   * A revoked token is a dead link — UNLESS it is the token the visitor just decided with.
+   *
+   * B-03-11 revokes EVERY outstanding token for a submission once a decision lands, and
+   * `.is('revoked_at', null)` does not exclude the one that was just consumed. So the
+   * sponsor pressed "Confirm Decline", the action revoked their own link, `revalidatePath`
+   * re-rendered this route, and they were shown a 404 — with no confirmation that the
+   * decision they had just made was recorded at all.
+   *
+   * Caught by the keyboard-journey E2E test rather than by review: the decision itself
+   * succeeded, so every assertion about the database passed and only the assertion about
+   * what the SPONSOR SEES failed.
+   *
+   * `used_at` is the discriminator. A token that was used is not a leaked or stale link;
+   * it is the record of this visitor's own decision, and the `decided` branch below
+   * renders it read-only with the outcome announced. Revoked-and-never-used stays a 404.
+   */
+  if (row.revoked_at && !row.used_at) return notFound()
 
   const expired = new Date(row.expires_at) < new Date()
   const decided = !!row.used_at

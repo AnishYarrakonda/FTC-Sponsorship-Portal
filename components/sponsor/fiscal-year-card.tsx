@@ -69,7 +69,18 @@ export function FiscalYearCard({ fiscalYearStartMonth }: { fiscalYearStartMonth:
             ))}
           </select>
         </div>
-        <Button onClick={handleSave} disabled={isPending || month === fiscalYearStartMonth}>
+        {/*
+          Named, not just "Save". This card landed on /sponsor/settings next to the approval
+          policy card, which already had a "Save" — leaving both generic gives a screen-reader
+          user two identical button names on one page with nothing to tell them apart, and the
+          visible label no longer matches the accessible name for voice control (WCAG 2.4.6,
+          2.5.3). The visible text stays short; the accessible name carries the distinction.
+        */}
+        <Button
+          onClick={handleSave}
+          disabled={isPending || month === fiscalYearStartMonth}
+          aria-label="Save fiscal year"
+        >
           {isPending ? 'Saving…' : 'Save'}
         </Button>
       </CardContent>

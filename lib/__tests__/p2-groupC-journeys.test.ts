@@ -294,3 +294,43 @@ describe('B-01-4 — NEEDS_VERIFICATION offers a way forward', () => {
     expect(body).toContain('setError(null)')
   })
 })
+
+/**
+ * NOT IN THE PACK. Found by the keyboard-journey E2E test in Phase 5.
+ *
+ * B-03-11 (P1 sweep) revokes EVERY outstanding access token for a submission once a
+ * decision lands, and `.is('revoked_at', null)` does not exclude the token that was just
+ * consumed. `/sponsor-view/[token]` then returned `notFound()` on any revoked token — so
+ * the sponsor pressed "Confirm Decline", the action revoked their own link,
+ * `revalidatePath` re-rendered the route, and they were handed a 404 with no confirmation
+ * that the decision they had just made had been recorded at all.
+ *
+ * Both fixes are correct in isolation, which is why review missed it and why every
+ * database assertion in the E2E test passed. Only the assertion about what the SPONSOR
+ * SEES failed.
+ *
+ * `used_at` is the discriminator: a used token is the record of this visitor's own
+ * decision, not a leaked link. Revoked-and-never-used stays a 404.
+ */
+describe('sponsor-view does not 404 the sponsor who just decided', () => {
+  const page = readCode('app/sponsor-view/[token]/page.tsx')
+
+  it('a revoked token is only a 404 when it was never used', () => {
+    expect(page).toContain('if (row.revoked_at && !row.used_at) return notFound()')
+    // The unconditional form is what produced the 404.
+    expect(page).not.toMatch(/if \(row\.revoked_at\) return notFound\(\)/)
+  })
+
+  it('the decided branch still renders read-only and announces the outcome', () => {
+    // `decided` gates the decision controls off, so a used token cannot decide twice.
+    expect(page).toContain('const decided = !!row.used_at')
+    expect(page).toContain("role={decided ? 'status' : undefined}")
+    expect(page).toContain('Decision recorded')
+  })
+
+  it('revocation itself is unchanged — every live token is still revoked on decision', () => {
+    const followUp = read('lib/decision-followup.ts')
+    expect(followUp).toContain('export async function revokeSubmissionAccessTokens')
+    expect(followUp).toMatch(/\.is\('revoked_at', null\)/)
+  })
+})

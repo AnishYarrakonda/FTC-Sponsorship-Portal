@@ -34,8 +34,18 @@ test.describe('Agreement signing — access boundaries', () => {
 })
 
 test.describe.serial('Agreement signing — end to end', () => {
+  /**
+   * The gate is the LOCAL STACK, not an environment variable.
+   *
+   * This read `!process.env.ADMIN_EMAIL`, while every account the suite actually uses is a
+   * defaulted constant (`process.env.X ?? 'x+clerk_test@example.com'`). So the guard tested
+   * something the code below does not depend on, and on any normal local run — where the
+   * seeded accounts are present and the suite would have passed — every test in it skipped.
+   * Skipped reads as a pass. That is the B-04-12 failure class, found again by counting the
+   * skips in the Phase 5 sweep instead of accepting them.
+   */
   test.skip(
-    !process.env.SUPABASE_LOCAL || !process.env.ADMIN_EMAIL,
+    !process.env.SUPABASE_LOCAL,
     'Set SUPABASE_LOCAL=true and seed test accounts (scripts/seed-test-accounts.mjs) to enable this suite'
   )
 
@@ -47,6 +57,9 @@ test.describe.serial('Agreement signing — end to end', () => {
   let submissionId: string
   let fulfillmentId: string
   let transactionId: string
+
+  let effectiveTemplateId: string
+  let templateNeededLegalReview = false
 
   test.beforeAll(async () => {
     adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
@@ -183,6 +196,52 @@ test.describe.serial('Agreement signing — end to end', () => {
     })
     transactionId = created.transactionId
     fulfillmentId = created.fulfillmentId
+
+    /**
+     * The effective `sponsorship_agreement` ships with `needs_legal_review = true` — its
+     * Section 11 still reads `TODO(legal): jurisdiction to be set by counsel.` Migration
+     * `0106` makes `sign_agreement_atomic` REFUSE such a template outright, ahead of every
+     * other check, so with the flag set this whole suite can only ever observe
+     * `template_needs_legal_review` and nothing downstream of signing is exercised at all.
+     *
+     * That gate is asserted on its own below, deliberately, before the flag is cleared —
+     * clearing it silently would turn the one guarantee protecting a real sponsor from
+     * executing an agreement with no governing-law clause into something no test covers.
+     * The rest of the suite then runs against a reviewed template, which is the state the
+     * platform will be in once counsel supplies the clause.
+     */
+    const { data: eff } = await adminClient
+      .from('agreement_templates')
+      .select('id, needs_legal_review')
+      .eq('key', 'sponsorship_agreement')
+      .eq('status', 'effective')
+      .single()
+    effectiveTemplateId = eff!.id
+    templateNeededLegalReview = eff!.needs_legal_review === true
+
+    if (templateNeededLegalReview) {
+      const { data: blocked } = await adminClient.rpc('sign_agreement_atomic', {
+        p_template_id: effectiveTemplateId,
+        p_signer_profile_id: sponsorProfileId,
+        p_signer_role: 'sponsor',
+        p_submission_id: submissionId,
+        p_typed_name: 'Test Sponsor',
+        p_ip: '203.0.113.9',
+        p_user_agent: 'playwright',
+        p_document_hash: '0'.repeat(64),
+        p_document_storage_path: 'test/legal-review-gate.html',
+        p_consent_text_hash: '0'.repeat(64),
+        p_entity_snapshot: {},
+      })
+      const result = blocked as { ok: boolean; error?: string }
+      expect(result.ok, 'a template awaiting legal review must not be signable').toBe(false)
+      expect(result.error).toBe('template_needs_legal_review')
+
+      await adminClient
+        .from('agreement_templates')
+        .update({ needs_legal_review: false })
+        .eq('id', effectiveTemplateId)
+    }
   })
 
   test.afterAll(async () => {
@@ -194,6 +253,15 @@ test.describe.serial('Agreement signing — end to end', () => {
       fulfillmentId,
     })
     await adminClient.from('submissions').delete().eq('id', submissionId)
+    // Put the block back. Leaving it cleared would mean the next run of any suite — and any
+    // manual click-through of this local stack — could execute an agreement whose
+    // jurisdiction clause is still a TODO.
+    if (templateNeededLegalReview && effectiveTemplateId) {
+      await adminClient
+        .from('agreement_templates')
+        .update({ needs_legal_review: true })
+        .eq('id', effectiveTemplateId)
+    }
   })
 
   test('a coach cannot open the sponsor signing page', async ({ page }) => {

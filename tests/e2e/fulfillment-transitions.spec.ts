@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { createClient } from '@supabase/supabase-js'
 import { Database } from '../../lib/supabase/types'
-import { pledge, unpledge } from '../helpers/fixtures'
+import { createOwnedTeam, deleteOwnedTeam, executeAgreement, pledge, unpledge } from '../helpers/fixtures'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://127.0.0.1:54321'
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
@@ -17,6 +17,10 @@ const SPONSOR_A_EMAIL = process.env.SPONSOR_EMAIL ?? 'sponsor+clerk_test@example
 const SPONSOR_B_EMAIL = process.env.SPONSOR2_EMAIL ?? 'sponsor2+clerk_test@example.com'
 const PLEDGE_CENTS = 10_000
 
+// FTC team numbers are unique; these two are reserved for this suite's throwaway teams.
+const OWNER_TEAM_NUMBER = 990101
+const STRANGER_TEAM_NUMBER = 990102
+
 test.describe.serial('Fulfillment Transitions & Security Boundaries', () => {
   test.skip(
     !process.env.SUPABASE_LOCAL || !SUPABASE_ANON_KEY || !SERVICE_ROLE_KEY,
@@ -30,6 +34,10 @@ test.describe.serial('Fulfillment Transitions & Security Boundaries', () => {
   let sponsorAUserId: string
   let sponsorBUserId: string
   let coachUserId: string
+  let submissionId: string
+  let owningCoachId: string
+  let teamId: string
+  let strangerTeamId: string
 
   test.beforeAll(async () => {
     adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
@@ -55,19 +63,81 @@ test.describe.serial('Fulfillment Transitions & Security Boundaries', () => {
     ).not.toBe(sponsorACompanyId)
     sponsorBUserId = profB!.id
 
-    const { data: profC } = await adminClient
-      .from('profiles')
+    /**
+     * The OWNING coach — the one whose team this pledge is actually for.
+     *
+     * The fixture below now attaches a real submission and team, because it previously
+     * attached NEITHER: `pledge()` defaulted both to null, so every fulfillment this suite
+     * created was an ORPHAN. Migration `0106` (A-04-03) refuses every forward transition on
+     * an orphaned fulfillment — an orphan's only correct disposition is `cancelled` — so the
+     * very first test started returning `submission_orphaned` and the whole serial suite
+     * stopped after it.
+     *
+     * The gate is right and the fixture was wrong. A funding fulfillment in production is
+     * always traceable to the approved submission that created it; one that is not is the
+     * exact hazard `0106` exists to stop (money marked sent against a submission whose
+     * executed agreement can no longer be verified). Same lesson as the 48-vs-64-hex access
+     * token: a fixture that does not look like production tests something production never
+     * does.
+     */
+    const owner = await createOwnedTeam(adminClient, {
+      label: 'fulfillment-owner',
+      ftcTeamNumber: OWNER_TEAM_NUMBER,
+    })
+    owningCoachId = owner.coachProfileId
+    teamId = owner.teamId
+
+    const { data: submission, error: subErr } = await adminClient
+      .from('submissions')
+      .insert({
+        team_id: teamId,
+        sponsor_id: sponsorACompanyId,
+        status: 'approved',
+        sent_at: new Date().toISOString(),
+        custom_pitch_alignment:
+          'Fixture pitch for the fulfillment-transition boundaries; never rendered, only funded.',
+        specific_needs_statement:
+          'Fixture needs statement covering registration, a drivetrain rebuild and regional travel.',
+      } as never)
       .select('id')
-      .eq('role', 'coach')
-      .limit(1)
       .single()
-    coachUserId = profC!.id
+    if (subErr) throw new Error(`fixture submission insert failed: ${subErr.message}`)
+    submissionId = submission!.id
+
+    // Both signatures, so `agreement_is_signed()` is true. That gate has always been in the
+    // payment_sent path but never fired here, because it is written
+    // `IF v_f.submission_id IS NOT NULL AND NOT agreement_is_signed(...)` — an orphaned
+    // fulfillment skipped it entirely. Which is precisely the hole A-04-03 closed.
+    await executeAgreement(adminClient, {
+      submissionId,
+      sponsorId: sponsorACompanyId,
+      teamId,
+      sponsorProfileId: sponsorAUserId,
+      coachProfileId: owningCoachId,
+    })
+
+    /**
+     * A SECOND coach, who owns nothing here. The "a coach who doesn't own it" boundary was
+     * previously satisfied by accident — the fulfillment had no `team_id` at all, so every
+     * coach on the platform was equally unauthorized, and the test would have passed against
+     * a function with no coach-ownership check whatsoever. With a real team attached, the
+     * assertion now distinguishes the owning coach from a stranger, which is what it always
+     * claimed to be doing.
+     */
+    const stranger = await createOwnedTeam(adminClient, {
+      label: 'fulfillment-stranger',
+      ftcTeamNumber: STRANGER_TEAM_NUMBER,
+    })
+    coachUserId = stranger.coachProfileId
+    strangerTeamId = stranger.teamId
 
     // Ledger + fulfillment + the matching capacity bookkeeping, so this fixture never shows
     // up as drift to the suites that assert on it.
     const created = await pledge(adminClient, {
       sponsorId: sponsorACompanyId,
       amountCents: PLEDGE_CENTS,
+      teamId,
+      submissionId,
     })
     transactionId = created.transactionId
     fulfillmentId = created.fulfillmentId
@@ -80,6 +150,14 @@ test.describe.serial('Fulfillment Transitions & Security Boundaries', () => {
       transactionId,
       fulfillmentId,
     })
+    // Children before parents: the signatures and the ledger/fulfillment rows all FK the
+    // submission, and the submission FKs the team.
+    if (submissionId) {
+      await adminClient.from('agreement_signatures').delete().eq('submission_id', submissionId)
+      await adminClient.from('submissions').delete().eq('id', submissionId)
+    }
+    await deleteOwnedTeam(adminClient, { coachProfileId: coachUserId, teamId: strangerTeamId })
+    await deleteOwnedTeam(adminClient, { coachProfileId: owningCoachId, teamId })
   })
 
   test('Sponsor A marks payment sent on their own fulfillment -> succeeds', async () => {

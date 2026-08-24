@@ -57,7 +57,7 @@ Gate at close of this session:
 |---|---|
 | `npm run typecheck` | clean |
 | `npm run lint` | **0 errors** |
-| `npm run test` | **735 passing** (baseline entering the session: 550) |
+| `npm run test` | **740 passing** in 49 files (baseline entering the session: 550 in 45) |
 | `npm run build` | exit 0 |
 | `scripts/verify-capacity-invariant.mjs` | 10/10, now including a negative control |
 | `detect_capacity_drift()` in production | **0 rows** |
@@ -137,6 +137,45 @@ pre-existing by reproducing it at the session's starting commit. The validator n
 
 That is the same failure class as B-04-12, where a dialog-focus test skipped on every clean run
 and skipped read as a pass. **If a test can't run, it isn't a test.**
+
+### Eight suites were skipping silently, and five defects were hiding behind them
+
+The first Phase 5 sweep read **118 passed / 58 skipped**. Explaining the skips — rather than
+accepting them — is where most of the session's remaining defects were.
+
+Every one of those suites gated its `test.skip` on a RAW env var (`!process.env.ADMIN_EMAIL`)
+while every account it uses is a DEFAULTED constant
+(`process.env.X ?? 'x+clerk_test@example.com'`). The guard tested something the code does not
+depend on. The accounts were seeded; the suites would have passed; they skipped instead.
+**Skipped reads as a pass.** The gate is now the local stack itself.
+
+What that uncovered is written up in full in `prompts/audits/_ORCHESTRATOR-STATE.md` — briefly:
+`0106`'s legal-review gate had no test and was blocking the whole signing suite; the
+fulfillment fixture was building orphaned fulfillments and its coach-ownership boundary passed
+only because *nobody* owned the row; `/sponsor/settings` had two identically-named "Save"
+buttons; `admin-levels` skipped with a false reason and had never verified that a reviewer
+cannot change a funding cap; and `team-verification` left records behind on every run until
+`.first()` started clicking a stale one.
+
+**If you add an E2E suite, gate it on the thing it actually needs.** A guard that names an
+unrelated env var is a suite that never runs.
+
+### Two things the E2E suite caught that review did not
+
+**A-08-04 was logged "did not reproduce", and that was wrong.** The command palette really does
+render through the project's base-ui `Dialog`, which is documented to trap and restore focus —
+that reasoning is why it was nearly closed as a phantom. Driving it with a keyboard showed Tab
+leaving the popup at press 4 and reaching the page behind at press 6, and Escape dropping focus
+to `<body>`. base-ui 1.4.0's `markOthers` uses `ariaHidden: modal` and never sets native `inert`,
+and `aria-hidden` removes nothing from the tab order. Fixed with a local Tab wrap in
+`components/ui/dialog.tsx` plus `finalFocus` on the palette. **"The library handles it" is a
+claim about observable behaviour; it can only be settled by observing it.**
+
+**`/sponsor-view/[token]` 404'd the sponsor who had just decided.** B-03-11 revokes every
+outstanding token once a decision lands, including the one just consumed, and the page returned
+`notFound()` on any revoked token. Two individually-correct changes composed into a defect. Worth
+noting how it surfaced: the decision itself succeeded, so every database assertion passed and
+only the assertion about *what the sponsor sees* failed.
 
 ### Cron: Vercel Hobby honours only 2 entries
 `vercel.json` schedules exactly two. `refresh-ftc-roster`, `nudge-fulfillments` and

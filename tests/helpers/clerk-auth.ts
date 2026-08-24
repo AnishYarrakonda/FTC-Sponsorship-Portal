@@ -84,11 +84,15 @@ export async function gotoStable(
 /**
  * Clerk's JS must be loaded before any helper here can run.
  *
- * The Playwright-bundled WebKit on this macOS build cannot complete a TLS handshake with
- * `*.clerk.accounts.dev` ("A TLS error caused the secure connection to fail"), which breaks
- * every Clerk-dependent spec on that project. It is an environment issue, not a product
- * one, so detect it and skip rather than report a false failure. Chromium and Firefox run
- * the whole suite.
+ * This guard exists because the Playwright-bundled WebKit could not complete a TLS handshake
+ * with `*.clerk.accounts.dev` ("A TLS error caused the secure connection to fail"), which
+ * broke every Clerk-dependent spec on that project. It is an environment issue, not a
+ * product one, so it is detected and skipped rather than reported as a false failure.
+ *
+ * As of the 2026-08-23 Phase 5 sweep **WebKit reaches Clerk and runs the whole suite** —
+ * verified by counting skips, which were zero. The guard stays because the failure is a
+ * property of the local WebKit build and can come back with the next Playwright bump; it is
+ * simply no longer firing. Do not read its presence as "WebKit is excluded".
  */
 export async function loadClerk(page: Page): Promise<boolean> {
   await setupClerkTestingToken({ page })
@@ -190,10 +194,48 @@ export async function establishSession(page: Page, email: string) {
  * each time: the loser of the race was simply whichever test ran there. Waiting on the
  * session here fixes every call site at once.
  */
+/**
+ * Wait for the session cookie the SERVER reads, not just the client session object.
+ *
+ * `waitForClerkSession` proves `window.Clerk.session` exists — a claim about the browser.
+ * `clerkMiddleware()` authorizes off the `__session` cookie, and Clerk writes that cookie a
+ * beat after activating the session. Navigate inside that window and middleware sees an
+ * unauthenticated request and redirects to `/login`, so the test asserts against the login
+ * form and reports "element(s) not found" for whatever it was actually looking for.
+ *
+ * Seen on Firefox, intermittently, and on a different test each run — which is what made it
+ * read as an app flake rather than a harness one. The screenshot is what settled it: a fully
+ * rendered `/login` page for an account that had just signed in successfully.
+ *
+ * Asserted against the server rather than against the cookie jar. Checking merely that a
+ * `__session` cookie EXISTS is not enough: `clerk.signOut()` above leaves the previous
+ * cookie in place, so that check passes instantly on a stale value and the race is
+ * unchanged. What matters is whether `clerkMiddleware()` accepts the request, so ask it.
+ *
+ * `page.request` shares the browser context's cookie jar, and `maxRedirects: 0` exposes the
+ * redirect itself. A signed-out request to a protected route is sent to `/login`; any other
+ * outcome — 200, or a role redirect to `/sponsor/dashboard` — means the session is live.
+ */
+async function waitForServerSession(page: Page) {
+  await expect
+    .poll(
+      async () => {
+        const res = await page.request.get('/dashboard', { maxRedirects: 0 })
+        return (res.headers()['location'] ?? '').includes('/login')
+      },
+      {
+        timeout: 15_000,
+        message: 'the server still treats this session as signed out (middleware redirects to /login)',
+      }
+    )
+    .toBe(false)
+}
+
 export async function signIn(page: Page, email: string, _password?: string) {
   const ticket = await signInTicket(email)
   await requireClerk(page)
   await clerk.signOut({ page }).catch(() => {})
   await clerk.signIn({ page, signInParams: { strategy: 'ticket', ticket } })
   await waitForClerkSession(page)
+  await waitForServerSession(page)
 }

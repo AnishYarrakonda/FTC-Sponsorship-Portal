@@ -35,6 +35,39 @@ const SPONSOR_EMAIL = process.env.SPONSOR_EMAIL ?? 'sponsor+clerk_test@example.c
  */
 const WCAG_AA_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']
 
+
+/**
+ * Is focus currently OUTSIDE the dialog on something a user could actually reach?
+ *
+ * Naively asserting `dialog.contains(document.activeElement)` after every Tab is WRONG, and
+ * this was written that way first. base-ui implements its focus trap with sentinel nodes
+ * placed outside the popup:
+ *
+ *   <span data-base-ui-focus-guard aria-hidden="true" data-base-ui-inert tabindex="0">
+ *
+ * Tabbing off the last control lands on a guard, which immediately bounces focus back to
+ * the start of the popup — so a correct trap legitimately shows `activeElement` outside the
+ * dialog (on the guard, and transiently on <body>) for one step. Measured on the command
+ * palette: input -> guard -> body -> input, never once touching the page behind.
+ *
+ * What actually constitutes an escape is focus landing on a REAL interactive control that
+ * is not in the dialog. That is what this checks.
+ */
+async function focusEscapedDialog(page: Page): Promise<false | string> {
+  return page.evaluate(() => {
+    const dialog = document.querySelector('[role="dialog"]')
+    const active = document.activeElement as HTMLElement | null
+    if (!dialog || !active) return false as const
+    if (dialog.contains(active)) return false as const
+    if (active === document.body || active === document.documentElement) return false as const
+    if (active.hasAttribute('data-base-ui-focus-guard')) return false as const
+    if (active.getAttribute('aria-hidden') === 'true') return false as const
+    const interactive = ['A', 'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA']
+    if (!interactive.includes(active.tagName) && active.tabIndex < 0) return false as const
+    return `${active.tagName}${active.id ? '#' + active.id : ''} ${(active.textContent ?? '').trim().slice(0, 40)}`
+  })
+}
+
 function axe(page: Page) {
   return new AxeBuilder({ page }).withTags(WCAG_AA_TAGS)
 }
@@ -224,8 +257,18 @@ test.describe('Accessibility — authenticated journeys', () => {
     if (error) throw new Error(`could not create the a11y fixture submission: ${error.message}`)
     submissionId = submission!.id
 
-    // The page looks the token up by sha256 hash, so the plaintext exists only here.
-    const raw = randomBytes(24).toString('hex')
+    /**
+     * The page looks the token up by sha256 hash, so the plaintext exists only here.
+     *
+     * 32 bytes, NOT 24. Production mints these as `encode(gen_random_bytes(32), 'hex')` in
+     * approve_submission_atomic — 64 hex characters. This fixture used 24 bytes (48 chars)
+     * and had done since it was written; nothing noticed, because nothing checked the
+     * format. A-10-05 added a shape check in front of the unauthenticated query (a real
+     * token is 64 hex chars, so a probe cannot reach Postgres), and that check is what
+     * surfaced the divergence. A fixture that does not look like production is a fixture
+     * that tests something production never does.
+     */
+    const raw = randomBytes(32).toString('hex')
     sponsorViewToken = raw
     await admin.from('submission_access_tokens').insert({
       submission_id: submissionId!,
@@ -415,7 +458,17 @@ test.describe('Accessibility — authenticated journeys', () => {
       await signIn(page, COACH_EMAIL)
       await gotoStable(page, '/dashboard')
 
-      const trigger = page.getByRole('button', { name: /graduate/i }).first()
+      /**
+       * "I have a team now", NOT /graduate/i.
+       *
+       * A SECOND reason this test could never run, which the finding did not catch: the
+       * B-04-06 fix in the P1 sweep re-rendered this trigger through the shared Button and
+       * its accessible name is the button text, "I have a team now". The heading beside it
+       * reads "Ready to graduate?" and the SUBMIT control inside the dialog is "Graduate
+       * Team" — so /graduate/i matched nothing while the dialog was closed, and would have
+       * matched the wrong control once it was open.
+       */
+      const trigger = page.getByRole('button', { name: /i have a team now/i }).first()
       // No test.skip here on purpose. If the trigger is missing now, that is a real
       // regression in the dashboard, and it must fail rather than silently pass.
       await expect(trigger, 'the Graduate trigger should render for an incubator team').toBeVisible()
@@ -442,21 +495,15 @@ test.describe('Accessibility — authenticated journeys', () => {
        */
       for (let i = 0; i < 12; i++) {
         await page.keyboard.press('Tab')
-        const stillInside = await page.evaluate(() => {
-          const d = document.querySelector('[role="dialog"]')
-          return !!d && !!document.activeElement && d.contains(document.activeElement)
-        })
-        expect(stillInside, `focus escaped the dialog after ${i + 1} Tab press(es)`).toBe(true)
+        const escaped = await focusEscapedDialog(page)
+        expect(escaped, `focus escaped the dialog after ${i + 1} Tab press(es), onto: ${escaped}`).toBe(false)
       }
 
       // 3. And backwards, which is a separate code path in every focus-trap implementation.
       for (let i = 0; i < 12; i++) {
         await page.keyboard.press('Shift+Tab')
-        const stillInside = await page.evaluate(() => {
-          const d = document.querySelector('[role="dialog"]')
-          return !!d && !!document.activeElement && d.contains(document.activeElement)
-        })
-        expect(stillInside, `focus escaped the dialog after ${i + 1} Shift+Tab press(es)`).toBe(true)
+        const escaped = await focusEscapedDialog(page)
+        expect(escaped, `focus escaped the dialog after ${i + 1} Shift+Tab press(es), onto: ${escaped}`).toBe(false)
       }
 
       // 4. Escape closes it.
@@ -501,19 +548,44 @@ test.describe('Accessibility — authenticated journeys', () => {
     })
     expect(focusInside, 'focus did not move into the command palette').toBe(true)
 
+    /**
+     * Measured cycle with the palette's single tab stop: input -> guard -> body -> input,
+     * period 3. So "is focus inside RIGHT NOW" is the wrong question after an arbitrary
+     * number of presses — it depends on where in that cycle you stopped. Two things are
+     * asserted instead, and together they are the real property:
+     *
+     *   1. focus NEVER lands on a real control outside the dialog, and
+     *   2. it does return into the dialog during the sweep, so it is cycling rather than
+     *      being lost to the document.
+     */
+    let landedInside = 0
     for (let i = 0; i < 10; i++) {
       await page.keyboard.press('Tab')
-      const stillInside = await page.evaluate(() => {
+      const escaped = await focusEscapedDialog(page)
+      expect(escaped, `focus escaped the palette after ${i + 1} Tab press(es), onto: ${escaped}`).toBe(false)
+      const inside = await page.evaluate(() => {
         const d = document.querySelector('[role="dialog"]')
         return !!d && !!document.activeElement && d.contains(document.activeElement)
       })
-      expect(stillInside, `focus escaped the palette after ${i + 1} Tab press(es)`).toBe(true)
+      if (inside) landedInside += 1
     }
+    expect(landedInside, 'focus never cycled back into the palette — it was lost, not trapped')
+      .toBeGreaterThan(0)
 
     await page.keyboard.press('Escape')
     await expect(dialog).not.toBeVisible()
 
-    const afterOnBody = await page.evaluate(() => document.activeElement === document.body)
-    expect(afterOnBody, 'focus was dropped to <body> when the palette closed').toBe(false)
+    /**
+     * Polled, not sampled once. Restoration is deferred by a frame on purpose — the Dialog
+     * is still unmounting and running its own focus handling during the state change that
+     * closes it, so focusing in the same tick is immediately overwritten. Asserting
+     * instantly would be asserting on the closing frame rather than the outcome.
+     */
+    await expect
+      .poll(
+        async () => page.evaluate(() => document.activeElement === document.body),
+        { timeout: 5_000, message: 'focus was dropped to <body> when the palette closed' }
+      )
+      .toBe(false)
   })
 })

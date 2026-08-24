@@ -229,16 +229,57 @@ describe('B-04-12 — the dialog focus test can actually run', () => {
   })
 })
 
-describe('A-08-04 — DID NOT REPRODUCE; the palette is already on a real Dialog', () => {
+/**
+ * A-08-04 — REPRODUCED, on both halves, after first being judged "did not reproduce".
+ *
+ * The first judgement was made by INSPECTION: the palette demonstrably renders through the
+ * project's real `<Dialog>` (B-04-05 rebuilt it there in the P1 sweep), and that component
+ * is documented to trap and restore focus. That reasoning is why the finding was almost
+ * closed as a phantom.
+ *
+ * Driving it with a keyboard proved otherwise:
+ *
+ *   Containment — Tab leaked out of the popup at press 4 and reached the page behind by
+ *   press 6: input → input → Cancel → Close → focus guard → <body> → "Skip to main
+ *   content" → "FTC Pitfund" → "Dashboard". Shift+Tab escaped onto "View Inbox".
+ *   Cause: base-ui 1.4.0's `markOthers` uses `ariaHidden: modal` and never sets the native
+ *   `inert` attribute, and `aria-hidden` does not remove anything from the tab order.
+ *
+ *   Restoration — Escape left `document.activeElement === document.body`. Confirmed
+ *   pre-existing by disabling the fix and re-running.
+ *
+ * The lesson worth keeping is not about this component: "the library handles it" is a claim
+ * about the library's behaviour, and it can only be settled by observing the behaviour.
+ */
+describe('A-08-04 — REPRODUCED; base-ui\'s trap leaks and the palette had no opener to restore to', () => {
   const src = read('components/global-command-palette.tsx')
+  const dialog = read('components/ui/dialog.tsx')
 
   it('it is rendered through the project Dialog, not a bare fixed-inset div', () => {
-    // The finding describes a hand-rolled overlay. B-04-05 in the P1 sweep had already
-    // rebuilt it on base-ui's Dialog, which supplies the focus trap, Escape handling and
-    // focus restoration the finding asks for. Pinned so it cannot regress to a div.
+    // Still true, and still worth pinning — it is the precondition for the two fixes
+    // below living in one place rather than being hand-rolled per call site.
     expect(src).toContain("from '@/components/ui/dialog'")
     expect(src).toContain('<Dialog open={open}')
     expect(src).toContain('<DialogContent')
+  })
+
+  it('the Dialog wraps Tab itself rather than trusting base-ui\'s guards', () => {
+    // The containment half. A local keydown wrap on the popup, chosen over marking the
+    // background `inert` because `inert` must be lifted before focus is restored and
+    // React runs child cleanups first — the trigger silently refused focus.
+    expect(dialog).toContain('useFocusWrap')
+    expect(dialog).toContain("event.key !== 'Tab'")
+    expect(dialog).toContain('onKeyDown={onKeyDown}')
+  })
+
+  it('the palette hands base-ui an opener to restore focus to', () => {
+    // The restoration half. Opened by a global shortcut, so there is no <DialogTrigger>
+    // and base-ui had nothing to hand focus back to. `finalFocus` is the supported seam:
+    // restoring from an effect instead raced base-ui's own restoration.
+    expect(src).toContain('openerRef')
+    expect(src).toContain('finalFocus={finalFocus}')
+    // Captured outside the setState updater — React may run an updater during render.
+    expect(src).toMatch(/if \(!insidePalette\)[\s\S]{0,200}openerRef\.current =/)
   })
 
   it('Escape is left to the Dialog rather than being hand-handled', () => {
@@ -247,8 +288,8 @@ describe('A-08-04 — DID NOT REPRODUCE; the palette is already on a real Dialog
   })
 
   it('a live end-to-end check exists rather than inspection only', () => {
-    // The finding was INFERRED and the P1 fix was build-verified only, because the palette
-    // does not mount under the preview harnesses.
+    // This is the assertion that actually caught it. The palette does not mount under the
+    // preview harnesses, so it had only ever been build-verified.
     const spec = read('tests/e2e/accessibility.spec.ts')
     expect(spec).toContain('the global command palette traps focus and restores it on Escape')
     expect(spec).toContain('focus escaped the palette')

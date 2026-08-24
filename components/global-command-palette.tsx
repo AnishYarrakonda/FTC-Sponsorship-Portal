@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from 'cmdk'
 import { LayoutDashboard, BookOpen, Target, Inbox, Settings, LogOut, Building2, Users, Search } from 'lucide-react'
@@ -56,15 +56,58 @@ export function GlobalCommandPalette({ role }: Props) {
     action.run({ router, signOut: () => signOut({ redirectUrl: '/login' }) })
   }, [router, signOut])
 
+  /**
+   * A-08-04, second half. The palette has no `<DialogTrigger>` — it is opened by a global
+   * Cmd/Ctrl-K handler — so base-ui has no opener element to hand focus back to, and
+   * closing it dropped focus to `<body>`. Verified live: Escape left `document.activeElement
+   * === document.body`, which is the "forcing them to traverse the entire page again"
+   * outcome the finding describes (WCAG 2.4.3 Focus Order).
+   *
+   * A dialog opened from a keyboard shortcut still has an opener — it is simply whatever
+   * had focus at the moment the shortcut fired. Capture it on the way in, and hand it to
+   * base-ui as the dialog's `finalFocus` so its OWN restoration targets it.
+   *
+   * Restoring from a `useEffect` here was tried first and does not hold: base-ui runs its
+   * focus restoration during the same close, so a `requestAnimationFrame` restore either
+   * fires before base-ui's (and is overwritten with `body`) or after it (and fights it).
+   * `finalFocus` is the supported seam — there is exactly one restoration, and it goes to
+   * the right element.
+   */
+  const openerRef = useRef<HTMLElement | null>(null)
+
+  /**
+   * A detached opener means `handleSelect` navigated and the destination page owns focus
+   * now; `true` hands base-ui back its default behaviour rather than focusing a node that
+   * is no longer in the document.
+   */
+  const finalFocus = useCallback(
+    () => (openerRef.current?.isConnected ? openerRef.current : true),
+    []
+  )
+
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
+        // Captured here rather than inside the `setOpen` updater: React may call an
+        // updater during render (and twice under StrictMode), which is the wrong moment
+        // to be reading `document.activeElement`.
+        //
+        // The "is it already open" test is the DOM rather than a ref mirroring `open`,
+        // because a ref written during render is a render-phase side effect. Cmd+K while
+        // the palette is open means focus is inside the popup, and capturing that would
+        // replace the real opener with a node that is about to unmount.
+        const active = document.activeElement
+        const insidePalette =
+          active instanceof HTMLElement && !!active.closest('[role="dialog"]')
+        if (!insidePalette) {
+          openerRef.current =
+            active instanceof HTMLElement && active !== document.body ? active : null
+        }
         setOpen((o) => !o)
       }
-      // Escape is handled by the Dialog now (and it also restores focus to the
-      // opener). Keeping a second handler here would close the palette before the
-      // Dialog could run its own restore.
+      // Escape is handled by the Dialog now. Keeping a second handler here would close the
+      // palette before the Dialog could run its own teardown.
     }
     document.addEventListener('keydown', down)
     return () => document.removeEventListener('keydown', down)
@@ -86,6 +129,7 @@ export function GlobalCommandPalette({ role }: Props) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent
         showCloseButton={false}
+        finalFocus={finalFocus}
         aria-label="Command palette"
         className="top-[15vh] left-1/2 w-full max-w-lg -translate-x-1/2 translate-y-0 gap-0 overflow-hidden rounded-2xl border border-border bg-card p-0 shadow-2xl sm:max-w-lg"
       >

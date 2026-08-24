@@ -24,7 +24,11 @@ import { signIn, gotoStable } from '../helpers/clerk-auth'
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'admin+clerk_test@example.com'
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? 'AdminTest123!'
-const REVIEWER_EMAIL = process.env.REVIEWER_EMAIL
+// Defaulted to the seeded reviewer, like every other account in this suite. It was
+// bare `process.env.REVIEWER_EMAIL`, so the whole "Reviewer boundaries" block skipped on
+// any run that did not export it by hand — which was every run. The account
+// (admin_level = 'reviewer') is created by scripts/seed-test-accounts.mjs.
+const REVIEWER_EMAIL = process.env.REVIEWER_EMAIL ?? 'reviewer+clerk_test@example.com'
 
 
 test.describe('Admin team page — access', () => {
@@ -70,8 +74,22 @@ test.describe('Reviewer boundaries', () => {
     await signIn(page, REVIEWER_EMAIL!)
     await gotoStable(page, '/sponsors')
 
-    const firstEdit = page.getByRole('link', { name: /edit/i }).first()
-    test.skip((await firstEdit.count()) === 0, 'No sponsor rows seeded to edit')
+    /**
+     * Selected by href, and NOT guarded by a skip.
+     *
+     * This read `getByRole('link', { name: /edit/i })` with
+     * `test.skip(count === 0, 'No sponsor rows seeded to edit')`. On `/sponsors` the link to
+     * the edit page is the COMPANY NAME — its accessible name is "dev testing", never
+     * "Edit" — so the locator matched nothing on every run, whatever the data. The suite
+     * then skipped, blaming absent fixtures while five sponsors sat in the table, and this
+     * assertion (that a reviewer cannot change a funding cap) has never actually run.
+     *
+     * An empty list is now a failure with a message that says so, rather than a skip that
+     * reads as a pass.
+     */
+    const firstEdit = page.locator('a[href$="/edit"]').first()
+    await expect(firstEdit, 'no sponsor rows on /sponsors — the fixture is missing, not the feature')
+      .toBeVisible({ timeout: 15_000 })
     await firstEdit.click()
 
     const capInput = page.getByLabel('Annual Funding Cap (USD)')

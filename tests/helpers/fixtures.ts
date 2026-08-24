@@ -23,6 +23,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { createHash } from 'node:crypto'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Admin = SupabaseClient<any, any, any>
@@ -152,4 +153,67 @@ export async function unpledge(
     await admin.from('transactions_ledger').delete().eq('id', opts.transactionId)
   }
   await bumpFundingUsed(admin, opts.sponsorId, -opts.amountCents)
+}
+
+/**
+ * Both executed signatures for a submission, so `agreement_is_signed()` is true and the
+ * fulfillment may legally reach `payment_sent`.
+ *
+ * Written directly rather than through `sign_agreement_atomic` on purpose. That RPC is the
+ * subject of its own suite (agreement-signing.spec.ts), which drives scroll-gating, consent,
+ * name matching, document-hash staleness and — since 0106 — the `needs_legal_review` block.
+ * A fixture that had to satisfy all of that to set up an unrelated test would couple the two
+ * suites together and would fail for reasons that have nothing to do with what is under test.
+ * This asserts only the property the transition gate reads: one sponsor row, one coach row.
+ *
+ * The hashes are real 64-hex digests because the table CHECKs them (`^[0-9a-f]{64}$`) — a
+ * placeholder is rejected outright.
+ */
+export async function executeAgreement(
+  admin: Admin,
+  opts: {
+    submissionId: string
+    sponsorId: string
+    teamId: string
+    sponsorProfileId?: string
+    coachProfileId?: string
+  }
+): Promise<void> {
+  const digest = (s: string) =>
+    createHash('sha256').update(`${FIXTURE_PREFIX}:${opts.submissionId}:${s}`).digest('hex')
+
+  const base = {
+    template_key: 'sponsorship_agreement',
+    template_version: 1,
+    submission_id: opts.submissionId,
+    sponsor_id: opts.sponsorId,
+    team_id: opts.teamId,
+    entity_snapshot: { fixture: true },
+    ip_address: '127.0.0.1',
+    user_agent: `${FIXTURE_PREFIX}/1.0`,
+    document_hash: digest('document'),
+    document_storage_path: `${FIXTURE_PREFIX}/${opts.submissionId}.html`,
+    consent_text_version: 1,
+    consent_text_hash: digest('consent'),
+  }
+
+  const { error } = await admin.from('agreement_signatures').insert([
+    {
+      ...base,
+      signer_role: 'sponsor',
+      signer_profile_id: opts.sponsorProfileId ?? null,
+      signer_legal_name: 'Fixture Sponsor Signatory',
+      signer_email: `${FIXTURE_PREFIX}-sponsor@example.com`,
+      typed_name: 'Fixture Sponsor Signatory',
+    },
+    {
+      ...base,
+      signer_role: 'coach',
+      signer_profile_id: opts.coachProfileId ?? null,
+      signer_legal_name: 'Fixture Coach Signatory',
+      signer_email: `${FIXTURE_PREFIX}-coach@example.com`,
+      typed_name: 'Fixture Coach Signatory',
+    },
+  ])
+  if (error) throw new Error(`fixture agreement signatures insert failed: ${error.message}`)
 }

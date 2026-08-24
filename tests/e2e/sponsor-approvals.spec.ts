@@ -66,8 +66,18 @@ async function restAs(
 }
 
 test.describe.serial('Org roles & the two-step approver workflow (0083)', () => {
+  /**
+   * The gate is the LOCAL STACK, not an environment variable.
+   *
+   * This read `!process.env.ADMIN_EMAIL`, while every account the suite actually uses is a
+   * defaulted constant (`process.env.X ?? 'x+clerk_test@example.com'`). So the guard tested
+   * something the code below does not depend on, and on any normal local run — where the
+   * seeded accounts are present and the suite would have passed — every test in it skipped.
+   * Skipped reads as a pass. That is the B-04-12 failure class, found again by counting the
+   * skips in the Phase 5 sweep instead of accepting them.
+   */
   test.skip(
-    !process.env.SUPABASE_LOCAL || !process.env.ADMIN_EMAIL,
+    !process.env.SUPABASE_LOCAL,
     'Set SUPABASE_LOCAL=true and seed test accounts (scripts/seed-test-accounts.mjs) to enable this suite'
   )
 
@@ -127,7 +137,10 @@ test.describe.serial('Org roles & the two-step approver workflow (0083)', () => 
     await expect(page.getByText('Approval policy')).toBeVisible({ timeout: 15_000 })
     await page.getByLabel('Two-step approval').check()
     await page.getByLabel('Threshold').fill('1000')
-    await page.getByRole('button', { name: /^save$/i }).click()
+    // Named, not /^save$/: /sponsor/settings now carries a second Save (the fiscal-year
+    // card). The ambiguity was a real a11y defect — two identically-named buttons on one
+    // page — so both were given accessible names rather than scoping the selector around it.
+    await page.getByRole('button', { name: /save approval policy/i }).click()
     await expect(page.getByText(/approval policy saved/i)).toBeVisible({ timeout: 10_000 })
 
     const { data } = await adminClient.from('sponsors').select('approval_required_above_cents').eq('id', sponsorAId).single()

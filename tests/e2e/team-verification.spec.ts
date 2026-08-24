@@ -77,8 +77,18 @@ test.describe('refresh-ftc-roster cron auth', () => {
 })
 
 test.describe.serial('Official FIRST team verification', () => {
+  /**
+   * The gate is the LOCAL STACK, not an environment variable.
+   *
+   * This read `!process.env.ADMIN_EMAIL`, while every account the suite actually uses is a
+   * defaulted constant (`process.env.X ?? 'x+clerk_test@example.com'`). So the guard tested
+   * something the code below does not depend on, and on any normal local run — where the
+   * seeded accounts are present and the suite would have passed — every test in it skipped.
+   * Skipped reads as a pass. That is the B-04-12 failure class, found again by counting the
+   * skips in the Phase 5 sweep instead of accepting them.
+   */
   test.skip(
-    !process.env.SUPABASE_LOCAL || !process.env.ADMIN_EMAIL,
+    !process.env.SUPABASE_LOCAL,
     'Set SUPABASE_LOCAL=true and seed test accounts (scripts/seed-test-accounts.mjs) to enable this suite'
   )
 
@@ -130,8 +140,42 @@ test.describe.serial('Official FIRST team verification', () => {
       },
     ])
 
+    /**
+     * Clear this suite's own verification records before starting.
+     *
+     * There was no cleanup at all, so every run left rows behind and they accumulated —
+     * twelve of them by the time the Phase 5 sweep looked. The override step below finds the
+     * pending row with `getByRole('button', { name: /^override$/i }).first()`, and with a
+     * previous run's un-overridden `needs_review` still on `/coaches` that `.first()` is
+     * someone else's row: the click lands, the assertions are made against THIS run's
+     * `recordId`, and the test times out at 60s having overridden the wrong record.
+     *
+     * The tell was that it passed in isolation and failed in the full sweep — which is what
+     * residue always looks like, and why it survived until the suite was run twice in a row.
+     * Scoped to the two throwaway team numbers this suite owns; nothing else is touched.
+     */
+    await adminClient
+      .from('team_verification_records')
+      .delete()
+      .in('ftc_team_number', [REJECTED_NUMBER, NEEDS_REVIEW_NUMBER])
+
     // Start each scenario from 'incubator' so the "Ready to graduate?" flow is reachable.
     await adminClient.from('teams').update({ status: 'incubator', ftc_team_number: null } as never).eq('id', teamId)
+  })
+
+  test.afterAll(async () => {
+    // Same rows, on the way out, so a crashed run does not poison the next one either.
+    await adminClient
+      .from('team_verification_records')
+      .delete()
+      .in('ftc_team_number', [REJECTED_NUMBER, NEEDS_REVIEW_NUMBER])
+    // Hand the shared team back the way the other suites expect to find it. This suite
+    // graduates it to 'existing' with one of the throwaway numbers, and `agreement-signing`
+    // and `accessibility` both build on the same row.
+    await adminClient
+      .from('teams')
+      .update({ status: 'existing', ftc_team_number: null } as never)
+      .eq('id', teamId)
   })
 
   test('graduating with a name that does not match the official roster is rejected, team stays incubator', async ({ page }) => {

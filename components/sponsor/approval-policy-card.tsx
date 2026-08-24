@@ -99,7 +99,13 @@ export function ApprovalPolicyCard({
         )}
 
         <div className="pt-2">
-          <Button onClick={handleSave} disabled={isPending || (enabled && !canEnable)}>
+          {/* See fiscal-year-card.tsx: two cards on /sponsor/settings, two Save buttons, so
+              each carries an accessible name that says what it saves. */}
+          <Button
+            onClick={handleSave}
+            disabled={isPending || (enabled && !canEnable)}
+            aria-label="Save approval policy"
+          >
             {isPending ? 'Saving…' : 'Save'}
           </Button>
         </div>

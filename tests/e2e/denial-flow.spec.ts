@@ -21,10 +21,13 @@ import { createClient } from '@supabase/supabase-js'
 import { signIn, gotoStable } from '../helpers/clerk-auth'
 import type { Database } from '../../lib/supabase/types'
 
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? ''
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? ''
-const COACH_EMAIL = process.env.DENIAL_COACH_EMAIL ?? ''
-const COACH_PASSWORD = process.env.DENIAL_COACH_PASSWORD ?? ''
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'admin+clerk_test@example.com'
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? 'AdminTest123!'
+// Defaulted like the rest. These were bare `?? ''`, so the skip gate below was always
+// true and this suite never ran. The denied coach is seeded by
+// scripts/seed-test-accounts.mjs.
+const COACH_EMAIL = process.env.DENIAL_COACH_EMAIL ?? 'denial-coach+clerk_test@example.com'
+const COACH_PASSWORD = process.env.DENIAL_COACH_PASSWORD ?? 'DenialCoachTest123!'
 
 // Unique reason so the coach-side assertion can't match stale data.
 const DENIAL_REASON = `E2E denial ${Date.now()}: the provided ID is expired, please upload a valid one.`

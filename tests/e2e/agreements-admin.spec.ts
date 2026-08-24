@@ -54,8 +54,18 @@ const VALID_BODY = [
 ].join(' ')
 
 test.describe('Agreements — admin draft and publish flow', () => {
+  /**
+   * The gate is the LOCAL STACK, not an environment variable.
+   *
+   * This read `!process.env.ADMIN_EMAIL`, while every account the suite actually uses is a
+   * defaulted constant (`process.env.X ?? 'x+clerk_test@example.com'`). So the guard tested
+   * something the code below does not depend on, and on any normal local run — where the
+   * seeded accounts are present and the suite would have passed — every test in it skipped.
+   * Skipped reads as a pass. That is the B-04-12 failure class, found again by counting the
+   * skips in the Phase 5 sweep instead of accepting them.
+   */
   test.skip(
-    !process.env.SUPABASE_LOCAL || !process.env.ADMIN_EMAIL,
+    !process.env.SUPABASE_LOCAL,
     'Set SUPABASE_LOCAL=true and ADMIN_EMAIL/ADMIN_PASSWORD (a seeded admin) to enable this test',
   )
 
