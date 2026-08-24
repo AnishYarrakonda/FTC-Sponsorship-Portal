@@ -59,8 +59,37 @@ Gate at close of this session:
 | `npm run lint` | **0 errors** |
 | `npm run test` | **740 passing** in 49 files (baseline entering the session: 550 in 45) |
 | `npm run build` | exit 0 |
+| `npx playwright test --project=chromium` | **177 passed · 0 failed · 0 skipped** (baseline: 166 pass / 10 skipped) |
 | `scripts/verify-capacity-invariant.mjs` | 10/10, now including a negative control |
 | `detect_capacity_drift()` in production | **0 rows** |
+
+Deployed with `vercel deploy --prod --yes` (`dpl_J3FrFzfUB2LnmbKnwuwjSQeHKQ4R`). Production
+smoke after the deploy matches the expected baseline on all seven checks: `/` 200 ·
+`/api/health` `{"ok":true,"service":"up","db":"ok"}` · `/legal/terms` 200 · `/sponsors/apply`
+200 · `/dashboard` 307 · `/api/admin/export` 401 · `/api/cron/daily-maintenance` 401.
+
+**Firefox and WebKit are not part of that number, and here is the honest state of them.**
+WebKit now reaches Clerk and runs the whole suite — the TLS-handshake skip in
+`tests/helpers/clerk-auth.ts` no longer fires (the guard is kept, because that failure is a
+property of the local WebKit build and can return with a Playwright bump). Firefox is stable
+about two runs in three; the residual failures coincide with
+`[Clerk Testing] FAPI request failed after 4 attempts` against the shared Clerk **dev**
+instance, i.e. the remote dependency, not this app. The deterministic half of that flake was
+real and is fixed: `signIn()` waited only for the *client* Clerk session, while
+`clerkMiddleware()` authorizes off the `__session` cookie, so a navigation inside that window
+was redirected to `/login` and the test reported "element(s) not found". It now asserts
+against the server — checking that the cookie merely *exists* is useless, because
+`clerk.signOut()` leaves the previous one in place and an existence check passes instantly on
+a stale value.
+
+Two things noticed while smoke-testing, neither a regression and neither fixed:
+
+- `/sponsor-view/<bad-token>` returns **HTTP 200** with the "Page not found" body — a soft-404.
+  Identical locally and in production, so it predates this session. It does not weaken
+  A-10-05: a malformed token and a well-formed miss return the *same* status and the *same*
+  body, so the route still gives an attacker no oracle for whether a token exists.
+- Local Supabase carries fixture residue from crashed runs (`e2e-fixture-…`, `coach-gate-…`,
+  `sponsor-match-…` profiles). Harmless, local only.
 
 ### Production database — what changed this session
 
