@@ -27,12 +27,16 @@ on something later in the list.
 
 ## §0 — Do this first: the code exists in exactly one place
 
-**19 commits exist only on this laptop.** Twelve on `main`, seven on
-`feat/strip-post-match-pipeline`. Neither has been pushed.
+**21 commits exist only on this laptop** and nothing has been pushed. `HEAD` is 21 commits
+ahead of `origin/main`; local `main` is itself 12 ahead. Re-check the real number before acting:
+
+```bash
+git rev-list --count origin/main..HEAD
+```
 
 This is the highest-severity item on the list, and it is not a hypothetical:
 
-- The GitHub repo (`ExodiusFTC/FTC-Matchmaker-Source-Code`) is **19 commits behind**.
+- The GitHub repo (`ExodiusFTC/FTC-Pitfund-Source-Code`, private) is **21 commits behind**.
 - `origin/main` is **pre-migration-`0111`** — it queries eleven tables that no longer exist in
   the production database. **If anyone deploys what is on GitHub today, the site breaks
   immediately.** Deploys are manual, so `git checkout main && vercel deploy --prod` is an easy

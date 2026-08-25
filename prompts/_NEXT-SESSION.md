@@ -56,8 +56,8 @@ Then branch on what you find:
 
 ## ⚠️ The one urgent thing
 
-As of 2026-08-25, **19 commits existed only on Anish's laptop** — 12 on `main`, 7 on
-`feat/strip-post-match-pipeline`. Neither was pushed.
+As of 2026-08-25, **21 commits existed only on Anish's laptop** and nothing had been pushed.
+`HEAD` was 21 ahead of `origin/main`; local `main` was itself 12 ahead.
 
 `origin/main` is **pre-`0111`**: it queries eleven tables that no longer exist in the production
 database. **Deploying what is on GitHub today breaks the site instantly**, and deploys are
@@ -128,7 +128,8 @@ incident.
 
 Answer from `docs/LAUNCH-CHECKLIST.md`, and lead with these three:
 
-1. **Push the code** (§0) — 19 commits on one laptop, and what is on GitHub cannot run.
+1. **Push the code** (§0) — everything is on one laptop, and what is on GitHub cannot run
+   against the live database. Get the current gap with `git rev-list --count origin/main..HEAD`.
 2. **Clerk production instance** (§4) — the last true launch blocker. Dev accounts cannot be
    migrated, so it must precede the first real signup. Zero users today means zero cost; that
    only goes up.
