@@ -35,7 +35,7 @@ assume.** Run these first:
 
 ```bash
 git log --oneline -1 && git branch --show-current
-git ls-remote --heads exodius | grep -c strip-post-match   # 0 = STILL UNPUSHED
+git rev-list --count origin/main..HEAD                     # non-zero = main is pre-0111, unsafe
 dig +short pitfund.exodiusftc.com CNAME                    # empty = DNS not done
 dig +short _dmarc.exodiusftc.com  TXT                      # empty = DMARC not done
 curl -s https://ftc-sponsorship-portal.vercel.app/login | grep -o 'pk_test_[A-Za-z0-9]*\|pk_live_[A-Za-z0-9]*'
@@ -46,7 +46,7 @@ Then branch on what you find:
 
 | Finding | Do this |
 |---|---|
-| The strip branch is **not on the remote** | **§0 of the launch checklist, immediately.** See the warning below — this is the top priority |
+| `git rev-list --count origin/main..HEAD` is **non-zero** | `main` on GitHub is still pre-`0111` and unsafe to deploy. See the warning below — fast-forward it (§0) |
 | `pitfund` CNAME is empty | The user has not done §3. Nothing downstream can proceed; say so plainly rather than working around it |
 | Still serving `pk_test_` | Clerk production (§4) has not happened. It is the last real launch blocker |
 | `pk_live_` is being served | Cutover happened — run §8 verification and help debug whatever broke |
@@ -56,17 +56,18 @@ Then branch on what you find:
 
 ## ⚠️ The one urgent thing
 
-As of 2026-08-25, **21 commits existed only on Anish's laptop** and nothing had been pushed.
-`HEAD` was 21 ahead of `origin/main`; local `main` was itself 12 ahead.
+**The push happened on 2026-08-25.** `main` and `feat/strip-post-match-pipeline` are both on
+GitHub, so the code no longer exists in exactly one place.
 
-`origin/main` is **pre-`0111`**: it queries eleven tables that no longer exist in the production
-database. **Deploying what is on GitHub today breaks the site instantly**, and deploys are
-manual, so `git checkout main && vercel deploy --prod` is an easy fatal mistake. The only code
-compatible with the live database is that unpushed branch.
+**What is still true:** `main` is **pre-`0111`**. It queries eleven tables that no longer exist
+in the production database, so **deploying `main` breaks the site instantly**. Deploys are
+manual, which makes `git checkout main && vercel deploy --prod` an easy fatal mistake. The only
+branch compatible with the live database is `feat/strip-post-match-pipeline`.
 
-If the check above returns `0`, raise this before doing anything else. The fix is in §0 of
-`docs/LAUNCH-CHECKLIST.md`. **Ask before pushing** — the user's standing instruction is to
-commit and push only when asked.
+The fix is a verified clean fast-forward, written out in §0 of `docs/LAUNCH-CHECKLIST.md`. If
+`git rev-list --count origin/main..HEAD` still returns non-zero, it has not been done — raise it
+before anything else. **Ask before pushing** — the user's standing instruction is to commit and
+push only when asked.
 
 ---
 
@@ -128,8 +129,9 @@ incident.
 
 Answer from `docs/LAUNCH-CHECKLIST.md`, and lead with these three:
 
-1. **Push the code** (§0) — everything is on one laptop, and what is on GitHub cannot run
-   against the live database. Get the current gap with `git rev-list --count origin/main..HEAD`.
+1. **Fast-forward `main`** (§0) — the code is pushed, but `main` is still pre-`0111` and cannot
+   run against the live database. Check with `git rev-list --count origin/main..HEAD`; non-zero
+   means it is still unsafe to deploy `main`.
 2. **Clerk production instance** (§4) — the last true launch blocker. Dev accounts cannot be
    migrated, so it must precede the first real signup. Zero users today means zero cost; that
    only goes up.

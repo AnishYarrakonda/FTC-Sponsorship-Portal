@@ -11,7 +11,7 @@ on something later in the list.
 
 | Section | What | Who | Time |
 |---|---|---|---|
-| §0 | **Push the code — it exists on one laptop** | Anish | 2 min |
+| §0 | ~~Push the code~~ ✅ done — **but `main` still needs the fast-forward** | Anish | 1 min |
 | §1 | Team identity, vault, ownership | captain + mentor | 30 min |
 | §2 | Purchases | nobody — $0 | — |
 | §3 | DNS records at GoDaddy | GoDaddy holder | 10 min + wait |
@@ -25,37 +25,31 @@ on something later in the list.
 
 ---
 
-## §0 — Do this first: the code exists in exactly one place
+## §0 — The code exists in more than one place — ✅ PUSHED 2026-08-25
 
-**21 commits exist only on this laptop** and nothing has been pushed. `HEAD` is 21 commits
-ahead of `origin/main`; local `main` is itself 12 ahead. Re-check the real number before acting:
-
-```bash
-git rev-list --count origin/main..HEAD
-```
-
-This is the highest-severity item on the list, and it is not a hypothetical:
-
-- The GitHub repo (`ExodiusFTC/FTC-Pitfund-Source-Code`, private) is **21 commits behind**.
-- `origin/main` is **pre-migration-`0111`** — it queries eleven tables that no longer exist in
-  the production database. **If anyone deploys what is on GitHub today, the site breaks
-  immediately.** Deploys are manual, so `git checkout main && vercel deploy --prod` is an easy
-  and fatal mistake.
-- The only code compatible with the live database is the unpushed local branch.
-
-If this laptop is lost or wiped, the product is gone and what remains cannot run.
+Everything was on one laptop and nothing had been pushed. **Both pushes are now done**:
+`main` and `feat/strip-post-match-pipeline` are on GitHub. If the laptop is lost, the product
+survives. Re-check the current gap at any time with:
 
 ```bash
-git push exodius main
-git push -u exodius feat/strip-post-match-pipeline
+git rev-list --count origin/main..HEAD    # 0 once the merge below is done
 ```
 
-Then merge the branch into `main` so `main` is what is actually running:
+### ⚠️ Still outstanding: `main` is not yet the code that runs
+
+`main` on GitHub is **pre-migration-`0111`** — it queries eleven tables that no longer exist in
+the production database. **Deploying `main` today breaks the site immediately.** Deploys are
+manual, so `git checkout main && vercel deploy --prod` remains an easy and fatal mistake. The
+only branch compatible with the live database is `feat/strip-post-match-pipeline`.
+
+Fix it by fast-forwarding `main` onto the branch (verified as a clean fast-forward — no merge
+commit, no conflicts):
 
 ```bash
 git checkout main
-git merge --ff-only feat/strip-post-match-pipeline   # HEAD already contains origin/main
+git merge --ff-only feat/strip-post-match-pipeline
 git push exodius main
+git checkout feat/strip-post-match-pipeline
 ```
 
 **Verify** `main` now contains the strip:
@@ -63,6 +57,8 @@ git push exodius main
 ```bash
 git show main:supabase/migrations/0111_strip_post_match_pipeline.sql | head -3
 ```
+
+Until that is done, treat `main` as unsafe to deploy.
 
 Good news: the repo is under the **ExodiusFTC organisation**, not a personal account, so
 ownership already survives Anish leaving. That is one succession problem you do not have.
