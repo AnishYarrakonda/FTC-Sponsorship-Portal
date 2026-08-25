@@ -1,255 +1,139 @@
 # Next session
 
-> **2026-08-25 — the product was simplified. Read this before anything else in this file.**
->
-> Migration `0111_strip_post_match_pipeline.sql` removed the e-signature layer, the payment
-> state machine, W-9/payout profiles, tax receipts and recognition tiers: 11 tables, 24
-> functions, 6 enum types, 2 storage buckets, ~100 files.
->
-> **The governing-law item that this file recorded as "the single thing to obtain from
-> counsel" is CLOSED — by deletion, not by a lawyer.** There is no agreement to execute.
->
-> The product is now a matchmaker: coach pitches → admin moderates → sponsor accepts (full
-> or partial) → both sides get each other's contact details → off-platform from there.
->
-> New since then: `void_match_atomic` + `/admin/capacity` "Void match", which is the only
-> remaining way to release capacity a sponsor committed. Without it a dead match would hold
-> a sponsor's cap forever.
->
-> **What is actually left is not engineering.** See `docs/PURCHASE-CHECKLIST.md`: a domain,
-> a production Clerk instance, a verified Resend sending domain with DMARC, and moving every
-> account off one student's personal login. `docs/RUNBOOK.md` covers operations.
->
-> Everything below predates `0111`. Treat it as history; where it conflicts with the code,
-> the code wins.
+**Written 2026-08-25.** This file is the live handoff. Read it before anything else.
 
 ---
 
-# Next session — start here
+## Where the project stands
 
-**Written:** 2026-08-23, at the end of the session that executed `_FINISH-EVERYTHING.md` —
-the **P2 tier, the P3 tier, and the five deferred items**.
-**Branch:** `main`.
-**Production:** migrations `0098`–`0110` are **all applied**, each with its post-condition
-asserted before COMMIT. `detect_capacity_drift()` returns **0 rows**.
+**The application is finished.** No feature work is outstanding. 591 unit tests pass,
+typecheck and lint are clean, the build is green, `verify-backlog` is **41 pass / 1 fail /
+0 skip** (the one failure is DMARC, which needs a DNS record nobody can add from here), and the
+current code is deployed and smoke-tested in production.
+
+**The product is a matchmaker.** Coach pitches → admin moderates → sponsor accepts, in full or
+for a smaller amount → both sides get each other's contact details → everything after that
+happens off-platform. The platform never touches money and tracks nothing after acceptance.
+
+Migration `0111_strip_post_match_pipeline.sql` removed the e-signature layer, the payment state
+machine, W-9/payout profiles, tax receipts and recognition tiers — 11 tables, 24 functions,
+6 enum types, 2 storage buckets, ~100 files. **This reversed two decisions previously recorded
+as locked** ("e-sign is in-house", "pledge-and-track"). `CLAUDE.md` records the reversal.
+`prompts/revamp/05-*` and `06-*` describe removed layers and are history, not a spec.
+
+**Everything that remains is money, accounts, DNS and dashboards.** It is enumerated in
+**`docs/LAUNCH-CHECKLIST.md`**, which is the authoritative list. Two supporting docs:
+`docs/GO-LIVE-CUTOVER.md` (the ordered DNS/Clerk sequence) and `docs/PURCHASE-CHECKLIST.md`
+(the version to hand a team captain).
 
 ---
 
-## The Gemini audit pack is CLOSED. Do not re-open it.
+## Start here — check state before doing anything
 
-All **102 findings** (9 P0 · 48 P1 · 30 P2 · 16 P3) have been worked. The per-finding record,
-including every finding that did not reproduce and the evidence for that, is in
-`prompts/audits/_ORCHESTRATOR-STATE.md`. `prompts/audits/` is now history, not a queue —
-the same status `prompts/revamp/` already had.
+The right work depends entirely on what the user has done manually since 2026-08-25. **Do not
+assume.** Run these first:
 
-`findings/` and `handoff/` remain gitignored and exist only on this machine.
-
----
-
-## THE ONE THING THAT IS NOT AN ENGINEERING TASK
-
-> **Anish: the platform cannot execute a sponsorship agreement until you get a governing-law
-> clause from counsel.**
-
-Section 11 of the effective `sponsorship_agreement` template reads, verbatim:
-
-```
-TODO(legal): jurisdiction to be set by counsel.
+```bash
+git log --oneline -1 && git branch --show-current
+git ls-remote --heads exodius | grep -c strip-post-match   # 0 = STILL UNPUSHED
+dig +short pitfund.exodiusftc.com CNAME                    # empty = DNS not done
+dig +short _dmarc.exodiusftc.com  TXT                      # empty = DMARC not done
+curl -s https://ftc-sponsorship-portal.vercel.app/login | grep -o 'pk_test_[A-Za-z0-9]*\|pk_live_[A-Za-z0-9]*'
+node scripts/verify-backlog.mjs 2>&1 | tail -3
 ```
 
-What is needed, and nothing else:
+Then branch on what you find:
 
-1. Ask a lawyer for the governing-law / jurisdiction clause (which state's law governs, and
-   where disputes are heard).
-2. Publish it as a new template version through `/agreements` in the admin portal.
-3. Clear `needs_legal_review` on that version — the admin **Mark reviewed** control.
-
-Until step 3, `sign_agreement_atomic` **refuses** to record a signature
-(`template_needs_legal_review`, migration `0106`) and the signing panel says so plainly. That
-is deliberate: migration `0079`'s own header states an attorney must review the seeded body
-"before this platform relies on it in a real transaction", and until this session nothing
-enforced it. No jurisdiction was invented — the executed record attests to the exact bytes
-shown and is SHA-256'd as evidence, so fabricating one would be worse than the gap.
-
-**Production is pre-launch (0 submissions, 0 teams), so nothing is blocked today.** But no
-sponsor can sign until this is done.
-
----
-
-## State of the world
-
-Gate at close of this session:
-
-| Check | Result |
+| Finding | Do this |
 |---|---|
-| `npm run typecheck` | clean |
-| `npm run lint` | **0 errors** |
-| `npm run test` | **740 passing** in 49 files (baseline entering the session: 550 in 45) |
-| `npm run build` | exit 0 |
-| `npx playwright test --project=chromium` | **177 passed · 0 failed · 0 skipped** (baseline: 166 pass / 10 skipped) |
-| `scripts/verify-capacity-invariant.mjs` | 10/10, now including a negative control |
-| `detect_capacity_drift()` in production | **0 rows** |
-
-Deployed with `vercel deploy --prod --yes` (`dpl_J3FrFzfUB2LnmbKnwuwjSQeHKQ4R`). Production
-smoke after the deploy matches the expected baseline on all seven checks: `/` 200 ·
-`/api/health` `{"ok":true,"service":"up","db":"ok"}` · `/legal/terms` 200 · `/sponsors/apply`
-200 · `/dashboard` 307 · `/api/admin/export` 401 · `/api/cron/daily-maintenance` 401.
-
-**Firefox and WebKit are not part of that number, and here is the honest state of them.**
-WebKit now reaches Clerk and runs the whole suite — the TLS-handshake skip in
-`tests/helpers/clerk-auth.ts` no longer fires (the guard is kept, because that failure is a
-property of the local WebKit build and can return with a Playwright bump). Firefox is stable
-about two runs in three; the residual failures coincide with
-`[Clerk Testing] FAPI request failed after 4 attempts` against the shared Clerk **dev**
-instance, i.e. the remote dependency, not this app. The deterministic half of that flake was
-real and is fixed: `signIn()` waited only for the *client* Clerk session, while
-`clerkMiddleware()` authorizes off the `__session` cookie, so a navigation inside that window
-was redirected to `/login` and the test reported "element(s) not found". It now asserts
-against the server — checking that the cookie merely *exists* is useless, because
-`clerk.signOut()` leaves the previous one in place and an existence check passes instantly on
-a stale value.
-
-Two things noticed while smoke-testing, neither a regression and neither fixed:
-
-- `/sponsor-view/<bad-token>` returns **HTTP 200** with the "Page not found" body — a soft-404.
-  Identical locally and in production, so it predates this session. It does not weaken
-  A-10-05: a malformed token and a well-formed miss return the *same* status and the *same*
-  body, so the route still gives an attacker no oracle for whether a token exists.
-- Local Supabase carries fixture residue from crashed runs (`e2e-fixture-…`, `coach-gate-…`,
-  `sponsor-match-…` profiles). Harmless, local only.
-
-### Production database — what changed this session
-
-`0098`–`0105` had been proven on local only. **Production had none of them.** They are now
-applied, plus five new ones written this session:
-
-| Migration | What |
-|---|---|
-| `0098` | Drops the anon notification INSERT hole |
-| `0099` | Sign-agreement approver-rank gate |
-| `0100`/`0101` | Capacity signed-delta + anon actor fall-through |
-| `0102` | `teams_update` requires a verified coach |
-| `0103` | `pending_storage_deletions` |
-| `0104` | `override_reason` survives actor deletion |
-| `0105` | `submissions` indexes |
-| **`0106`** | `needs_legal_review` gate + orphaned-fulfillment gate |
-| **`0107`** | `withdrawn` submission status |
-| **`0108`** | Explicit `WITH CHECK` on 4 UPDATE policies |
-| **`0109`** | Sponsor self-serve audit log |
-| **`0110`** | PO numbers + fiscal-year boundary |
-
-> **A-02-01 was live and remotely exploitable in production until this session.** Anyone with
-> the public anon key could forge a notification to any user. The probe now returns 401 both
-> with and without `Prefer: return=representation` — that header matters, and is how the
-> exploit was nearly missed.
-
-The migration **ledger is repaired**: `0076`–`0110` are stamped, so
-`supabase migration list --linked` no longer claims production is at `0075`.
+| The strip branch is **not on the remote** | **§0 of the launch checklist, immediately.** See the warning below — this is the top priority |
+| `pitfund` CNAME is empty | The user has not done §3. Nothing downstream can proceed; say so plainly rather than working around it |
+| Still serving `pk_test_` | Clerk production (§4) has not happened. It is the last real launch blocker |
+| `pk_live_` is being served | Cutover happened — run §8 verification and help debug whatever broke |
+| `verify-backlog` shows a **new** failure | Something regressed. Investigate that before anything else |
 
 ---
 
-## Product decisions made this session (do not relitigate)
+## ⚠️ The one urgent thing
 
-Two were escalated rather than decided unilaterally, and Anish answered both:
+As of 2026-08-25, **19 commits existed only on Anish's laptop** — 12 on `main`, 7 on
+`feat/strip-post-match-pipeline`. Neither was pushed.
 
-- **Multi-org sponsor membership is SUPPORTED.** A sponsor user may belong to two
-  organizations, with a switcher in the portal. The active org is a cookie and is therefore
-  treated as a *preference* — it is re-validated against real memberships on every request and
-  can never introduce an org the caller does not hold.
-- **PO numbers and fiscal years are BUILT**, but `funding_cap_cents` remains the **single**
-  enforcement point for capacity. The fiscal year is a reporting boundary; nothing resets
-  `funding_used_cents` automatically, because a silent reset is money state changing with no
-  actor and no audit row.
+`origin/main` is **pre-`0111`**: it queries eleven tables that no longer exist in the production
+database. **Deploying what is on GitHub today breaks the site instantly**, and deploys are
+manual, so `git checkout main && vercel deploy --prod` is an easy fatal mistake. The only code
+compatible with the live database is that unpushed branch.
 
-Closed as decisions rather than code:
-
-- **IdP group → role mapping** stays unbuilt. An SSO first login lands on `viewer` because an
-  IdP-authenticated stranger must not be able to move money on day one, and `approver` is the
-  rank that countersigns funding. Shipping the mapping would hand budget authority to whoever
-  controls a customer's directory groups. Invariant pinned by tests.
-
-Still locked from earlier sessions: the platform **never touches funds** (pledge-and-track),
-e-sign is **in-house** (ESIGN/UETA), sponsor multi-user is **Clerk Organizations**, FTC
-verification uses the **official FIRST API** with FTCScout as fallback.
+If the check above returns `0`, raise this before doing anything else. The fix is in §0 of
+`docs/LAUNCH-CHECKLIST.md`. **Ask before pushing** — the user's standing instruction is to
+commit and push only when asked.
 
 ---
 
-## Things worth knowing before you touch anything
+## Things that will bite you
 
-### Migrations
-The latest is **`0110`**. Confirm with `ls supabase/migrations | tail -3` — this line has been
-stale before. Apply with `psql -f`, never `supabase db push`.
+These are all learned the hard way in this repo. Violating any one of them has caused a real
+incident.
 
-**Never rebuild a function body from an older migration file.** Dump the live body with
-`pg_get_functiondef` and patch that. `0106` was written that way — a script patched the dumped
-text — precisely because transcribing has silently deleted later fixes three times here.
-
-### The E2E suite collects 531 tests in 22 files
-`tests/e2e/payout-w9.spec.ts` could not be **collected** before this session: it imported a
-validator through a `'use server'` module, which drags in `server-only`, and Playwright failed
-the whole file. Every payout/W-9 security-boundary test in it was silently absent. Confirmed
-pre-existing by reproducing it at the session's starting commit. The validator now lives in
-`lib/file-validation.ts`.
-
-That is the same failure class as B-04-12, where a dialog-focus test skipped on every clean run
-and skipped read as a pass. **If a test can't run, it isn't a test.**
-
-### Eight suites were skipping silently, and five defects were hiding behind them
-
-The first Phase 5 sweep read **118 passed / 58 skipped**. Explaining the skips — rather than
-accepting them — is where most of the session's remaining defects were.
-
-Every one of those suites gated its `test.skip` on a RAW env var (`!process.env.ADMIN_EMAIL`)
-while every account it uses is a DEFAULTED constant
-(`process.env.X ?? 'x+clerk_test@example.com'`). The guard tested something the code does not
-depend on. The accounts were seeded; the suites would have passed; they skipped instead.
-**Skipped reads as a pass.** The gate is now the local stack itself.
-
-What that uncovered is written up in full in `prompts/audits/_ORCHESTRATOR-STATE.md` — briefly:
-`0106`'s legal-review gate had no test and was blocking the whole signing suite; the
-fulfillment fixture was building orphaned fulfillments and its coach-ownership boundary passed
-only because *nobody* owned the row; `/sponsor/settings` had two identically-named "Save"
-buttons; `admin-levels` skipped with a false reason and had never verified that a reviewer
-cannot change a funding cap; and `team-verification` left records behind on every run until
-`.first()` started clicking a stale one.
-
-**If you add an E2E suite, gate it on the thing it actually needs.** A guard that names an
-unrelated env var is a suite that never runs.
-
-### Two things the E2E suite caught that review did not
-
-**A-08-04 was logged "did not reproduce", and that was wrong.** The command palette really does
-render through the project's base-ui `Dialog`, which is documented to trap and restore focus —
-that reasoning is why it was nearly closed as a phantom. Driving it with a keyboard showed Tab
-leaving the popup at press 4 and reaching the page behind at press 6, and Escape dropping focus
-to `<body>`. base-ui 1.4.0's `markOthers` uses `ariaHidden: modal` and never sets native `inert`,
-and `aria-hidden` removes nothing from the tab order. Fixed with a local Tab wrap in
-`components/ui/dialog.tsx` plus `finalFocus` on the palette. **"The library handles it" is a
-claim about observable behaviour; it can only be settled by observing it.**
-
-**`/sponsor-view/[token]` 404'd the sponsor who had just decided.** B-03-11 revokes every
-outstanding token once a decision lands, including the one just consumed, and the page returned
-`notFound()` on any revoked token. Two individually-correct changes composed into a defect. Worth
-noting how it surfaced: the decision itself succeeded, so every database assertion passed and
-only the assertion about *what the sponsor sees* failed.
-
-### Cron: Vercel Hobby honours only 2 entries
-`vercel.json` schedules exactly two. `refresh-ftc-roster`, `nudge-fulfillments` and
-`impact-rollup` run inside the `daily-maintenance` dispatcher. **A new cron job goes inside the
-dispatcher, not into `vercel.json`**, unless the project moves to Pro.
-
-### Deploys are manual
-`vercel deploy --prod --yes`. Pushing to `main` deploys nothing.
+- **Never judge a Postgres function by the migration that created it.** Dump the live body with
+  `pg_get_functiondef` first — including when deciding whether a change affects it at all.
+  Reading `0084` alone said `detect_capacity_drift()` was unaffected by `0111`; the live body
+  had a third term added by `0095` that would have thrown on every call, **silently disabling
+  the Capacity Integrity check.** Separately, the live `sponsor_decide_submission_atomic`
+  carries an `is_trusted_server_context()` branch from `0101` (a P0 tenant-takeover fix) that is
+  absent from `0100` — rebuilding from the file would delete it.
+- **`DROP FUNCTION IF EXISTS` matches on the argument list.** Wrong arity is a silent no-op.
+  Find functions via `pg_proc`, never by name pattern — a name sweep missed
+  `record_benefit_delivery` and `void_benefit_proof`.
+- **`CREATE OR REPLACE` does not preserve REVOKE/GRANT.** Re-issue them every time.
+- **Apply migrations with `psql -f`, never the Supabase CLI** — its splitter mishandles files
+  defining multiple `$$`-quoted functions.
+- **`dig` takes one record type per query.** `dig name TXT CNAME A` treats the extra types as
+  hostnames and returns misleading results. This produced a wrong conclusion in this project on
+  2026-08-25 (I claimed email was broken; it was fine).
+- **A preview returning 200 is not proof it renders** — error boundaries return 200. Check the
+  browser console.
+- **`DATABASE_URL` in `.env.local` points at PRODUCTION.** Verify before running anything that
+  writes. `scripts/seed-test-accounts.mjs` has **no production guard** and deletes rows.
+- **A check that always skips is worse than no check.** Eight E2E suites sat green-by-skipping
+  here for months. Gate on what the suite needs, and never trust a skip's stated reason.
+- **Vercel Hobby runs only 2 cron entries** and silently ignores extras. New jobs go inside the
+  `daily-maintenance` dispatcher, not `vercel.json`.
+- **Deploys are manual.** Pushing to `main` deploys nothing. `vercel deploy --prod --yes`.
 
 ---
 
-## What is actually left
+## What NOT to do
 
-Nothing from the audit pack. The open items are yours, not the code's:
+- **Do not strip more features.** `appeals.ts` (789 lines), `messages.ts`, and sponsor
+  organisations were all built against zero traffic and are obvious deletion candidates.
+  Leave them. Tested code nobody visits costs approximately nothing; another destructive
+  migration has real risk, and `0111` nearly disabled the capacity check. The reasoning is
+  recorded in §10 of the launch checklist.
+- **Do not change the stack.** Vercel + Supabase + Clerk + Resend is correct for this scale and
+  for handing the project to a non-programmer. Free tiers have 60–100× headroom at the target
+  of dozens of teams. This was analysed in full; do not relitigate.
+- **Do not reintroduce** MFA, rate limiting / Upstash, e-signatures, payment tracking, W-9s,
+  receipts, or recognition tiers. All were deliberately removed.
+- **Do not run another audit pass.** All 102 findings from the 16-prompt Gemini pack are closed
+  and shipped. `prompts/audits/` is history, not a queue, and there is no Gemini subagent here.
+  The app has been audited far more than it has been used.
+- **Do not delete from `transactions_ledger`.** It is append-only; a reversal is a compensating
+  negative row via `void_match_atomic`. The single exception is the pre-launch fixture wipe in
+  §6, which is explicitly scoped.
 
-1. **The governing-law clause** — see the top of this file. This is the only thing blocking a
-   real sponsorship from being executed.
-2. **DMARC** — still outstanding from an earlier session.
-3. **Subscription decisions** — the consolidated list is at the bottom of
-   `prompts/audits/_ORCHESTRATOR-STATE.md`. The one with a real functional consequence is
-   Vercel Pro: on Hobby, only 2 cron entries run, which is why the dispatcher exists.
+---
+
+## If the user asks "what's left?"
+
+Answer from `docs/LAUNCH-CHECKLIST.md`, and lead with these three:
+
+1. **Push the code** (§0) — 19 commits on one laptop, and what is on GitHub cannot run.
+2. **Clerk production instance** (§4) — the last true launch blocker. Dev accounts cannot be
+   migrated, so it must precede the first real signup. Zero users today means zero cost; that
+   only goes up.
+3. **Ownership** (§1) — every account is in Anish's personal name, and he leaves for college.
+
+**It costs $0.** The team already owns `exodiusftc.com` (GoDaddy DNS, team website on Netlify at
+the apex), and Resend is already verified on it. What is needed is the GoDaddy login, not a
+credit card. **Never move that domain's nameservers** — it would take the team website down.

@@ -29,6 +29,11 @@ both parties get each other's contact details and settle up directly. Next.js 16
 
 `prompts/_NEXT-SESSION.md` is the live handoff; read it first.
 
+**The app is code-complete.** Everything remaining before launch is accounts, DNS and
+dashboards, enumerated in **`docs/LAUNCH-CHECKLIST.md`** (authoritative), with
+`docs/GO-LIVE-CUTOVER.md` for the ordered DNS/Clerk sequence and `docs/PURCHASE-CHECKLIST.md`
+for the team-captain version. Launch costs **$0** — the team already owns `exodiusftc.com`.
+
 `prompts/revamp/` holds the 18 sequential enterprise-readiness prompts (funding fulfillment,
 W-9s, e-sign, sponsor orgs, SSO, CSR reporting, accessibility). **All 18 are shipped and
 audited** — that pack is history, not a queue. `prompts/revamp/_CONTEXT.md` is still the most
