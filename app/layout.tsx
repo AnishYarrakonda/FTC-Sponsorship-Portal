@@ -23,7 +23,6 @@ export const metadata: Metadata = {
 
 import { ThemeProvider } from "@/components/theme-provider"
 import { GlobalShortcuts } from "@/components/global-shortcuts"
-import { RoboticsCursor } from "@/components/robotics-cursor"
 import { DotGridClient } from "@/components/ui/dot-grid-client"
 import { MotionPreferences } from "@/components/motion/motion-preferences"
 
@@ -64,7 +63,6 @@ export default function RootLayout({
                 <DotGridClient />
                 {children}
                 <GlobalShortcuts />
-                <RoboticsCursor />
                 <Toaster richColors position="top-right" />
               </div>
             </MotionPreferences>
