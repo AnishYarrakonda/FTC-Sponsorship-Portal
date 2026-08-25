@@ -193,11 +193,16 @@ async function assertWriteSealed(tables) {
   return `RLS on, 0 write policies on ${tables.length} table(s) — writes rejected regardless of grants`
 }
 
-check('01.13', 'grep', 'payment_reference never reaches an audit or notification payload', async () => {
-  const hits = await grep('payment_reference|paymentReference', ['app/actions/fulfillment.ts'])
-  const bad = hits.filter((h) => /audit|metadata|notif|title:|body:/i.test(h))
-  return assert(bad.length === 0, bad.length ? bad.join('\n') : `${hits.length} refs, all outside audit/notify payloads`)
-})
+// 01.13 REMOVED by 0111. It grepped app/actions/fulfillment.ts to prove `payment_reference`
+// never leaked into an audit or notification payload. That file no longer exists, so the check
+// skipped unconditionally and could never pass or fail again.
+//
+// A check that always skips is worse than no check: it keeps a reassuring line in the output
+// while guarding nothing. This repo has already been bitten by exactly that — eight E2E suites
+// sat green-by-skipping for months (see 'E2E skip gates tested the wrong thing').
+//
+// The surviving half of its intent is 03.16, which greps emails/ and app/api/cron for the same
+// field across the whole tree rather than one deleted file.
 
 // ---- 02 · payout profiles & W-9 ----------------------------------------------
 
@@ -211,11 +216,18 @@ check('02.13', 'env', 'PAYOUT_ENCRYPTION_KEY is gone from lib/env.ts (0111 remov
 
 // ---- 03 · fulfillment UI & reconciliation ------------------------------------
 
-check('03.14', 'http', 'GET /api/cron/nudge-fulfillments without the secret returns JSON 401', async () => {
-  const { status, body } = await http('/api/cron/nudge-fulfillments')
-  eq(status, 401, 'status')
-  assert(!body.startsWith('<'), 'body is HTML — the route redirected instead of returning JSON')
-  return `401 ${body.slice(0, 80)}`
+// INVERTED by 0111. This used to assert the nudge-fulfillments cron rejected an unauthenticated
+// caller with a JSON 401. The fulfillment layer is gone, so the route is gone, and the original
+// check failed with 404 — it outlived the feature it guarded.
+//
+// It is inverted rather than deleted because the route was a *scheduled, secret-guarded* entry
+// point. If one is ever reintroduced by a revert or a stray merge, it must not come back
+// silently: a cron route that 404s is dead code, and one that answers without a secret is an
+// open endpoint. Asserting 404 pins the removal itself.
+check('03.14', 'http', 'the nudge-fulfillments cron is gone and has not come back', async () => {
+  const { status } = await http('/api/cron/nudge-fulfillments')
+  eq(status, 404, 'status')
+  return '404 — route absent, as 0111 intended'
 })
 
 check('03.16', 'grep', 'payment_reference never reaches an email template or a cron', async () => {
@@ -376,11 +388,9 @@ check('13.14', 'db', 'appeal state transitions are guarded in the database', asy
 
 // ---- 14 · recognition tiers --------------------------------------------------
 
-check('14.14', 'grep', 'proof_url never reaches an audit or notification payload', async () => {
-  const hits = await grep('proof_url', ['app/actions/recognition.ts'])
-  const bad = hits.filter((h) => /audit|metadata|notif|title:|body:/i.test(h))
-  return assert(bad.length === 0, bad.length ? bad.join('\n') : `${hits.length} refs, none in audit/notify payloads`)
-})
+// 14.14 REMOVED by 0111, for the same reason as 01.13 above: it grepped
+// app/actions/recognition.ts, which no longer exists, so it skipped unconditionally and
+// guarded nothing. Recognition tiers were removed entirely — there is no proof_url to leak.
 
 check('14.10', 'grep', 'dispatch is still the only place that sends sponsor outreach', async () => {
   // The mandate governs SPONSOR-FACING outreach. app/actions/account.ts sends a data export
