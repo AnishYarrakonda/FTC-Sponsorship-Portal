@@ -35,7 +35,8 @@ assume.** Run these first:
 
 ```bash
 git log --oneline -1 && git branch --show-current
-git rev-list --count origin/main..HEAD                     # non-zero = main is pre-0111, unsafe
+git fetch origin --quiet   # ALWAYS fetch first; the count below reads a local cache
+git rev-list --count origin/main..HEAD                     # 0 = main is in sync and deployable
 dig +short pitfund.exodiusftc.com CNAME                    # empty = DNS not done
 dig +short _dmarc.exodiusftc.com  TXT                      # empty = DMARC not done
 curl -s https://ftc-sponsorship-portal.vercel.app/login | grep -o 'pk_test_[A-Za-z0-9]*\|pk_live_[A-Za-z0-9]*'
@@ -46,7 +47,7 @@ Then branch on what you find:
 
 | Finding | Do this |
 |---|---|
-| `git rev-list --count origin/main..HEAD` is **non-zero** | `main` on GitHub is still pre-`0111` and unsafe to deploy. See the warning below — fast-forward it (§0) |
+| `git rev-list --count origin/main..HEAD` is **non-zero** | Work has diverged since 2026-08-25. Fetch first, then see §0 — `main` must stay at or ahead of `0111` to be deployable |
 | `pitfund` CNAME is empty | The user has not done §3. Nothing downstream can proceed; say so plainly rather than working around it |
 | Still serving `pk_test_` | Clerk production (§4) has not happened. It is the last real launch blocker |
 | `pk_live_` is being served | Cutover happened — run §8 verification and help debug whatever broke |
@@ -54,20 +55,16 @@ Then branch on what you find:
 
 ---
 
-## ⚠️ The one urgent thing
+## The formerly-urgent thing — now closed
 
-**The push happened on 2026-08-25.** `main` and `feat/strip-post-match-pipeline` are both on
-GitHub, so the code no longer exists in exactly one place.
+On 2026-08-25 everything existed only on Anish's laptop, and `main` was pre-`0111` (it queried
+eleven dropped tables, so deploying it would have broken the site instantly). **Both are fixed.**
+`main` and `feat/strip-post-match-pipeline` point at the same commit, and it is what production
+runs. `main` is safe to deploy again.
 
-**What is still true:** `main` is **pre-`0111`**. It queries eleven tables that no longer exist
-in the production database, so **deploying `main` breaks the site instantly**. Deploys are
-manual, which makes `git checkout main && vercel deploy --prod` an easy fatal mistake. The only
-branch compatible with the live database is `feat/strip-post-match-pipeline`.
-
-The fix is a verified clean fast-forward, written out in §0 of `docs/LAUNCH-CHECKLIST.md`. If
-`git rev-list --count origin/main..HEAD` still returns non-zero, it has not been done — raise it
-before anything else. **Ask before pushing** — the user's standing instruction is to commit and
-push only when asked.
+If the probe above returns non-zero, something has diverged since — **`git fetch` first**, then
+re-check, then read §0 of `docs/LAUNCH-CHECKLIST.md`. **Ask before pushing** — the user's
+standing instruction is to commit and push only when asked.
 
 ---
 
@@ -129,13 +126,14 @@ incident.
 
 Answer from `docs/LAUNCH-CHECKLIST.md`, and lead with these three:
 
-1. **Fast-forward `main`** (§0) — the code is pushed, but `main` is still pre-`0111` and cannot
-   run against the live database. Check with `git rev-list --count origin/main..HEAD`; non-zero
-   means it is still unsafe to deploy `main`.
-2. **Clerk production instance** (§4) — the last true launch blocker. Dev accounts cannot be
+1. **Clerk production instance** (§4) — the last true launch blocker. Dev accounts cannot be
    migrated, so it must precede the first real signup. Zero users today means zero cost; that
    only goes up.
-3. **Ownership** (§1) — every account is in Anish's personal name, and he leaves for college.
+2. **Ownership** (§1) — every account is in Anish's personal name, and he leaves for college.
+3. **DNS at GoDaddy** (§3) — the `pitfund` CNAME and the two DMARC records. Nothing downstream
+   of the domain can be verified until these exist.
+
+§0 is closed: the code is pushed and `main` is deployable.
 
 **It costs $0.** The team already owns `exodiusftc.com` (GoDaddy DNS, team website on Netlify at
 the apex), and Resend is already verified on it. What is needed is the GoDaddy login, not a

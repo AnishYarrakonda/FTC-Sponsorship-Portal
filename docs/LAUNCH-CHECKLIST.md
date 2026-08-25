@@ -11,7 +11,7 @@ on something later in the list.
 
 | Section | What | Who | Time |
 |---|---|---|---|
-| §0 | ~~Push the code~~ ✅ done — **but `main` still needs the fast-forward** | Anish | 1 min |
+| §0 | ~~Push the code~~ ✅ **closed** — pushed and `main` fast-forwarded | Anish | done |
 | §1 | Team identity, vault, ownership | captain + mentor | 30 min |
 | §2 | Purchases | nobody — $0 | — |
 | §3 | DNS records at GoDaddy | GoDaddy holder | 10 min + wait |
@@ -25,40 +25,33 @@ on something later in the list.
 
 ---
 
-## §0 — The code exists in more than one place — ✅ PUSHED 2026-08-25
+## §0 — ✅ CLOSED 2026-08-25 — the code is pushed and `main` is deployable
 
-Everything was on one laptop and nothing had been pushed. **Both pushes are now done**:
-`main` and `feat/strip-post-match-pipeline` are on GitHub. If the laptop is lost, the product
-survives. Re-check the current gap at any time with:
+Everything used to live on one laptop, and `main` used to be pre-migration-`0111` — it queried
+eleven tables that no longer exist in production, so deploying it would have broken the site
+instantly. Both problems are fixed. `main` and `feat/strip-post-match-pipeline` now point at the
+same commit, and that commit is the code running in production.
 
-```bash
-git rev-list --count origin/main..HEAD    # 0 once the merge below is done
-```
+Repo: **`ExodiusFTC/FTC-Pitfund-Source-Code`** (private, owned by the *organisation*, not by
+Anish personally — one succession problem you do not have).
 
-### ⚠️ Still outstanding: `main` is not yet the code that runs
-
-`main` on GitHub is **pre-migration-`0111`** — it queries eleven tables that no longer exist in
-the production database. **Deploying `main` today breaks the site immediately.** Deploys are
-manual, so `git checkout main && vercel deploy --prod` remains an easy and fatal mistake. The
-only branch compatible with the live database is `feat/strip-post-match-pipeline`.
-
-Fix it by fast-forwarding `main` onto the branch (verified as a clean fast-forward — no merge
-commit, no conflicts):
+Confirm at any time:
 
 ```bash
-git checkout main
-git merge --ff-only feat/strip-post-match-pipeline
-git push exodius main
-git checkout feat/strip-post-match-pipeline
+git fetch origin
+git rev-list --count origin/main..HEAD                                 # 0 = in sync
+git show main:supabase/migrations/0111_strip_post_match_pipeline.sql | head -1
 ```
 
-**Verify** `main` now contains the strip:
+Two traps this closed, both of which lied silently rather than erroring:
 
-```bash
-git show main:supabase/migrations/0111_strip_post_match_pipeline.sql | head -3
-```
-
-Until that is done, treat `main` as unsafe to deploy.
+- **The remotes pointed at the repo's old name** (`FTC-Matchmaker-Source-Code`). GitHub
+  redirected every push, so it worked and nothing warned. Redirects hold only until someone else
+  claims the abandoned name. Both remotes now use the current URL.
+- **`git rev-list --count origin/main..HEAD` reads a local cache, not GitHub.** Straight after
+  pushing it reported a 23-commit gap that did not exist, because only the `exodius` tracking ref
+  had been refreshed. **`git fetch` first, every time**, or the number is stale by however long
+  it has been since the last fetch.
 
 Good news: the repo is under the **ExodiusFTC organisation**, not a personal account, so
 ownership already survives Anish leaving. That is one succession problem you do not have.
