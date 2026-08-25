@@ -16,9 +16,9 @@
   - `admin/export` — CSV/data export (admin-only)
   - `admin/queue/count` — moderation queue badge count
   - `coach/notifications/unread` — unread notification count (coach)
-  - `cron/expire-submissions` — **scheduled** daily at 02:00 UTC (`vercel.json`); marks stale submissions expired, releases their reserved sponsor capacity, and sweeps gov-ID/W-9 retention
-  - `cron/daily-maintenance` — **scheduled** daily at 04:00 UTC (`vercel.json`); a dispatcher that runs `refresh-ftc-roster`, `nudge-fulfillments` and `impact-rollup` in sequence, each in its own try/catch
-  - `cron/refresh-ftc-roster`, `cron/nudge-fulfillments`, `cron/impact-rollup` — **not** scheduled directly. Vercel Hobby honours only 2 cron entries and silently ignores extras, which is how three jobs sat dead in production (A-09-05). Each stays independently invocable via its own route; only the *scheduler* moved. **A new cron job goes inside the dispatcher, not into `vercel.json`**, unless the project is on Pro.
+  - `cron/expire-submissions` — **scheduled** daily at 02:00 UTC (`vercel.json`); marks stale submissions expired, releases their reserved sponsor capacity, and sweeps gov-ID retention. **Also the Supabase keepalive** — its daily DB hit is what stops the free project pausing after 7 days, so disabling it takes the site down a week later, silently
+  - `cron/daily-maintenance` — **scheduled** daily at 04:00 UTC (`vercel.json`); a dispatcher that runs `refresh-ftc-roster` and `impact-rollup` in sequence, each in its own try/catch
+  - `cron/refresh-ftc-roster`, `cron/impact-rollup` — **not** scheduled directly. Vercel Hobby honours only 2 cron entries and silently ignores extras, which is how three jobs sat dead in production (A-09-05). Each stays independently invocable via its own route; only the *scheduler* moved. **A new cron job goes inside the dispatcher, not into `vercel.json`**, unless the project is on Pro.
   - `health` — public health check
   - `webhooks/clerk` — handles `user.deleted` and email sync from Clerk
   - `webhooks/resend` — delivery event webhooks from Resend
@@ -34,7 +34,7 @@
 - `lib/dev-bypass.ts` — dev-only admin auth bypass + mock Supabase data (`NEXT_PUBLIC_DEV_AUTH_BYPASS=true`; forced off in production).
 - `lib/dev-preview.ts` — dev-only sponsor portal preview with static fixtures (`NEXT_PUBLIC_SPONSOR_PREVIEW=1`; forced off in production).
 - `lib/dev-coach-preview.ts` — dev-only coach portal preview with static fixtures (`NEXT_PUBLIC_COACH_PREVIEW=1`; forced off in production).
-- `supabase/migrations/*.sql` — numbered, idempotent migrations (latest: `0095_release_capacity_on_cancel.sql`; note `0012` does not exist — the numbering skips it). Always confirm the real latest with `ls supabase/migrations | tail -3` before adding one — this line has been stale before.
+- `supabase/migrations/*.sql` — numbered, idempotent migrations (latest: `0111_strip_post_match_pipeline.sql`; note `0012` does not exist — the numbering skips it). Always confirm the real latest with `ls supabase/migrations | tail -3` before adding one — this line has been stale before.
 - `tests/` — Playwright E2E + `global-setup.ts`; `scripts/seed-test-accounts.mjs` for local data.
 
 ## Roles & key tables

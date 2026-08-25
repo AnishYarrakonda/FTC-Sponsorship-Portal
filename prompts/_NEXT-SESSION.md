@@ -1,3 +1,30 @@
+# Next session
+
+> **2026-08-25 — the product was simplified. Read this before anything else in this file.**
+>
+> Migration `0111_strip_post_match_pipeline.sql` removed the e-signature layer, the payment
+> state machine, W-9/payout profiles, tax receipts and recognition tiers: 11 tables, 24
+> functions, 6 enum types, 2 storage buckets, ~100 files.
+>
+> **The governing-law item that this file recorded as "the single thing to obtain from
+> counsel" is CLOSED — by deletion, not by a lawyer.** There is no agreement to execute.
+>
+> The product is now a matchmaker: coach pitches → admin moderates → sponsor accepts (full
+> or partial) → both sides get each other's contact details → off-platform from there.
+>
+> New since then: `void_match_atomic` + `/admin/capacity` "Void match", which is the only
+> remaining way to release capacity a sponsor committed. Without it a dead match would hold
+> a sponsor's cap forever.
+>
+> **What is actually left is not engineering.** See `docs/PURCHASE-CHECKLIST.md`: a domain,
+> a production Clerk instance, a verified Resend sending domain with DMARC, and moving every
+> account off one student's personal login. `docs/RUNBOOK.md` covers operations.
+>
+> Everything below predates `0111`. Treat it as history; where it conflicts with the code,
+> the code wins.
+
+---
+
 # Next session — start here
 
 **Written:** 2026-08-23, at the end of the session that executed `_FINISH-EVERYTHING.md` —

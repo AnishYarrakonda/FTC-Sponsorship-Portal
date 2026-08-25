@@ -171,28 +171,6 @@ check('01.3', 'db', 'sponsors.funding_used_cents invariant holds for every spons
   return assert(drifted.length === 0, drifted.length ? `drifted sponsors: ${JSON.stringify(drifted)}` : `${rows.length} sponsors reconcile`)
 })
 
-check('01.9', 'db', 'funding_fulfillments is SELECT-scoped, never cross-sponsor readable', async () => {
-  // `qual` is multi-line SQL text, so it is reduced to a boolean here rather than returned —
-  // returning it would break the line-per-row parse that every other check relies on.
-  const rows = await sql(`
-    select policyname, cmd, (qual is null or btrim(qual) = 'true')::text as unscoped
-      from pg_policies where tablename='funding_fulfillments'`)
-  assert(rows.length > 0, 'no policies on funding_fulfillments — table is unprotected')
-  const writes = rows.filter(([, cmd]) => cmd !== 'SELECT')
-  assert(writes.length === 0, `unexpected write policies: ${writes.map((r) => r[0]).join(', ')}`)
-  const unscoped = rows.filter(([, , u]) => u === 't')
-  assert(unscoped.length === 0, `unscoped policy: ${unscoped.map((r) => r[0]).join(', ')}`)
-  return `${rows.length} SELECT policies, all scoped`
-})
-
-check('01.10', 'db', 'RLS is enabled on both fulfillment tables (anon gets [])', async () => {
-  const rows = await sql(`select relname, relrowsecurity from pg_class
-     where relname in ('funding_fulfillments','funding_fulfillment_events')`)
-  eq(rows.length, 2, 'both tables present')
-  const off = rows.filter(([, on]) => on !== 't')
-  return assert(off.length === 0, off.length ? `RLS disabled on ${off.map((r) => r[0])}` : 'RLS enabled on both')
-})
-
 /**
  * "No authenticated role can UPDATE or DELETE X" is enforced by RLS, not by GRANTs.
  *
@@ -215,15 +193,6 @@ async function assertWriteSealed(tables) {
   return `RLS on, 0 write policies on ${tables.length} table(s) — writes rejected regardless of grants`
 }
 
-check('01.11', 'db', 'no authenticated role can UPDATE or DELETE the fulfillment tables', () =>
-  assertWriteSealed(['funding_fulfillments', 'funding_fulfillment_events'])
-)
-
-check('01.12', 'grep', '/sponsor/funding no longer claims "Confirmed disbursements"', async () => {
-  const hits = await grep('Confirmed disbursements', ['app', 'components'])
-  return assert(hits.length === 0, hits.length ? hits.join('\n') : 'string absent from the tree')
-})
-
 check('01.13', 'grep', 'payment_reference never reaches an audit or notification payload', async () => {
   const hits = await grep('payment_reference|paymentReference', ['app/actions/fulfillment.ts'])
   const bad = hits.filter((h) => /audit|metadata|notif|title:|body:/i.test(h))
@@ -231,35 +200,6 @@ check('01.13', 'grep', 'payment_reference never reaches an audit or notification
 })
 
 // ---- 02 · payout profiles & W-9 ----------------------------------------------
-
-check('02.1', 'db', 'EIN is stored as ciphertext, never readable in the column', async () => {
-  // The column is bytea, so a text regex would error rather than fail — decode to a lossless
-  // escaped string first and look for an EIN anywhere in the bytes, not just anchored.
-  const type = await scalar(`select data_type from information_schema.columns
-     where table_name='team_payout_profiles' and column_name='ein_ciphertext'`)
-  eq(type, 'bytea', 'ein_ciphertext column type')
-  const n = await scalar(`select count(*) from team_payout_profiles
-     where ein_ciphertext is not null
-       and encode(ein_ciphertext, 'escape') ~ '[0-9]{2}-?[0-9]{7}'`)
-  return assert(n === '0', n === '0' ? 'bytea, and no plaintext EIN pattern in the stored bytes' : `${n} row(s) contain a readable EIN`)
-})
-
-check('02.3', 'db', 'coaches cannot self-verify their own W-9 (column write guard exists)', async () => {
-  const n = await scalar(`select count(*) from pg_trigger
-     where tgrelid = 'team_payout_profiles'::regclass and not tgisinternal
-       and tgname like '%writable_columns%'`)
-  return assert(n !== '0', n !== '0' ? 'guard_payout_profile_writable_columns trigger present' : 'write guard trigger missing')
-})
-
-check('02.7', 'db', 'tax-documents bucket is private, 5 MB, application/pdf only', async () => {
-  const rows = await sql(`select public, file_size_limit, allowed_mime_types from storage.buckets where id='tax-documents'`)
-  assert(rows.length === 1, 'tax-documents bucket does not exist')
-  const [pub, limit, mimes] = rows[0]
-  eq(pub, 'f', 'public')
-  eq(limit, '5242880', 'file_size_limit')
-  assert(/application\/pdf/.test(mimes), `allowed_mime_types is ${mimes}`)
-  return 'private, 5 MB, application/pdf'
-})
 
 check('02.13', 'env', 'PAYOUT_ENCRYPTION_KEY is gone from lib/env.ts (0111 removed payouts)', async () => {
   const src = read('lib/env.ts')
@@ -290,20 +230,6 @@ check('03.18', 'grep', 'this slice added no SQL', async () => {
 
 // ---- 04 · receipts -----------------------------------------------------------
 
-check('04.8', 'db', 'receipt numbers are unique and gap-free within each year', async () => {
-  const rows = await sql(`
-    select substring(receipt_number from 4 for 4) as yr, count(*),
-           count(distinct receipt_number),
-           max(substring(receipt_number from 9)::int)
-      from funding_receipts group by 1`)
-  if (rows.length === 0) return 'no receipts issued yet — vacuously true, recheck after first issuance'
-  for (const [yr, total, distinct, max] of rows) {
-    eq(distinct, total, `${yr} distinct receipt numbers`)
-    eq(max, total, `${yr} highest number equals count (no gaps)`)
-  }
-  return rows.map(([yr, n]) => `${yr}: ${n} contiguous`).join(', ')
-})
-
 check('04.11', 'db', 'only service_role may execute the receipt RPCs', async () => {
   const rows = await sql(`
     select p.proname, r.rolname
@@ -315,74 +241,9 @@ check('04.11', 'db', 'only service_role may execute the receipt RPCs', async () 
   return assert(rows.length === 0, rows.length ? `leaked EXECUTE: ${JSON.stringify(rows)}` : 'anon/authenticated denied on both')
 })
 
-check('04.11b', 'db', 'funding_receipts is not writable by authenticated', () => assertWriteSealed(['funding_receipts']))
-
-check('04.15', 'grep', 'payment_reference never reaches a receipt document or email', async () => {
-  const hits = await grep('payment_reference|paymentReference', ['lib/receipt-document.tsx', 'emails/funding-receipt-email.tsx'])
-  return assert(hits.length === 0, hits.length ? hits.join('\n') : 'absent from both')
-})
-
 // ---- 05 · agreement templates ------------------------------------------------
 
-check('05.2', 'db', 'exactly one effective sponsorship_agreement template exists', async () => {
-  const rows = await sql(`select key, version, status, needs_legal_review from agreement_templates order by version`)
-  assert(rows.length >= 1, 'agreement_templates is empty — the seed never ran')
-  const effective = rows.filter(([, , status]) => status === 'effective')
-  eq(effective.length, 1, 'effective templates')
-  return `${rows.length} version(s); effective = v${effective[0][1]}, needs_legal_review=${effective[0][3]}`
-})
-
-check('05.3', 'db', 'agreement_templates has exactly the five expected policies', async () => {
-  const rows = await sql(`select cmd, count(*) from pg_policies where tablename='agreement_templates' group by 1 order by 1`)
-  const total = rows.reduce((a, [, n]) => a + Number(n), 0)
-  return assert(total === 5, `expected 5 policies, found ${total}: ${JSON.stringify(rows)}`)
-})
-
-check('05.4', 'db', 'an effective template body is immutable (trigger present)', async () => {
-  const n = await scalar(`select count(*) from pg_trigger
-     where tgrelid='agreement_templates'::regclass and not tgisinternal and tgname like '%immutable%'`)
-  return assert(n !== '0', n !== '0' ? 'immutability trigger present' : 'trigger missing — effective templates are editable')
-})
-
-check('05.5', 'db', 'publish_agreement_version is not executable by authenticated', async () => {
-  const rows = await sql(`
-    select p.proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace and n.nspname='public'
-     where p.proname='publish_agreement_version' and has_function_privilege('authenticated', p.oid, 'EXECUTE')`)
-  return assert(rows.length === 0, rows.length ? 'authenticated CAN execute publish_agreement_version' : 'EXECUTE denied to authenticated')
-})
-
 // ---- 06 · e-sign -------------------------------------------------------------
-
-check('06.2', 'db', 'agreement_signatures has 4 SELECT policies and zero write policies', async () => {
-  const rows = await sql(`select cmd, count(*) from pg_policies where tablename='agreement_signatures' group by 1`)
-  const byCmd = Object.fromEntries(rows)
-  eq(byCmd.SELECT ?? 0, 4, 'SELECT policies')
-  const writes = Object.entries(byCmd).filter(([cmd]) => cmd !== 'SELECT')
-  return assert(writes.length === 0, writes.length ? `write policies: ${JSON.stringify(writes)}` : '4 SELECT, 0 write')
-})
-
-check('06.3', 'db', 'executed-agreements bucket is private, 5 MB, text/html', async () => {
-  const rows = await sql(`select public, file_size_limit, allowed_mime_types from storage.buckets where id='executed-agreements'`)
-  assert(rows.length === 1, 'executed-agreements bucket does not exist')
-  const [pub, limit, mimes] = rows[0]
-  eq(pub, 'f', 'public')
-  eq(limit, '5242880', 'file_size_limit')
-  assert(/text\/html/.test(mimes), `allowed_mime_types is ${mimes}`)
-  return 'private, 5 MB, text/html'
-})
-
-check('06.4', 'db', 'agreement_signatures is append-only (immutability trigger present)', async () => {
-  const n = await scalar(`select count(*) from pg_trigger
-     where tgrelid='agreement_signatures'::regclass and not tgisinternal
-       and (tgname like '%append_only%' or tgname like '%immutable%')`)
-  return assert(n !== '0', n !== '0' ? 'append-only guard present' : 'no immutability trigger')
-})
-
-check('06.5', 'db', 'the signed-agreement gate exists on the fulfillment advance path', async () => {
-  const n = await scalar(`select count(*) from pg_proc p join pg_namespace ns on ns.oid=p.pronamespace
-     where ns.nspname='public' and p.proname='guard_fulfillment_requires_signed_agreement'`)
-  return assert(n !== '0', n !== '0' ? 'guard_fulfillment_requires_signed_agreement present' : 'gate function missing')
-})
 
 // ---- 07 · FIRST team verification --------------------------------------------
 
@@ -515,42 +376,6 @@ check('13.14', 'db', 'appeal state transitions are guarded in the database', asy
 
 // ---- 14 · recognition tiers --------------------------------------------------
 
-check('14.8', 'db', 'no benefit proof can exist without a no-minors affirmation', async () => {
-  const n = await scalar(`select count(*) from recognition_benefit_deliveries
-     where proof_url is not null and no_minors_confirmed_at is null`)
-  assert(n === '0', `${n} proofs lack a no-minors affirmation`)
-  const con = await scalar(`select count(*) from pg_constraint
-     where conrelid='recognition_benefit_deliveries'::regclass and contype='c'
-       and pg_get_constraintdef(oid) like '%no_minors_confirmed_at%'`)
-  assert(con !== '0', 'the CHECK constraint that makes this impossible is missing')
-  return '0 unaffirmed proofs, CHECK constraint present'
-})
-
-check('14.11', 'db', 'recognition tier ranges never overlap', async () => {
-  // Ranges are half-open `[min, max)` — see 0087:628 and recognition_tier_for_amount at
-  // 0087:197 (`amount >= min AND amount < max`). Adjacent tiers therefore share a boundary
-  // value legitimately; the comparison must be strict or every ladder reads as overlapping.
-  const rows = await sql(`
-    select a.name, b.name from recognition_tiers a join recognition_tiers b
-      on a.id < b.id and a.archived_at is null and b.archived_at is null
-     and a.min_amount_cents < coalesce(b.max_amount_cents, 9223372036854775807)
-     and coalesce(a.max_amount_cents, 9223372036854775807) > b.min_amount_cents`)
-  assert(rows.length === 0, `overlapping: ${JSON.stringify(rows)}`)
-  const ladder = await sql(`select name, min_amount_cents, coalesce(max_amount_cents::text, '∞')
-      from recognition_tiers where archived_at is null order by min_amount_cents`)
-  return ladder.map(([n, lo, hi]) => `${n}[${lo},${hi})`).join(' ')
-})
-
-check('14.12', 'db', 'the three recognition tables are read-only to authenticated', () =>
-  assertWriteSealed(['recognition_tiers', 'sponsor_recognition_awards', 'recognition_benefit_deliveries'])
-)
-
-check('14.13', 'grep', 'tier thresholds are never compared in app code (DB owns the ladder)', async () => {
-  const hits = await grep('min_amount_cents|max_amount_cents', ['app', 'components', 'lib'])
-  const comparisons = hits.filter((h) => /(min|max)_amount_cents\s*(<=|>=|<|>)|(<=|>=|<|>)\s*\w*\.(min|max)_amount_cents/.test(h))
-  return assert(comparisons.length === 0, comparisons.length ? comparisons.join('\n') : `${hits.length} refs, all display-only`)
-})
-
 check('14.14', 'grep', 'proof_url never reaches an audit or notification payload', async () => {
   const hits = await grep('proof_url', ['app/actions/recognition.ts'])
   const bad = hits.filter((h) => /audit|metadata|notif|title:|body:/i.test(h))
@@ -606,12 +431,23 @@ check('15.13', 'http', 'cron/impact-rollup rejects a missing bearer token with J
   return `401 ${body.slice(0, 80)}`
 })
 
-check('15.x-cron', 'env', 'every cron route in the repo is scheduled in vercel.json', async () => {
-  const scheduled = new Set(JSON.parse(read('vercel.json')).crons.map((c) => c.path))
+check('15.x-cron', 'env', 'vercel.json stays within the Hobby 2-cron cap and every unscheduled route is dispatched', async () => {
+  const scheduled = JSON.parse(read('vercel.json')).crons.map((c) => c.path)
+  assert(scheduled.length <= 2, `${scheduled.length} cron entries — Hobby honours only 2 and SILENTLY IGNORES the rest`)
+
   const { stdout } = await execFileAsync('ls', ['app/api/cron'], { cwd: ROOT })
   const routes = stdout.split('\n').filter(Boolean).map((d) => `/api/cron/${d}`)
-  const missing = routes.filter((r) => !scheduled.has(r))
-  return assert(missing.length === 0, missing.length ? `unscheduled: ${missing.join(', ')}` : `all ${routes.length} cron routes scheduled`)
+
+  // A route that is neither scheduled nor called by the dispatcher is dead code that looks
+  // alive — exactly the A-09-05 failure, where three jobs never ran for months.
+  const dispatcher = read('app/api/cron/daily-maintenance/route.ts')
+  const orphaned = routes.filter(
+    (r) => !scheduled.includes(r) && !dispatcher.includes(r.replace('/api/cron/', '../'))
+  )
+  return assert(
+    orphaned.length === 0,
+    orphaned.length ? `neither scheduled nor dispatched: ${orphaned.join(', ')}` : `${scheduled.length} scheduled, ${routes.length - scheduled.length} dispatched`
+  )
 })
 
 // ---- 16 · BotID & email domain gating ----------------------------------------

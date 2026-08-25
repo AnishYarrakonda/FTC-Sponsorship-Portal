@@ -2,8 +2,9 @@
 
 A platform connecting verified adult FTC robotics coaches with corporate sponsors.
 Coaches build a team Portfolio and submit tailored pitches; admins moderate and
-gate sponsor-facing outreach; sponsors review approved pitches and fund teams under
-strict capacity caps. Next.js 16 (App Router) + Clerk (auth) + Supabase (Postgres + Storage) + Resend.
+gate sponsor-facing outreach; sponsors accept in full or for a smaller amount under strict
+capacity caps. The platform never touches the money and tracks nothing after acceptance —
+both parties get each other's contact details and settle up directly. Next.js 16 (App Router) + Clerk (auth) + Supabase (Postgres + Storage) + Resend.
 
 ## Core Mandates (never violate)
 - **COPPA Compliance**: No student PII collected or exposed. Verified adult coaches only.
@@ -39,10 +40,25 @@ by an external Gemini agent, which writes evidence to `prompts/audits/findings/`
 self-contained fix prompt to `prompts/audits/handoff/` for Claude Code to execute. Start with
 `prompts/audits/_RUNNER-AUDIT.md`; `prompts/audits/_CONTEXT-AUDIT.md` is their shared contract.
 
-Decisions already locked there — do not relitigate: the platform **never touches funds**
-(pledge-and-track only), e-sign is **in-house** (ESIGN/UETA), sponsor multi-user is built on
-**Clerk Organizations**, and FTC verification uses the **official FIRST API** with FTCScout
-as fallback.
+Decisions already locked there — do not relitigate: the platform **never touches funds**,
+sponsor multi-user is built on **Clerk Organizations**, and FTC verification uses the
+**official FIRST API** with FTCScout as fallback.
+
+**REVERSED (migration `0111`).** These were locked decisions and are no longer true:
+- ~~e-sign is in-house (ESIGN/UETA)~~ — **there is no e-signature layer.** Agreement
+  templates, signatures, the signing pages and the executed-agreements bucket are gone.
+- ~~pledge-and-track~~ — the platform tracks nothing after acceptance. The payment state
+  machine, W-9/payout profiles, tax receipts and recognition tiers were all removed.
+
+The product is now a **matchmaker**: coach pitches → admin moderates → sponsor accepts (in
+full or for less) → both parties get each other's contact details → everything after that
+happens off-platform. `prompts/revamp/05-*` and `06-*` describe the removed layers and are
+history, not a spec.
+
+The one post-acceptance capacity operation that remains is **voiding a match**
+(`void_match_atomic`, `app/actions/void-match.ts`, exposed at `/admin/capacity`). It is the
+only way to release capacity a sponsor committed, and it writes a compensating NEGATIVE
+`transactions_ledger` row rather than deleting anything.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

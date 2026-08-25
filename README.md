@@ -58,8 +58,18 @@ RESEND_FROM_EMAIL=noreply@yourdomain.com
 RESEND_WEBHOOK_SECRET=                # Svix signing secret; required in production
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 CRON_SECRET=                          # bearer token for the Vercel cron; required
+DATABASE_URL=                         # direct Postgres URL — NOT read by the app; used by
+                                      # `psql -f` for migrations and by scripts/*.mjs
 # Optional: SENTRY_DSN, NEXT_PUBLIC_SENTRY_DSN, ADMIN_NOTIFICATION_EMAILS
+# Optional: FIRST_API_USERNAME, FIRST_API_TOKEN — official FIRST roster lookup for coach
+#           verification. Absent, it falls back to FTCScout silently; nothing warns you.
 ```
+
+> Every variable listed as required is validated by `lib/env.ts`, which **throws in
+> production** if one is missing — so a typo here takes the whole site down rather than
+> degrading one feature. Leave `SENTRY_DSN` genuinely blank rather than pasting a
+> placeholder; the schema tolerates a malformed value on purpose, because the old literal
+> placeholder made it into Vercel more than once.
 
 > **Use the legacy Supabase JWT keys** (Settings → API → JWT keys, they start with `eyJ`). The new `sb_publishable_…` / `sb_secret_…` format is **not** reliably accepted by the API. There is **no** Upstash/Redis dependency — rate limiting was removed.
 
@@ -100,7 +110,7 @@ app/
   sponsor-view/    # Public, token-authenticated pitch viewer
   api/
     webhooks/      # Resend bounce/open + Clerk (user.deleted / email sync) webhook handlers
-    cron/          # Scheduled jobs (e.g. expiring submissions)
+    cron/          # Two scheduled jobs; the 02:00 one is ALSO the Supabase keepalive
     health/        # Liveness + authed deep DB probe
 components/
   portfolio-builder/ # Multi-step submission form
@@ -133,4 +143,20 @@ emails/            # React Email templates
 
 ## Deployment
 
-Live on Vercel at **https://ftc-sponsorship-portal.vercel.app** (Hobby tier). Runtime env vars are configured in the Vercel project (not committed). The daily cron (`/api/cron/expire-submissions`) is defined in `vercel.json` and authed with `CRON_SECRET`. See `CLAUDE.md` → "Deployment & Ops" for the Supabase-key and migration gotchas.
+Live on Vercel (Hobby tier). Runtime env vars are configured in the Vercel project, not
+committed.
+
+**Deploys are manual — pushing to `main` does nothing.** There is no Git integration on the
+Vercel project. Ship with `vercel deploy --prod --yes`.
+
+Two crons are scheduled in `vercel.json` and authed with `CRON_SECRET`. **The 02:00
+`/api/cron/expire-submissions` job is also what keeps Supabase from pausing the free project
+— disabling it takes the site down seven days later, silently.** Vercel Hobby runs only two
+scheduled entries and ignores extras without warning, which is why `daily-maintenance` is a
+dispatcher; a new job goes inside it, not into `vercel.json`.
+
+- **`docs/RUNBOOK.md`** — operations, written for a non-developer: deploy, rollback, add an
+  admin, apply a migration, symptom→fix.
+- **`docs/PURCHASE-CHECKLIST.md`** — the accounts and the one domain that still need buying.
+- **`docs/GO-LIVE-AND-HANDOFF.md`** — launch blockers and long-term ownership.
+- `CLAUDE.md` → "Deployment & Ops" for the Supabase-key and migration gotchas.

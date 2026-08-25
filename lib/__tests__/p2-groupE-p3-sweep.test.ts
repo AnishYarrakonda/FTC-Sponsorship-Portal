@@ -281,7 +281,6 @@ describe('P3 — docs', () => {
     const doc = read('.claude/rules/architecture.md')
     expect(doc).toContain('cron/daily-maintenance')
     expect(doc).toContain('cron/refresh-ftc-roster')
-    expect(doc).toContain('cron/nudge-fulfillments')
     expect(doc).toContain('cron/impact-rollup')
   })
 
