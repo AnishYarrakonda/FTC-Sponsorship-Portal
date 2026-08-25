@@ -16,11 +16,14 @@ function Card({
         className
       )}
       style={{
-        background: "var(--bg-surface)",
-        border: "1px solid var(--border-color)",
-        borderRadius: "6px",
+        backgroundColor: "rgba(255, 252, 247, 0.65)",
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
+        border: "1px solid rgba(231, 225, 214, 0.6)",
+        borderRadius: "12px",
         padding: "20px 24px",
         color: "var(--text-primary)",
+        boxShadow: "0 8px 32px rgba(0, 0, 0, 0.03)",
       }}
       {...props}
     />
