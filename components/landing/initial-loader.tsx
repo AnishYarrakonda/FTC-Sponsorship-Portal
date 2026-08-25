@@ -31,6 +31,9 @@ export function InitialLoader() {
       window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
     if (alreadySeen || prefersReducedMotion) {
+      setIsLoading(false)
+      document.body.style.overflow = ''
+      document.documentElement.style.overflow = ''
       window.dispatchEvent(new CustomEvent('initial-loader-complete'))
       return
     }
