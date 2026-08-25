@@ -2,6 +2,7 @@ import { PageHeader } from '@/components/page-header'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { runCapacityAudit } from '@/app/actions/capacity-audit'
 import { CapacityDriftTable } from '@/components/admin/capacity-drift-table'
+import { LiveMatches } from './live-matches'
 
 // The audit reads live rows and writes an audit_log entry each time it runs, so it must
 // never be served from the full-route cache.
@@ -25,6 +26,10 @@ export default async function CapacityAuditPage() {
         <CapacityDriftTable rows={result.rows} sponsorCount={result.sponsorCount} />
       )}
 
+      {/* Called as a function, not rendered as <LiveMatches />: both are Server Components
+          and awaiting it here keeps the Supabase client out of a serialized prop boundary. */}
+      {await LiveMatches()}
+
       <div className="rounded-xl border border-border bg-card/50 px-5 py-4 text-sm text-muted-foreground">
         <p className="font-medium text-foreground">The invariant</p>
         {/* B-04-09. The drift formula is wider than the card on every viewport the audit
@@ -36,8 +41,10 @@ export default async function CapacityAuditPage() {
         </pre>
         <p className="mt-3">
           Reserving happens at admin approval, settling at the sponsor&apos;s decision, and releasing on
-          decline, partial fund, expiry, bounce, or account deletion. The same check runs nightly with
-          the 02:00 UTC cron and reports to Sentry.
+          decline, partial fund, expiry, bounce, account deletion, or an admin voiding a match above.
+          A void is a negative <code>transactions_ledger</code> row rather than a deletion, so the sum
+          on the right stays correct without rewriting history. The same check runs nightly with the
+          02:00 UTC cron and reports to Sentry.
         </p>
       </div>
     </div>
