@@ -48,7 +48,6 @@ const MODES = {
     env: { NEXT_PUBLIC_DEV_AUTH_BYPASS: 'true' },
     routes: [
       '/admin',
-      '/agreements',
       '/admin/domains',
       '/admin/capacity',
       '/admin/appeals',
@@ -59,9 +58,6 @@ const MODES = {
       '/coaches',
       '/sponsors',
       '/impact',
-      '/payouts',
-      '/reconciliation',
-      '/recognition',
     ],
   },
   sponsor: {
@@ -69,11 +65,9 @@ const MODES = {
     env: { NEXT_PUBLIC_SPONSOR_PREVIEW: '1' },
     routes: [
       '/sponsor/dashboard',
-      '/sponsor/funding',
       '/sponsor/members',
       '/sponsor/approvals',
       '/sponsor/submissions',
-      '/sponsor/recognition',
       '/sponsor/impact',
       '/sponsor/inbox',
       '/sponsor/settings',
@@ -82,7 +76,7 @@ const MODES = {
   coach: {
     script: 'dev:coach-preview',
     env: { NEXT_PUBLIC_COACH_PREVIEW: '1' },
-    routes: ['/dashboard', '/submissions/new', '/sponsors/browse', '/appeals', '/team/payout'],
+    routes: ['/dashboard', '/submissions/new', '/sponsors/browse', '/appeals'],
   },
 }
 

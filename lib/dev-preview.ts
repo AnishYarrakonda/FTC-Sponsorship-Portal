@@ -13,7 +13,6 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from './supabase/types'
-import { PREVIEW_PLACEHOLDER_IMAGE } from './dev-placeholder-image'
 
 export const SPONSOR_PREVIEW =
   process.env.NODE_ENV !== 'production' &&
@@ -322,61 +321,6 @@ const transactions = [
   { id: 'txn-1', sponsor_id: SPONSOR_ID, submission_id: 'preview-sub-4', team_id: TEAM_ID_A, amount_cents: 500_000, actor_type: 'sponsor', decision_type: 'approve', created_at: '2026-04-15T11:00:00.000Z', teams: { team_name: 'Quantum Foxes' } },
 ]
 
-const fulfillments = [
-  { id: 'f-1', sponsor_id: SPONSOR_ID, submission_id: 'preview-sub-4', team_id: TEAM_ID_A, amount_cents: 500_000, status: 'receipted', receipt_number: 'PF-2026-000001', pledged_at: '2026-04-15T11:00:00.000Z', payment_sent_at: '2026-04-17T11:00:00.000Z', payment_received_at: '2026-04-20T11:00:00.000Z', teams: { team_name: 'Quantum Foxes' } },
-]
-
-const receipts = [
-  {
-    id: 'rec-1',
-    receipt_number: 'PF-2026-000001',
-    fulfillment_id: 'f-1',
-    transaction_id: 'txn-1',
-    sponsor_id: SPONSOR_ID,
-    team_id: TEAM_ID_A,
-    amount_cents: 500_000,
-    contribution_date: '2026-04-20',
-    variant: 'charitable_501c3',
-    payee_legal_name: 'Quantum Foxes Robotics Booster Club Inc.',
-    payee_ein_last4: '1234',
-    payee_tax_classification: '501c3_org',
-    sponsor_legal_name: 'Helix Robotics Foundation',
-    sponsor_contact_email: 'partnerships@helix.example',
-    document_html: '<div style="padding: 24px;"><h1>Contribution acknowledgment</h1><p>Quantum Foxes Robotics Booster Club Inc. (EIN 12-3456789) acknowledges receipt of $5,000.00 from Helix Robotics Foundation on 2026-04-20.</p><p><strong>No goods or services were provided by Quantum Foxes Robotics Booster Club Inc. in exchange for this contribution.</strong></p></div>',
-    document_sha256: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
-    copy_version: '2026-08-v1',
-    copy_reviewed_at: null,
-    status: 'issued',
-    issued_at: '2026-04-20T12:00:00.000Z',
-    emailed_at: '2026-04-20T12:01:00.000Z',
-    teams: { team_name: 'Quantum Foxes' }
-  },
-  {
-    id: 'rec-voided',
-    receipt_number: 'PF-2026-000000',
-    fulfillment_id: 'f-1',
-    transaction_id: 'txn-1',
-    sponsor_id: SPONSOR_ID,
-    team_id: TEAM_ID_A,
-    amount_cents: 500_000,
-    contribution_date: '2026-04-20',
-    variant: 'charitable_501c3',
-    payee_legal_name: 'Quantum Foxes Robotics Team',
-    payee_ein_last4: '1234',
-    sponsor_legal_name: 'Helix Robotics Foundation',
-    document_html: '<div style="padding: 24px;"><h1>Contribution acknowledgment</h1><p>Draft receipt superseded by PF-2026-000001.</p></div>',
-    document_sha256: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
-    copy_version: '2026-08-v1',
-    copy_reviewed_at: null,
-    status: 'voided',
-    issued_at: '2026-04-19T12:00:00.000Z',
-    voided_at: '2026-04-20T11:59:00.000Z',
-    voided_reason: 'Payee legal name updated from team name to booster club legal entity name.',
-    superseded_by_receipt_id: 'rec-1',
-    teams: { team_name: 'Quantum Foxes' }
-  }
-]
-
 const MEMBER_PROFILE_ID = 'preview-member-profile'
 
 const sponsorMembers = [
@@ -476,58 +420,6 @@ const sponsorDecisionProposals = [
   },
 ]
 
-const agreementSignatures = [
-  {
-    id: '00000000-0000-4000-8000-000000000101',
-    template_id: 'agr-1',
-    template_key: 'sponsorship_agreement',
-    template_version: 1,
-    signer_profile_id: PROFILE_ID,
-    signer_role: 'sponsor',
-    signer_legal_name: profile.full_name,
-    signer_email: profile.email,
-    submission_id: 'preview-sub-4',
-    sponsor_id: SPONSOR_ID,
-    team_id: TEAM_ID_A,
-    entity_snapshot: { team_number: teamA.ftc_team_number, team_name: teamA.team_name, team_organization: teamA.organization, sponsor_company_name: sponsor.company_name, amount_cents: 500_000 },
-    typed_name: profile.full_name,
-    signed_at: '2026-04-15T11:02:00.000Z',
-    ip_address: '203.0.113.10',
-    user_agent: 'Mozilla/5.0 (dev preview)',
-    document_hash: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
-    document_storage_path: 'preview/sig-sponsor-1.html',
-    consent_text_version: 1,
-    consent_text_hash: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
-    created_at: '2026-04-15T11:02:00.000Z',
-  },
-  {
-    id: '00000000-0000-4000-8000-000000000102',
-    template_id: 'agr-1',
-    template_key: 'sponsorship_agreement',
-    template_version: 1,
-    signer_profile_id: 'preview-coach',
-    signer_role: 'coach',
-    signer_legal_name: 'Preview Coach',
-    signer_email: 'coach@preview.local',
-    submission_id: 'preview-sub-4',
-    sponsor_id: SPONSOR_ID,
-    team_id: TEAM_ID_A,
-    entity_snapshot: { team_number: teamA.ftc_team_number, team_name: teamA.team_name, team_organization: teamA.organization, sponsor_company_name: sponsor.company_name, amount_cents: 500_000 },
-    typed_name: 'Preview Coach',
-    signed_at: '2026-04-16T09:30:00.000Z',
-    ip_address: '203.0.113.42',
-    user_agent: 'Mozilla/5.0 (dev preview)',
-    document_hash: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
-    document_storage_path: 'preview/sig-coach-1.html',
-    consent_text_version: 1,
-    consent_text_hash: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
-    created_at: '2026-04-16T09:30:00.000Z',
-  },
-]
-
-// Q&A thread (0085). Only RELEASED coach messages appear here: a sponsor must never see a
-// reply that is still in review, and the preview should not model a state the real policies
-// forbid. The sponsor's own question is here too, which is what the composer produces.
 const submissionMessages = [
   {
     id: 'msg-1', submission_id: 'preview-sub-2', author_role: 'sponsor',
@@ -554,9 +446,6 @@ const FIXTURES: Record<string, unknown[]> = {
   submissions,
   notifications,
   transactions_ledger: transactions,
-  funding_fulfillments: fulfillments,
-  funding_receipts: receipts,
-  agreement_signatures: agreementSignatures,
   sponsor_members: sponsorMembers,
   sponsor_decision_proposals: sponsorDecisionProposals,
   submission_messages: submissionMessages,
@@ -565,39 +454,6 @@ const FIXTURES: Record<string, unknown[]> = {
   appeals: [],
   // One award seen from the sponsor's side: one benefit delivered with proof, one still
   // outstanding so the "Not needed" waive control is browsable.
-  sponsor_recognition_awards: [
-    {
-      id: 'award-preview-s1',
-      fulfillment_id: 'ff-preview-s1',
-      sponsor_id: sponsor.id,
-      team_id: teamA.id,
-      amount_cents: 300000,
-      tier_id: 'tier-silver',
-      tier_name_snapshot: 'Silver',
-      tier_rank_snapshot: 2,
-      tier_min_amount_cents_snapshot: 250000,
-      benefits_snapshot: ['logo_on_website', 'social_media_mention'],
-      awarded_at: '2026-06-20T15:00:00.000Z',
-      created_at: '2026-06-20T15:00:00.000Z',
-      updated_at: '2026-07-05T15:00:00.000Z',
-      teams: { team_name: teamA.team_name },
-      recognition_benefit_deliveries: [
-        {
-          id: 'del-preview-s1', award_id: 'award-preview-s1', benefit_type: 'logo_on_website',
-          status: 'delivered',
-          proof_url: PREVIEW_PLACEHOLDER_IMAGE,
-          proof_uploaded_at: '2026-07-05T15:00:00.000Z',
-          delivered_at: '2026-07-05T15:00:00.000Z',
-        },
-        {
-          id: 'del-preview-s2', award_id: 'award-preview-s1', benefit_type: 'social_media_mention',
-          status: 'promised',
-          proof_url: null, proof_uploaded_at: null, delivered_at: null,
-        },
-      ],
-    },
-  ],
-  recognition_benefit_deliveries: [],
   // One open and one closed year, so the index's Open/Final chips and the print view are
   // both browsable without a database.
   impact_report_snapshots: [
