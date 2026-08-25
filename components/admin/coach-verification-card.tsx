@@ -181,12 +181,12 @@ export function CoachVerificationCard({ coach }: { coach: CoachData }) {
             </span>
           )}
           {!coach.coach_verified && hasPendingData && (
-             <span className="inline-flex items-center rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 text-[10px] font-medium px-2 py-0.5">
+             <span className="inline-flex items-center rounded-full bg-[var(--badge-pending-bg)] border border-[var(--badge-pending-text)]/25 text-[var(--badge-pending-text)] text-[10px] font-medium px-2 py-0.5">
                Data Pending Review
              </span>
           )}
           {wasDenied && (
-             <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 border border-red-500/20 text-red-600 text-[10px] font-medium px-2 py-0.5">
+             <span className="inline-flex items-center gap-1 rounded-full bg-[var(--badge-rejected-bg)] border border-[var(--badge-rejected-text)]/25 text-[var(--badge-rejected-text)] text-[10px] font-medium px-2 py-0.5">
                <XCircle className="h-3 w-3" /> Previously denied {new Date(coach.denied_at!).toLocaleDateString()}
              </span>
           )}

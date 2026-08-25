@@ -19,7 +19,6 @@ const envSchema = z.object({
   RESEND_WEBHOOK_SECRET: z.string().min(1).optional(), // Optional for dev environments
   // App
   NEXT_PUBLIC_APP_URL: z.string().url(),
-  PAYOUT_ENCRYPTION_KEY: z.string().min(32),
   // Comma-separated list of admin recipient emails for system alerts.
 
   // If unset, notify falls back to a profiles.role='admin' query.

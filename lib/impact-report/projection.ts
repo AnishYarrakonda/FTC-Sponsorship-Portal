@@ -56,20 +56,14 @@ export const IMPACT_ACHIEVEMENT_FIELDS = ['season', 'event_name', 'award', 'desc
  * Not `payment_reference` (prompt 01 forbids it leaving the row, and a CSR report gets
  * emailed around) and not `notes` (free text that may name a person at the sponsor).
  */
-export const IMPACT_FULFILLMENT_FIELDS = [
+// 0111: sourced from transactions_ledger, not the retired funding_fulfillments table. The
+// ledger is the complete record of a match now, and it carries nothing about a team or a
+// student -- only who committed how much, when, and whether it was later voided.
+export const IMPACT_LEDGER_FIELDS = [
   'amount_cents',
-  'status',
-  'pledged_at',
-  'payment_received_at',
-  'receipted_at',
-  // A-12-04. The SPONSOR's own purchase-order reference. Safe on this allowlist: it is
-  // authored by the sponsor's finance team about their own commitment, so it carries no
-  // team or student information, and it is the field their AP department reconciles
-  // against. Note `payment_reference` (a cheque/ACH number) stays excluded.
-  'po_number',
+  'decision_type',
+  'created_at',
 ] as const
-
-export const IMPACT_BENEFIT_FIELDS = ['benefit_type', 'status', 'delivered_at', 'proof_url'] as const
 
 /**
  * Every one of these has a recorded reason:
@@ -86,7 +80,7 @@ export const IMPACT_BENEFIT_FIELDS = ['benefit_type', 'status', 'delivered_at', 
  *    sponsor's own CSR document is a needless awkwardness.
  *  - Free text on `submissions` — a coach's prose about a specific ask, not impact, and the
  *    highest-risk place for an incidental student mention.
- *  - `payment_reference`, `notes` — see IMPACT_FULFILLMENT_FIELDS.
+ *  - `payment_reference`, `notes` — belonged to the retired fulfillment table (0111).
  */
 export const IMPACT_FORBIDDEN_KEYS = [
   'full_name',
@@ -127,11 +121,8 @@ export function impactTeamSelect(): string {
 export function impactAchievementSelect(): string {
   return IMPACT_ACHIEVEMENT_FIELDS.join(',')
 }
-export function impactFulfillmentSelect(): string {
-  return IMPACT_FULFILLMENT_FIELDS.join(',')
-}
-export function impactBenefitSelect(): string {
-  return IMPACT_BENEFIT_FIELDS.join(',')
+export function impactLedgerSelect(): string {
+  return IMPACT_LEDGER_FIELDS.join(',')
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -166,21 +157,15 @@ export interface ImpactAchievement {
   description: string | null
 }
 
-export interface ImpactFulfillment {
+/**
+ * One sponsor commitment. `decision_type` is 'full' | 'partial' | 'void'; a void row carries
+ * a NEGATIVE amount_cents and reverses an earlier match, so a consumer that sums these gets
+ * the correct net without special-casing anything.
+ */
+export interface ImpactMatch {
   amount_cents: number
-  status: string
-  pledged_at: string | null
-  payment_received_at: string | null
-  receipted_at: string | null
-  /** A-12-04. Sponsor-authored PO reference; null when their AP has not issued one. */
-  po_number: string | null
-}
-
-export interface ImpactBenefit {
-  benefit_type: string
-  status: string
-  delivered_at: string | null
-  proof_url: string | null
+  decision_type: string
+  matched_at: string | null
 }
 
 // Raw rows are deliberately typed loosely: a real query returns exactly the allowlisted
@@ -261,23 +246,11 @@ export function projectAchievement(row: RawRow): ImpactAchievement {
   }
 }
 
-export function projectFulfillment(row: RawRow): ImpactFulfillment {
+export function projectMatch(row: RawRow): ImpactMatch {
   return {
     amount_cents: num(row.amount_cents) ?? 0,
-    status: str(row.status) ?? 'pledged',
-    pledged_at: str(row.pledged_at),
-    payment_received_at: str(row.payment_received_at),
-    receipted_at: str(row.receipted_at),
-    po_number: str(row.po_number),
-  }
-}
-
-export function projectBenefit(row: RawRow): ImpactBenefit {
-  return {
-    benefit_type: str(row.benefit_type) ?? 'unknown',
-    status: str(row.status) ?? 'promised',
-    delivered_at: str(row.delivered_at),
-    proof_url: str(row.proof_url),
+    decision_type: str(row.decision_type) ?? 'full',
+    matched_at: str(row.created_at),
   }
 }
 

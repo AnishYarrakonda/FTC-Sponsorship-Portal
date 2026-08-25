@@ -5,52 +5,46 @@
  * projection.ts — never `select('*')`, never a hand-written string, and never a join on
  * `profiles`.
  *
- * Year boundary: a fulfillment belongs to a report year by PLEDGED_AT, the commitment
- * date, not by payment_received_at. A December pledge paid in February stays in the
- * December report and shows as outstanding until the following regeneration. That is
- * stated in the payload's own `footnotes` because a finance reader will ask.
+ * Year boundary: a match belongs to a report year by the ledger row's CREATED_AT, i.e. the
+ * date the sponsor committed. Nothing tracks when (or whether) money moved, so there is no
+ * second date it could be filed under. That is stated in the payload's own `footnotes`
+ * because a finance reader will ask.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 import {
   impactAchievementSelect,
-  impactBenefitSelect,
-  impactFulfillmentSelect,
+  impactLedgerSelect,
   impactTeamSelect,
   projectAchievement,
-  projectBenefit,
-  projectFulfillment,
+  projectMatch,
   projectTeam,
   type ImpactAchievement,
-  type ImpactBenefit,
-  type ImpactFulfillment,
+  type ImpactMatch,
   type ImpactTeam,
 } from './projection'
 
 export const IMPACT_PAYLOAD_SCHEMA_VERSION = 1
 
-/** Statuses that mean the money actually cleared. Everything else is a promise. */
-const RECEIVED_STATUSES = ['payment_received', 'receipted']
-
+/**
+ * 0111: the pledged/received/outstanding split is gone with the fulfillment state machine.
+ * Nothing in the product observes whether money actually arrived -- the platform never
+ * touches funds -- so reporting a "received" figure would have been an assertion we cannot
+ * support. One honest number remains: what sponsors COMMITTED TO.
+ */
 export interface ImpactTotals {
-  pledged_cents: number
-  received_cents: number
-  /** pledged − received, floored at zero. */
-  outstanding_cents: number
+  matched_cents: number
   teams_supported: number
   students_reached: number
   events_hosted: number
   volunteer_hours: number
-  benefits_promised: number
-  benefits_delivered: number
 }
 
 export interface ImpactTeamSection {
   team: ImpactTeam
   achievements: ImpactAchievement[]
-  fulfillments: ImpactFulfillment[]
-  recognition: { tier_name: string | null; benefits: ImpactBenefit[] }
+  matches: ImpactMatch[]
 }
 
 export interface SponsorImpactPayload {
@@ -74,7 +68,7 @@ export interface PlatformImpactPayload {
 
 /**
  * Named `footnotes`, not `notes`: `notes` is on IMPACT_FORBIDDEN_KEYS (it is a free-text
- * column on both sponsors and funding_fulfillments), and findForbiddenKeys is deliberately
+ * column that also existed on the retired fulfillment table), and findForbiddenKeys is deliberately
  * a blunt key-name check with no exceptions. A legitimate field must not share the name.
  */
 const FOOTNOTES = [
@@ -89,22 +83,12 @@ function yearBounds(year: number): { from: string; to: string } {
 
 function emptyTotals(): ImpactTotals {
   return {
-    pledged_cents: 0,
-    received_cents: 0,
-    outstanding_cents: 0,
+    matched_cents: 0,
     teams_supported: 0,
     students_reached: 0,
     events_hosted: 0,
     volunteer_hours: 0,
-    benefits_promised: 0,
-    benefits_delivered: 0,
   }
-}
-
-/** Never negative: a receipted total exceeding the pledged total would be a data bug, not
- *  a negative debt to display to a CFO. */
-export function outstandingCents(pledged: number, received: number): number {
-  return Math.max(0, pledged - received)
 }
 
 export async function buildSponsorImpactPayload(
@@ -123,42 +107,37 @@ export async function buildSponsorImpactPayload(
     .eq('id', sponsorId)
     .maybeSingle()
 
-  const { data: fulfillmentRows } = await adminClient
-    .from('funding_fulfillments')
-    .select(`team_id, ${impactFulfillmentSelect()}`)
+  const { data: ledgerRows } = await adminClient
+    .from('transactions_ledger')
+    .select(`team_id, ${impactLedgerSelect()}`)
     .eq('sponsor_id', sponsorId)
-    .neq('status', 'cancelled')
-    .gte('pledged_at', from)
-    .lt('pledged_at', to)
+    .gte('created_at', from)
+    .lt('created_at', to)
 
-  const rows = (fulfillmentRows ?? []) as unknown as (Record<string, unknown> & { team_id: string | null })[]
-  const teamIds = Array.from(new Set(rows.map((r) => r.team_id).filter((id): id is string => !!id)))
+  const rows = (ledgerRows ?? []) as unknown as (Record<string, unknown> & { team_id: string | null })[]
+
+  // Net per team, so a match voided inside the same report year drops out of both the money
+  // and the team count rather than inflating a CSR report with a sponsorship that unwound.
+  const netByTeam = new Map<string, number>()
+  for (const r of rows) {
+    if (!r.team_id) continue
+    const amount = typeof r.amount_cents === 'number' ? r.amount_cents : 0
+    netByTeam.set(r.team_id, (netByTeam.get(r.team_id) ?? 0) + amount)
+  }
+  const teamIds = Array.from(netByTeam.entries()).filter(([, net]) => net > 0).map(([id]) => id)
 
   const totals = emptyTotals()
-  for (const r of rows) {
-    const amount = typeof r.amount_cents === 'number' ? r.amount_cents : 0
-    totals.pledged_cents += amount
-    if (typeof r.status === 'string' && RECEIVED_STATUSES.includes(r.status)) {
-      totals.received_cents += amount
-    }
-  }
+  totals.matched_cents = teamIds.reduce((sum, id) => sum + (netByTeam.get(id) ?? 0), 0)
   totals.teams_supported = teamIds.length
 
   const teams: ImpactTeamSection[] = []
 
   if (teamIds.length > 0) {
-    const [{ data: teamRows }, { data: achievementRows }, { data: awardRows }] = await Promise.all([
+    const [{ data: teamRows }, { data: achievementRows }] = await Promise.all([
       adminClient.from('teams').select(impactTeamSelect()).in('id', teamIds).is('deleted_at', null),
       adminClient
         .from('team_achievements')
         .select(`team_id, ${impactAchievementSelect()}`)
-        .in('team_id', teamIds),
-      adminClient
-        .from('sponsor_recognition_awards')
-        .select(
-          `team_id, tier_name_snapshot, recognition_benefit_deliveries(${impactBenefitSelect()})`
-        )
-        .eq('sponsor_id', sponsorId)
         .in('team_id', teamIds),
     ])
 
@@ -168,20 +147,6 @@ export async function buildSponsorImpactPayload(
       const list = achievementsByTeam.get(key) ?? []
       list.push(projectAchievement(a))
       achievementsByTeam.set(key, list)
-    }
-
-    const recognitionByTeam = new Map<string, { tier_name: string | null; benefits: ImpactBenefit[] }>()
-    for (const a of (awardRows ?? []) as unknown as Record<string, unknown>[]) {
-      const key = String(a.team_id)
-      const benefits = Array.isArray(a.recognition_benefit_deliveries)
-        ? (a.recognition_benefit_deliveries as Record<string, unknown>[]).map(projectBenefit)
-        : []
-      recognitionByTeam.set(key, {
-        tier_name: typeof a.tier_name_snapshot === 'string' ? a.tier_name_snapshot : null,
-        benefits,
-      })
-      totals.benefits_promised += benefits.length
-      totals.benefits_delivered += benefits.filter((b) => b.status === 'delivered').length
     }
 
     for (const t of (teamRows ?? []) as unknown as Record<string, unknown>[]) {
@@ -194,13 +159,10 @@ export async function buildSponsorImpactPayload(
       teams.push({
         team,
         achievements: achievementsByTeam.get(id) ?? [],
-        fulfillments: rows.filter((r) => r.team_id === id).map(projectFulfillment),
-        recognition: recognitionByTeam.get(id) ?? { tier_name: null, benefits: [] },
+        matches: rows.filter((r) => r.team_id === id).map(projectMatch),
       })
     }
   }
-
-  totals.outstanding_cents = outstandingCents(totals.pledged_cents, totals.received_cents)
 
   return {
     schema_version: IMPACT_PAYLOAD_SCHEMA_VERSION,
@@ -228,21 +190,24 @@ export async function buildPlatformImpactPayload(
   const { from, to } = yearBounds(year)
   const generatedAt = new Date().toISOString()
 
-  const { data: fulfillmentRows } = await adminClient
-    .from('funding_fulfillments')
-    .select('team_id, amount_cents, status')
-    .neq('status', 'cancelled')
-    .gte('pledged_at', from)
-    .lt('pledged_at', to)
+  const { data: ledgerRows } = await adminClient
+    .from('transactions_ledger')
+    .select('team_id, amount_cents')
+    .gte('created_at', from)
+    .lt('created_at', to)
 
-  const rows = (fulfillmentRows ?? []) as unknown as { team_id: string | null; amount_cents: number; status: string }[]
-  const teamIds = Array.from(new Set(rows.map((r) => r.team_id).filter((id): id is string => !!id)))
+  const rows = (ledgerRows ?? []) as unknown as { team_id: string | null; amount_cents: number }[]
+
+  // Same net-per-team rule as the sponsor payload; see the comment there.
+  const netByTeam = new Map<string, number>()
+  for (const r of rows) {
+    if (!r.team_id) continue
+    netByTeam.set(r.team_id, (netByTeam.get(r.team_id) ?? 0) + (r.amount_cents ?? 0))
+  }
+  const teamIds = Array.from(netByTeam.entries()).filter(([, net]) => net > 0).map(([id]) => id)
 
   const totals = emptyTotals()
-  for (const r of rows) {
-    totals.pledged_cents += r.amount_cents ?? 0
-    if (RECEIVED_STATUSES.includes(r.status)) totals.received_cents += r.amount_cents ?? 0
-  }
+  totals.matched_cents = teamIds.reduce((sum, id) => sum + (netByTeam.get(id) ?? 0), 0)
   totals.teams_supported = teamIds.length
 
   if (teamIds.length > 0) {
@@ -257,17 +222,7 @@ export async function buildPlatformImpactPayload(
       totals.events_hosted += t.events_hosted ?? 0
       totals.volunteer_hours += t.volunteer_hours ?? 0
     }
-
-    const { data: benefitRows } = await adminClient
-      .from('recognition_benefit_deliveries')
-      .select('status')
-    for (const b of (benefitRows ?? []) as unknown as { status: string }[]) {
-      totals.benefits_promised += 1
-      if (b.status === 'delivered') totals.benefits_delivered += 1
-    }
   }
-
-  totals.outstanding_cents = outstandingCents(totals.pledged_cents, totals.received_cents)
 
   const { count: sponsorsActive } = await adminClient
     .from('sponsors')

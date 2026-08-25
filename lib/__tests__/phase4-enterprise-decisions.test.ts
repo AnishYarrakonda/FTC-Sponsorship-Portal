@@ -9,10 +9,11 @@
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
+import { execSync } from 'node:child_process'
 import { join } from 'node:path'
 import { pickActiveSponsorId, ACTIVE_SPONSOR_COOKIE_OPTIONS } from '../active-sponsor-org'
 import { ORG_ADMIN_WRITABLE_SPONSOR_COLUMNS } from '../sponsor-org-writes'
-import { projectFulfillment, IMPACT_FULFILLMENT_FIELDS, IMPACT_FORBIDDEN_KEYS } from '../impact-report/projection'
+import { IMPACT_LEDGER_FIELDS, IMPACT_FORBIDDEN_KEYS } from '../impact-report/projection'
 
 const root = join(__dirname, '..', '..')
 const read = (p: string) => readFileSync(join(root, p), 'utf8')
@@ -99,99 +100,26 @@ describe('A-12-01 — the active org is a preference, never an authorization', (
   })
 })
 
-describe('A-12-04 — PO numbers and fiscal year, without a second budget', () => {
-  const migration = read('supabase/migrations/0110_po_numbers_and_fiscal_year.sql')
-
-  it('CAPACITY INTEGRITY: no second budget column was introduced', () => {
-    // The finding asked to "migrate funding caps to be bucketed by year". Doing so would
-    // put money state in two shapes. funding_cap_cents stays the single enforcement point.
-    expect(migration).not.toMatch(/funding_cap_cents\s*=|ALTER COLUMN funding_cap_cents/)
-    // No per-year budget column. (Scoped to the ALTER statements; the header comment
-    // explains at length why one was not added.)
-    const statements = migration.split('\n').filter((l) => /^\s*(ALTER TABLE|ADD COLUMN)/.test(l))
-    expect(statements.join('\n')).not.toMatch(/budget/i)
-    expect(migration).toContain('fiscal_year_start_month')
-  })
-
-  it('nothing resets funding_used_cents automatically', () => {
-    // A silent reset is money state changing with no actor and no audit row.
-    expect(migration).not.toMatch(/UPDATE\s+sponsors\s+SET\s+funding_used_cents/i)
-  })
-
-  it('the PO lives on funding_fulfillments, not on the immutable ledger', () => {
-    expect(migration).toContain('ALTER TABLE funding_fulfillments')
-    expect(migration).toContain('ADD COLUMN IF NOT EXISTS po_number text')
-    expect(migration).not.toMatch(/ALTER TABLE transactions_ledger/)
-  })
-
-  it('the fiscal-year month is constrained to a real month', () => {
-    expect(migration).toContain('CHECK (fiscal_year_start_month BETWEEN 1 AND 12)')
-    expect(migration).toContain('DEFAULT 1') // existing sponsors keep calendar-year behaviour
-  })
-
-  it('an org admin may set the fiscal year but STILL not the funding cap', () => {
-    expect(ORG_ADMIN_WRITABLE_SPONSOR_COLUMNS).toContain('fiscal_year_start_month')
-    expect(ORG_ADMIN_WRITABLE_SPONSOR_COLUMNS).toContain('approval_required_above_cents')
-    expect(ORG_ADMIN_WRITABLE_SPONSOR_COLUMNS).not.toContain('funding_cap_cents')
-    expect(ORG_ADMIN_WRITABLE_SPONSOR_COLUMNS).not.toContain('status')
-  })
-
-  it('the PO action is tenant-scoped and audited', () => {
-    const src = read('app/actions/sponsor-finance.ts')
-    expect(src).toContain(".in('sponsor_id', sponsorIds)")
-    expect(src).toContain("action: 'set_fulfillment_po_number'")
-    expect(src).toContain("action: 'update_org_fiscal_year'")
-  })
-
-  it('the PO reaches the CSR report, and payment_reference still does not', () => {
-    expect(IMPACT_FULFILLMENT_FIELDS).toContain('po_number')
-    // A cheque/ACH number must never leave the row — a CSR report gets emailed around.
-    expect(IMPACT_FULFILLMENT_FIELDS).not.toContain('payment_reference')
-    expect(IMPACT_FORBIDDEN_KEYS).toContain('payment_reference')
-
-    const projected = projectFulfillment({
-      amount_cents: 50000,
-      status: 'receipted',
-      po_number: 'PO-2026-00412',
-      payment_reference: 'CHECK-8891',
-      notes: 'private',
-    })
-    expect(projected.po_number).toBe('PO-2026-00412')
-    expect(projected).not.toHaveProperty('payment_reference')
-    expect(projected).not.toHaveProperty('notes')
-  })
-
-  it('the CSR CSV carries the two columns a finance team reconciles by', () => {
-    const src = read('app/api/sponsor/impact-report/route.ts')
-    expect(src).toContain("'po_numbers'")
-    expect(src).toContain("'fiscal_year'")
-  })
-
-  it('the UI states plainly that the fiscal year is not a budget reset', () => {
-    // "Fiscal year" in a finance UI strongly implies a reset. It does not do that.
-    const card = read('components/sponsor/fiscal-year-card.tsx')
-    expect(card).toMatch(/does <strong>not<\/strong> reset your funding budget/)
-  })
-})
-
-describe('Phase 4 — the other three items are closed, not pending', () => {
-  it('B-03-08: an unreviewed agreement cannot be countersigned', () => {
-    expect(read('supabase/migrations/0106_legal_review_gate_and_orphan_fulfillments.sql')).toContain(
-      "'template_needs_legal_review'"
-    )
-  })
+describe('Phase 4 — the remaining items are closed, not pending', () => {
+  // B-03-08 (an unreviewed agreement must not be countersignable) is retired: 0111 removed
+  // the agreement layer outright, so there is no signature to gate. What survives from that
+  // finding is the principle that no engineer invents a jurisdiction -- pinned in
+  // p2-groupA-money.test.ts against the Terms, which still carry the open governing-law gap.
 
   it('B-04-05 / A-08-04: the palette is driven live, not inspected', () => {
     const spec = read('tests/e2e/accessibility.spec.ts')
     expect(spec).toContain('the global command palette traps focus and restores it on Escape')
   })
 
-  it('the EIN backfill was closed forward-only, and the render is last-4', () => {
-    // Phase 1 census against production: 0 hyphenated, 0 bare, 0 rows in funding_receipts,
-    // so there is nothing to redact and no migration is owed. What must not regress is the
-    // forward fix — receipts render last-4, never a full decrypted EIN.
-    const doc = read('lib/receipt-document.tsx')
-    expect(doc).toContain('payeeEinLast4')
-    expect(doc).not.toMatch(/\bein_ciphertext\b/)
+  it('no EIN, encrypted or otherwise, survives anywhere in the tree', () => {
+    // The original finding was that a receipt could render a full decrypted EIN. 0111
+    // deleted receipts, payout profiles and the EIN crypto helpers entirely, which closes
+    // it far more thoroughly than redaction did -- so the assertion becomes the stronger
+    // one: the concept is gone, not merely masked.
+    const hits = execSync(
+      "grep -rl 'ein_ciphertext\\|payeeEinLast4\\|PAYOUT_ENCRYPTION_KEY' app lib components emails --exclude-dir=__tests__ || true",
+      { cwd: process.cwd(), encoding: 'utf8' }
+    ).trim()
+    expect(hits).toBe('')
   })
 })

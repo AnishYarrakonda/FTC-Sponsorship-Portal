@@ -1,6 +1,5 @@
 import Image from 'next/image'
 import type { SponsorImpactPayload } from '@/lib/impact-report/build'
-import { isRecognitionBenefitType, recognitionBenefitLabel } from '@/lib/recognition'
 import { RichText } from '@/components/ui/rich-text'
 
 /**
@@ -21,9 +20,6 @@ function taxStatusLabel(status: string | null | undefined): string | null {
 export function ImpactReportView({ payload }: { payload: SponsorImpactPayload }) {
   const money = (cents: number) =>
     `$${(cents / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })}`
-
-  const benefitLabel = (b: string) =>
-    isRecognitionBenefitType(b) ? recognitionBenefitLabel(b) : b
 
   return (
     <>
@@ -64,15 +60,14 @@ export function ImpactReportView({ payload }: { payload: SponsorImpactPayload })
           </h2>
           <dl className="mt-3 grid gap-4 sm:grid-cols-3">
             {[
-              ['Pledged', money(payload.totals.pledged_cents)],
-              ['Received by teams', money(payload.totals.received_cents)],
-              ['Outstanding', money(payload.totals.outstanding_cents)],
+              // 0111: a single "matched" figure. The platform never handles the money and
+              // nothing observes its arrival, so "Received by teams" was a number this
+              // report could not stand behind in front of a CFO.
+              ['Matched', money(payload.totals.matched_cents)],
               ['Teams supported', String(payload.totals.teams_supported)],
               ['Students reached', payload.totals.students_reached.toLocaleString('en-US')],
               ['Volunteer hours', payload.totals.volunteer_hours.toLocaleString('en-US')],
               ['Events hosted', String(payload.totals.events_hosted)],
-              ['Benefits promised', String(payload.totals.benefits_promised)],
-              ['Benefits delivered', String(payload.totals.benefits_delivered)],
             ].map(([label, value]) => (
               <div key={label} className="rounded-lg border border-border p-4">
                 <dt className="text-xs text-muted-foreground">{label}</dt>
@@ -89,12 +84,11 @@ export function ImpactReportView({ payload }: { payload: SponsorImpactPayload })
 
           {payload.teams.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No sponsorships were pledged in {payload.year}.
+              No sponsorships were matched in {payload.year}.
             </p>
           ) : (
             payload.teams.map((section, i) => {
               const t = section.team
-              const delivered = section.recognition.benefits.filter((b) => b.status === 'delivered')
               return (
                 <div key={i} className="impact-team-card space-y-4 rounded-xl border border-border p-6">
                   <div className="flex items-start justify-between gap-4">
@@ -167,47 +161,6 @@ export function ImpactReportView({ payload }: { payload: SponsorImpactPayload })
                           </li>
                         ))}
                       </ul>
-                    </div>
-                  )}
-
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-                      Recognition{section.recognition.tier_name ? ` · ${section.recognition.tier_name}` : ''}
-                    </p>
-                    {section.recognition.benefits.length === 0 ? (
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        No recognition benefits were attached to this sponsorship.
-                      </p>
-                    ) : (
-                      <ul className="mt-1 space-y-1 text-sm">
-                        {section.recognition.benefits.map((b, j) => (
-                          <li key={j}>
-                            {benefitLabel(b.benefit_type)} — {b.status.replace(/_/g, ' ')}
-                            {b.delivered_at
-                              ? ` (${new Date(b.delivered_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })})`
-                              : ''}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-
-                  {delivered.some((b) => b.proof_url) && (
-                    <div className="flex flex-wrap gap-3">
-                      {delivered
-                        .filter((b) => b.proof_url)
-                        .map((b, j) => (
-                          <Image
-                            key={j}
-                            src={b.proof_url as string}
-                            alt={`${benefitLabel(b.benefit_type)} proof`}
-                            width={160}
-                            height={120}
-                            unoptimized
-                            loading="eager"
-                            className="h-28 w-auto rounded-md border border-border object-cover"
-                          />
-                        ))}
                     </div>
                   )}
 

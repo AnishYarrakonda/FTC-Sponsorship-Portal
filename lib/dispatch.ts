@@ -4,7 +4,6 @@ import { createHash } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { env } from '@/lib/env'
 import { mapBudgetItems } from '@/lib/dispatch-budget'
-import { fetchRecognitionLadder, ladderForEmail } from '@/lib/recognition'
 import { SUPPORT_EMAIL as SITE_SUPPORT_EMAIL } from '@/lib/site-config'
 import * as Sentry from '@sentry/nextjs'
 
@@ -83,21 +82,6 @@ export async function dispatchApprovedSubmission(
     const coachProfile = (team.profiles ?? null) as { email?: string | null; full_name?: string | null } | null
     const replyTo = options?.replyTo ?? coachProfile?.email ?? SUPPORT_EMAIL
 
-    // The recognition ladder. A config read must NEVER cost us the pitch: losing the
-    // outreach because a tier query hiccuped is far worse than an email missing one
-    // block, so this degrades to an empty ladder and the email renders without the
-    // section. fetchRecognitionLadder lives in lib/recognition.ts and takes the client as
-    // an argument for the same reason lib/dispatch-budget.ts was split out.
-    let recognitionTiers: { name: string; range: string; benefits: string[] }[] = []
-    try {
-      recognitionTiers = ladderForEmail(await fetchRecognitionLadder(supabase))
-    } catch (ladderError) {
-      console.error('[dispatch] Recognition ladder unavailable; sending without it', ladderError)
-      Sentry.captureException(
-        ladderError instanceof Error ? ladderError : new Error('[dispatch] ladder fetch failed'),
-        { extra: { submissionId } }
-      )
-    }
 
     const result = await resend.emails.send({
       from: env.RESEND_FROM_EMAIL,
@@ -123,7 +107,6 @@ export async function dispatchApprovedSubmission(
         specificNeedsStatement: submission.specific_needs_statement ?? '',
         heroImageUrl: ((team.media_urls as string[]) ?? [])[0] ?? null,
         viewerUrl,
-        recognitionTiers,
       }),
       tags: [
         { name: 'submission_id', value: submission.id },

@@ -30,23 +30,6 @@ describe('B-03-04 — the coach dashboard reads columns it actually fetched', ()
   })
 })
 
-describe('B-03-03 — the payer is named on the coach funding surface', () => {
-  const page = read('app/(coach)/dashboard/page.tsx')
-
-  it('does not embed sponsors on funding_fulfillments', () => {
-    // sponsors_select is is_admin(); sponsors_select_own is current_sponsor_ids(). A coach
-    // matches neither, so the embed resolved to null on every row and funding-tab fell
-    // back to the literal string 'Sponsor'.
-    expect(page).not.toMatch(/from\('funding_fulfillments'\)[\s\S]{0,80}sponsors\(company_name\)/)
-  })
-
-  it('resolves names from v_sponsors_public instead', () => {
-    const resolver = page.slice(page.indexOf('B-03-03'))
-    expect(resolver).toContain('v_sponsors_public')
-    expect(resolver).toContain('f.sponsors = ')
-  })
-})
-
 describe('B-03-02 — rich text is never shown as raw markup', () => {
   it('sponsor-facing surfaces RENDER it, agreeing with the token page', () => {
     for (const f of ['components/sponsor/review-shell.tsx', 'components/impact/impact-report-view.tsx']) {
@@ -72,48 +55,21 @@ describe('B-03-02 — rich text is never shown as raw markup', () => {
   })
 })
 
-describe('B-03-05 — the payment gate is explained and routable', () => {
-  it('agreement_not_signed has human copy', () => {
-    const src = read('app/actions/fulfillment.ts')
-    expect(src).toContain("case 'agreement_not_signed'")
-    expect(src).toMatch(/agreement has not been signed/i)
-  })
+describe('B-03-05 — action errors are explained, never raw database codes', () => {
+  /**
+   * The agreement/payment-gate half of this finding went with 0111. What generalises, and
+   * is the reason the finding was filed, is that a user must never be shown a raw RPC error
+   * string. Re-pinned against the decision path, which is where RPC codes surface now.
+   */
+  it('the decision path maps RPC codes to human copy rather than returning them', () => {
+    // Every RPC failure on this path goes through mapDecisionError; the action never hands
+    // a raw `result.error` back to the UI.
+    const action = read('app/actions/sponsor-decision.ts')
+    expect(action).toMatch(/mapDecisionError\(result\?\.error\)/)
+    expect(action).not.toMatch(/return \{ error: result\?\.error \}/)
 
-  it('the default branch no longer leaks raw database codes', () => {
-    const src = read('app/actions/fulfillment.ts')
-    expect(src).not.toMatch(/default:\s*return error\b/)
-    expect(src).toMatch(/unmapped transition error code/)
-  })
-
-  it('the funding row offers a route to sign, gated on rank', () => {
-    const row = read('components/sponsor/sponsor-fulfillment-row.tsx')
-    expect(row).toContain('/sign')
-    expect(row).toContain("hasSponsorRole(memberRole, 'approver')")
-    // and distinguishes "you have not signed" from "waiting on the coach"
-    expect(row).toMatch(/Waiting on the coach/)
-  })
-
-  it('the page reads coach signatures through the admin client, since RLS hides them', () => {
-    const page = read('app/(sponsor)/sponsor/funding/page.tsx')
-    expect(page).toMatch(/adminClient[\s\S]{0,200}agreement_signatures/)
-    // Minimal columns only — no signature payload, no PII.
-    expect(page).toContain("select('submission_id, signer_role')")
-  })
-})
-
-describe('B-03-06 — receipt controls are reachable', () => {
-  const page = read('app/(admin)/reconciliation/page.tsx')
-
-  it('receipted fulfillments get a table of their own', () => {
-    expect(page).toContain('receiptedRows')
-    expect(page).toMatch(/ReconciliationTable[\s\S]{0,160}receiptedRows/)
-  })
-
-  it('ReconciliationTable is still the only mount point for the controls', () => {
-    // If this stops being true the fix above is no longer load-bearing — but if it is
-    // true and receipted rows are excluded again, the controls vanish silently.
-    const table = read('components/admin/reconciliation-table.tsx')
-    expect(table).toContain('receipt-actions')
+    const mapper = read('lib/decision-followup.ts')
+    expect(mapper).toContain('insufficient_capacity')
   })
 })
 
@@ -152,41 +108,6 @@ describe('B-03-07 / A-03-02 — partial funding works from the portal', () => {
   })
 })
 
-describe('B-03-08 — the signer is told the agreement is unreviewed', () => {
-  it('needsLegalReview reaches the panel', () => {
-    expect(read('lib/agreements/provider.ts')).toContain('needsLegalReview')
-    expect(read('lib/agreements/in-house-provider.ts')).toContain('needs_legal_review')
-  })
-
-  it('the panel warns before signature, and only when flagged', () => {
-    const panel = read('components/agreements/signing-panel.tsx')
-    expect(panel).toContain('document.needsLegalReview')
-    expect(panel).toMatch(/not been reviewed by counsel/i)
-  })
-
-  it('does NOT invent a governing-law clause', () => {
-    // Fabricating a jurisdiction into a document executed under ESIGN/UETA, with a
-    // SHA-256 of the exact bytes stored as evidence, would be worse than the gap.
-    const migrations = read('supabase/migrations/0079_agreement_templates.sql')
-    expect(migrations).toContain('TODO(legal)')
-  })
-})
-
-describe('A-03-01 — the EIN reveal validates its input', () => {
-  const src = read('app/actions/admin-payout.ts')
-
-  it('safeParses teamId and target', () => {
-    expect(src).toContain('safeParse')
-    expect(src).toContain('z.string().uuid()')
-    expect(src).toContain("z.enum(['payee', 'fiscal_sponsor'])")
-  })
-
-  it('uses the parsed values, not the raw arguments', () => {
-    expect(src).toContain('p_team_id: parsed.data.teamId')
-    expect(src).toContain('p_target: parsed.data.target')
-  })
-})
-
 describe('A-03-05 — audit_log failures are no longer swallowed', () => {
   it('writeAudit reports and never throws', () => {
     const src = read('lib/audit.ts')
@@ -202,9 +123,9 @@ describe('A-03-05 — audit_log failures are no longer swallowed', () => {
       'app/actions/admin.ts',
       'app/actions/moderation.ts',
       'app/actions/submission.ts',
-      'app/actions/agreements-sign.ts',
-      'app/actions/receipt.ts',
       'app/actions/sponsor.ts',
+      'app/actions/sponsor-decision.ts',
+      'app/actions/sponsor-approvals.ts',
       'app/api/webhooks/clerk/route.ts',
     ]
     for (const f of files) {

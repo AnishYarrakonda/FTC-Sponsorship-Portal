@@ -53,7 +53,7 @@ describe('A-02-04 — every UPDATE policy states its WITH CHECK explicitly', () 
   })
 })
 
-describe('A-06-03 — signed URLs for government IDs and W-9s are short-lived', () => {
+describe('A-06-03 — signed URLs for government IDs are short-lived', () => {
   it('the TTL is 60 seconds, not 1800', () => {
     // The constant lives in lib/, not the action file: every export of a 'use server'
     // module must be an async server action, and exporting a const there fails the build.
@@ -61,7 +61,7 @@ describe('A-06-03 — signed URLs for government IDs and W-9s are short-lived', 
   })
 
   it('neither admin queue mints a 1800-second URL any more', () => {
-    for (const f of ['app/(admin)/coaches/page.tsx', 'app/(admin)/payouts/page.tsx']) {
+    for (const f of ['app/(admin)/coaches/page.tsx']) {
       expect(read(f), f).not.toContain(', 1800)')
       expect(read(f), f).toContain('SENSITIVE_DOCUMENT_URL_TTL_SECONDS')
     }
@@ -93,9 +93,11 @@ describe('A-06-03 — signed URLs for government IDs and W-9s are short-lived', 
     expect(btn).toContain('mintSensitiveDocumentUrl')
     // A signed URL must not leak through a referrer header.
     expect(btn).toContain('noopener,noreferrer')
-    for (const f of ['components/admin/coach-verification-card.tsx', 'components/admin/payout-review-card.tsx']) {
+    // The payout review card went with the W-9 subsystem (0111); the coach verification
+    // card is the surviving surface that mints a URL to a government ID.
+    for (const f of ['components/admin/coach-verification-card.tsx']) {
       expect(read(f), f).toContain('OpenSensitiveDocumentButton')
-      expect(read(f), f).not.toMatch(/<a href=\{(coach|payout)\.signedUrl!\}/)
+      expect(read(f), f).not.toMatch(/<a href=\{coach\.signedUrl!\}/)
     }
   })
 })

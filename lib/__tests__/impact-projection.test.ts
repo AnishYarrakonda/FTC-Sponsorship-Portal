@@ -4,21 +4,17 @@ import path from 'path'
 import {
   IMPACT_TEAM_FIELDS,
   IMPACT_ACHIEVEMENT_FIELDS,
-  IMPACT_FULFILLMENT_FIELDS,
-  IMPACT_BENEFIT_FIELDS,
+  IMPACT_LEDGER_FIELDS,
   IMPACT_FORBIDDEN_KEYS,
   IMPACT_MEDIA_LIMIT,
   impactTeamSelect,
   impactAchievementSelect,
-  impactFulfillmentSelect,
-  impactBenefitSelect,
+  impactLedgerSelect,
   projectTeam,
   projectAchievement,
-  projectFulfillment,
-  projectBenefit,
+  projectMatch,
   findForbiddenKeys,
 } from '@/lib/impact-report/projection'
-import { outstandingCents } from '@/lib/impact-report/build'
 
 const repoRoot = path.resolve(__dirname, '../..')
 const read = (p: string) => fs.readFileSync(path.join(repoRoot, p), 'utf8')
@@ -93,7 +89,7 @@ describe('COPPA: no student PII reaches the projection', () => {
     expect(JSON.stringify(projected)).not.toContain('FORBIDDEN')
   })
 
-  it('projectAchievement, projectFulfillment and projectBenefit emit no sentinel', () => {
+  it('projectAchievement and projectMatch emit no sentinel', () => {
     const achievement = projectAchievement({
       season: '2025-26',
       event_name: 'North Texas Regional',
@@ -104,31 +100,27 @@ describe('COPPA: no student PII reaches the projection', () => {
       notes: 'FORBIDDEN_notes',
       full_name: 'FORBIDDEN_full_name',
     })
-    const fulfillment = projectFulfillment({
+    const match = projectMatch({
       amount_cents: 250000,
-      status: 'payment_received',
-      pledged_at: '2026-03-01T00:00:00.000Z',
-      payment_received_at: '2026-04-01T00:00:00.000Z',
-      receipted_at: null,
-      payment_reference: 'FORBIDDEN_payment_reference',
+      decision_type: 'full',
+      created_at: '2026-03-01T00:00:00.000Z',
+      // transactions_ledger has no free-text column today, but the projection is the
+      // guarantee -- so feed it one anyway and assert it cannot get through.
       notes: 'FORBIDDEN_notes',
-    })
-    const benefit = projectBenefit({
-      benefit_type: 'logo_on_robot',
-      status: 'delivered',
-      delivered_at: '2026-05-01T00:00:00.000Z',
-      proof_url: 'https://x.supabase.co/p.jpg',
-      coach_note: 'FORBIDDEN_notes',
+      contact_email: 'FORBIDDEN_contact_email',
     })
 
-    for (const [name, out] of Object.entries({ achievement, fulfillment, benefit })) {
+    for (const [name, out] of Object.entries({ achievement, match })) {
       expect(findForbiddenKeys(out), name).toEqual([])
       expect(JSON.stringify(out), name).not.toContain('FORBIDDEN')
     }
 
     expect(Object.keys(achievement).sort()).toEqual([...IMPACT_ACHIEVEMENT_FIELDS].sort())
-    expect(Object.keys(fulfillment).sort()).toEqual([...IMPACT_FULFILLMENT_FIELDS].sort())
-    expect(Object.keys(benefit).sort()).toEqual([...IMPACT_BENEFIT_FIELDS].sort())
+    // projectMatch renames created_at -> matched_at, so the key set is the allowlist with
+    // that one substitution rather than the allowlist verbatim.
+    expect(Object.keys(match).sort()).toEqual(
+      [...IMPACT_LEDGER_FIELDS].map((f) => (f === 'created_at' ? 'matched_at' : f)).sort()
+    )
   })
 
   it('a fully assembled payload carries no forbidden key and no sentinel', () => {
@@ -137,16 +129,12 @@ describe('COPPA: no student PII reaches the projection', () => {
       year: 2026,
       generated_at: '2026-08-13T00:00:00.000Z',
       sponsor: { company_name: 'Acme Robotics', logo_url: null },
-      totals: { pledged_cents: 250000, received_cents: 0, outstanding_cents: 250000 },
+      totals: { matched_cents: 250000 },
       teams: [
         {
           team: projectTeam(rawTeamRow()),
           achievements: [projectAchievement({ season: '2025-26', award: 'Inspire' })],
-          fulfillments: [projectFulfillment({ amount_cents: 250000, status: 'pledged' })],
-          recognition: {
-            tier_name: 'Silver',
-            benefits: [projectBenefit({ benefit_type: 'logo_on_website', status: 'delivered' })],
-          },
+          matches: [projectMatch({ amount_cents: 250000, decision_type: 'full' })],
         },
       ],
       footnotes: [],
@@ -167,16 +155,14 @@ describe('the select strings are derived from the allowlist', () => {
   it('hand-editing one without the other fails here', () => {
     expect(impactTeamSelect()).toBe(IMPACT_TEAM_FIELDS.join(','))
     expect(impactAchievementSelect()).toBe(IMPACT_ACHIEVEMENT_FIELDS.join(','))
-    expect(impactFulfillmentSelect()).toBe(IMPACT_FULFILLMENT_FIELDS.join(','))
-    expect(impactBenefitSelect()).toBe(IMPACT_BENEFIT_FIELDS.join(','))
+    expect(impactLedgerSelect()).toBe(IMPACT_LEDGER_FIELDS.join(','))
   })
 
   it('no forbidden key appears in any select string', () => {
     const all = [
       impactTeamSelect(),
       impactAchievementSelect(),
-      impactFulfillmentSelect(),
-      impactBenefitSelect(),
+      impactLedgerSelect(),
     ].join(',')
     const columns = new Set(all.split(','))
     for (const k of IMPACT_FORBIDDEN_KEYS) {
@@ -214,20 +200,6 @@ describe('unknown columns cannot reach the output', () => {
     expect(JSON.stringify(withExtra)).not.toContain('Maya')
   })
 })
-
-describe('totals', () => {
-  it('outstanding equals pledged minus received and is never negative', () => {
-    expect(outstandingCents(250000, 100000)).toBe(150000)
-    expect(outstandingCents(250000, 250000)).toBe(0)
-    // A receipted total exceeding the pledged total is a data bug, not a negative debt to
-    // show a CFO.
-    expect(outstandingCents(100000, 250000)).toBe(0)
-  })
-})
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Invariants — file-reading assertions
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('INVARIANT: the projection has no escape hatch', () => {
   const projectionSrc = read('lib/impact-report/projection.ts')
@@ -403,7 +375,8 @@ describe('INVARIANT: the rollup cron is auth-hardened and scheduled', () => {
     // Every job goes through runJob(), which wraps the call in its own try/catch.
     expect(dispatcher).toContain('runJob(')
     expect(dispatcher).toContain('catch')
-    for (const job of ['runRefreshFtcRoster', 'runNudgeFulfillments', 'runImpactRollup']) {
+    // runNudgeFulfillments was removed with the fulfillment layer (0111).
+    for (const job of ['runRefreshFtcRoster', 'runImpactRollup']) {
       expect(dispatcher).toContain(job)
     }
   })

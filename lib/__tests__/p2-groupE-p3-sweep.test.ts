@@ -213,14 +213,6 @@ describe('P3 — components', () => {
     expect(src.split(sentence).length - 1, 'the empty-state sentence appears more than once').toBe(1)
   })
 
-  it('team_payout_profiles is read with maybeSingle, not single', () => {
-    // .single() throws a console 406 on every /team/edit load for a team with no profile.
-    const src = readCode('components/coach/portfolio-tab.tsx')
-    const block = src.slice(src.indexOf("from('team_payout_profiles')"), 400 + src.indexOf("from('team_payout_profiles')"))
-    expect(block).toContain('.maybeSingle()')
-    expect(block).not.toMatch(/(?<!maybeS)\.single\(\)/)
-  })
-
   it('a failed portfolio save offers a way to the first invalid field', () => {
     const src = read('components/coach/portfolio-tab.tsx')
     expect(src).toContain('function focusFirstError()')
@@ -236,10 +228,16 @@ describe('P3 — components', () => {
     )
   })
 
-  it('fulfillment dates are en-US, matching the rest of the app', () => {
-    for (const f of ['components/sponsor/sponsor-fulfillment-row.tsx', 'components/coach/funding-tab.tsx']) {
-      expect(read(f), f).not.toContain('en-GB')
-    }
+  it('no surface formats dates in en-GB', () => {
+    // The two fulfillment components this named are gone (0111); the rule is app-wide.
+    // Excludes this file and comment lines: lib/format-dates.ts documents the en-GB drift
+    // it was written to stop, and that prose must not read as a violation of itself.
+    const hits = execSync(
+      `grep -rn "en-GB" app components lib emails --include=*.ts --include=*.tsx` +
+        ` --exclude-dir=__tests__ | grep -v '^\\S*: *\\*' | grep -v '//' || true`,
+      { cwd: root, encoding: 'utf8' }
+    ).trim()
+    expect(hits, `en-GB date formatting:\n${hits}`).toBe('')
   })
 })
 
@@ -262,13 +260,6 @@ describe('P3 — accessibility polish', () => {
     expect(src).toContain('sr-only')
     expect(src).toContain("label: 'Details'")
     expect(readCode('components/admin/audit-log-table.tsx')).not.toContain("'Time', ''")
-  })
-
-  it('the proof-removal reason has a persistent, announced rule', () => {
-    const src = read('components/admin/proof-review-queue.tsx')
-    expect(src).toContain('aria-describedby={`proof-reason-hint-')
-    expect(src).toContain('At least 10 characters')
-    expect(src).toContain('aria-label=')
   })
 
   it('the textarea uses the shared form-control border token', () => {

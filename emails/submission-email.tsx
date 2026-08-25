@@ -33,12 +33,6 @@ interface SubmissionEmailProps {
   specificNeedsStatement: string
   heroImageUrl: string | null
   viewerUrl: string | null
-  /**
-   * The live recognition ladder, already formatted by lib/recognition.ts. Optional and
-   * fully absent-safe: a team pitching before an admin has configured any tier must still
-   * get a correct email, so an empty or missing array renders nothing at all.
-   */
-  recognitionTiers?: { name: string; range: string; benefits: string[] }[]
 }
 
 function taxBadgeLabel(taxStatus: string): string | null {
@@ -61,7 +55,6 @@ export default function SubmissionEmail({
   specificNeedsStatement,
   heroImageUrl,
   viewerUrl,
-  recognitionTiers,
 }: SubmissionEmailProps) {
   const taxLabel = taxBadgeLabel(taxStatus)
   const totalDisplay = `$${(financialAskCents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
@@ -163,31 +156,6 @@ export default function SubmissionEmail({
               </Column>
             </Row>
           </Section>
-
-          {/* What the sponsor gets back. Reuses the budget table's styles deliberately —
-              this is the most important email the product sends and is not the place to
-              introduce a second visual language. */}
-          {recognitionTiers && recognitionTiers.length > 0 && (
-            <>
-              <Hr style={hr} />
-              <Heading style={h2}>What your sponsorship earns</Heading>
-              <Section style={budgetTable}>
-                {recognitionTiers.map((tier, i) => (
-                  <Row key={i} style={budgetRow}>
-                    <Column style={{ ...budgetCell, width: '38%', fontWeight: 'bold' }}>
-                      {tier.name}
-                      <br />
-                      <span style={{ fontWeight: 'normal', color: '#64748b' }}>{tier.range}</span>
-                    </Column>
-                    <Column style={budgetCell}>{tier.benefits.join(' · ')}</Column>
-                  </Row>
-                ))}
-              </Section>
-              <Text style={{ ...footer, marginTop: '8px' }}>
-                Recognition levels are indicative and are confirmed when a sponsorship is finalised.
-              </Text>
-            </>
-          )}
 
           <Hr style={hr} />
 

@@ -73,8 +73,7 @@ export default async function SponsorImpactIndexPage() {
                 <p className="mt-1 text-sm text-muted-foreground">
                   {payload?.totals?.teams_supported ?? 0} team
                   {(payload?.totals?.teams_supported ?? 0) === 1 ? '' : 's'} ·{' '}
-                  {money(payload?.totals?.pledged_cents ?? 0)} pledged ·{' '}
-                  {money(payload?.totals?.received_cents ?? 0)} received
+                  {money(payload?.totals?.matched_cents ?? 0)} matched
                 </p>
               </div>
               <span

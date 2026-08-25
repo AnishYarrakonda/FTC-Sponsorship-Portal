@@ -1,7 +1,8 @@
 import { getAuthedProfile, requireSponsorRole } from '@/lib/actions-utils'
 import { notFound, redirect } from 'next/navigation'
 import { SponsorReviewShell } from '@/components/sponsor/review-shell'
-import { AgreementStatusRow } from '@/components/agreements/agreement-status-row'
+import { MatchHandoffPanel } from '@/components/funding/match-handoff-panel'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { isAwaitingSponsor } from '@/lib/submission-status'
 import type { ThreadMessage } from '@/components/messages/thread'
 import { SPONSOR_SUBMISSION_SELECT } from '@/lib/sponsor-visibility'
@@ -75,11 +76,49 @@ export default async function SponsorSubmissionReviewPage({ params }: { params: 
     isAwaitingSponsor(submission.status as string) &&
     (!submission.expires_at || new Date(submission.expires_at as string) > new Date())
 
+  const isMatched = submission.status === 'approved'
+  const teamName = ((submission.teams as Record<string, unknown> | null)?.team_name as string) ?? 'the team'
+
+  /**
+   * The coach's address, for the handoff panel only.
+   *
+   * profiles_select is own-row-plus-admin, so a sponsor cannot read a coach's email under
+   * RLS by any route. Rather than widen that policy (house rule 9), the crossing happens
+   * here through the admin client, scoped to the owner of the one team this sponsor has
+   * already committed money to, selecting the one column. No match, no address.
+   */
+  let coachContactEmail: string | null = null
+  if (isMatched && submission.team_id) {
+    const adminClient = createAdminClient()
+    const { data: teamRow } = await adminClient
+      .from('teams')
+      .select('owner_id')
+      .eq('id', submission.team_id as string)
+      .maybeSingle()
+    if (teamRow?.owner_id) {
+      const { data: coach } = await adminClient
+        .from('profiles')
+        .select('email')
+        .eq('id', teamRow.owner_id)
+        .maybeSingle()
+      coachContactEmail = coach?.email ?? null
+    }
+  }
+
   return (
     <div className="space-y-4">
-      <div className="container mx-auto max-w-4xl pt-6">
-        {await AgreementStatusRow({ supabase, submissionId: id, viewerRole: 'sponsor', sponsorMemberRole: memberRole })}
-      </div>
+      {isMatched && (
+        <div className="container mx-auto max-w-4xl pt-6">
+          <MatchHandoffPanel
+            viewer="sponsor"
+            counterpartyName={teamName}
+            counterpartyEmail={coachContactEmail}
+            amountCents={(submission.reserved_amount_cents as number) || (submission.requested_amount_cents as number)}
+            askedForCents={submission.requested_amount_cents as number}
+            teamName={teamName}
+          />
+        </div>
+      )}
       <SponsorReviewShell
         submission={submission}
         team={submission.teams}

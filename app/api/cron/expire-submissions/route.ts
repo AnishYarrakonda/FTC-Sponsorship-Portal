@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createInAppNotification } from '@/lib/notify'
 import { sweepUnpurgedCredentials, sweepPendingStorageDeletions } from '@/lib/credentials-retention'
-import { sweepExpiringW9s } from '@/lib/payout-retention'
 import crypto from 'crypto'
 import { env } from '@/lib/env'
 import * as Sentry from '@sentry/nextjs'
@@ -91,13 +90,6 @@ export async function GET(req: Request) {
       )
     }
 
-    const w9Retention = await sweepExpiringW9s(supabase)
-    if (w9Retention.notified > 0 || w9Retention.failed > 0) {
-      console.log(
-        `[cron] w9 expiration: notified ${w9Retention.notified}, failed ${w9Retention.failed}`
-      )
-    }
-
     // Same idiom as the submissions expiry above: select the pending-and-overdue
     // proposals BEFORE running the RPC — afterwards they no longer match the pending
     // filter and there is no way to find them again to notify their proposer.
@@ -174,8 +166,6 @@ export async function GET(req: Request) {
         credentials_purge_failed: retention.failed,
         superseded_storage_deleted: pendingDeletions.deleted,
         superseded_storage_failed: pendingDeletions.failed,
-        w9_renewal_notices: w9Retention.notified,
-        w9_renewal_notices_failed: w9Retention.failed,
         proposals_expired: proposalsExpiredCount,
       },
     })

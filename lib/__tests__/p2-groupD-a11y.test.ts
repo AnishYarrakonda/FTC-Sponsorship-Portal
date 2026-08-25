@@ -65,14 +65,6 @@ describe('B-04-07 — read-only values are named, not unlabelled disabled inputs
     expect(src).not.toContain('<Input value={role} disabled')
   })
 
-  it('the masked EINs on the payout form are named', () => {
-    // The field where "which identifier is this" is the entire question.
-    const src = read('components/coach/payout-profile-form.tsx')
-    expect(src).toContain('label="EIN"')
-    expect(src).toContain('label="Fiscal Sponsor EIN"')
-    expect(src).not.toMatch(/<Input disabled value=\{`•••••-••\$\{initialData/)
-  })
-
   it('no disabled Input in the app is left without an accessible name', () => {
     // A disabled <Input> is only acceptable inside a FormItem/FormLabel pair, which does
     // associate the label. The bare ones are what this finding was about.
@@ -166,26 +158,30 @@ describe('B-04-10 — destructive TEXT passes AA on both page backgrounds', () =
   })
 })
 
-describe('B-04-11 — the payout status badges pass AA', () => {
+describe('B-04-11 — the status badge tokens pass AA', () => {
+  // Originally filed against the payout badges, which went with the W-9 subsystem (0111).
+  // The TOKENS outlived them and are used by every badge in the app, so the contrast
+  // assertions are kept and the labels generalised.
   const pairs: [string, string, string][] = [
-    ['warning (Awaiting W-9)', 'badge-warning-text', 'badge-warning-bg'],
-    ['success (Verified)', 'badge-success-text', 'badge-success-bg'],
-    ['pending (In review)', 'badge-pending-text', 'badge-pending-bg'],
-    ['rejected (Needs attention)', 'badge-rejected-text', 'badge-rejected-bg'],
+    ['warning', 'badge-warning-text', 'badge-warning-bg'],
+    ['success', 'badge-success-text', 'badge-success-bg'],
+    ['pending', 'badge-pending-text', 'badge-pending-bg'],
+    ['rejected', 'badge-rejected-text', 'badge-rejected-bg'],
   ]
 
   it.each(pairs)('%s clears 4.5:1 on its own badge background', (_name, fg, bg) => {
     expect(contrast(token(fg), token(bg))).toBeGreaterThanOrEqual(AA_NORMAL)
   })
 
-  it('the badges no longer use raw Tailwind palette classes', () => {
-    // amber-600 measures 3.11:1 and emerald-600 3.68:1 over --bg-surface. The finding
-    // named only the amber one; all five in this element are fixed together.
-    const src = read('components/coach/portfolio-tab.tsx')
-    const jsx = src.split('\n').filter((l) => l.includes('payoutStatus ===') || l.includes('rounded-full'))
-    for (const cls of ['text-amber-600', 'text-emerald-600', 'text-blue-600', 'text-red-600']) {
-      expect(jsx.join('\n'), cls).not.toContain(cls)
-    }
+  it('no badge anywhere uses a raw Tailwind palette class', () => {
+    // amber-600 measures 3.11:1 and emerald-600 3.68:1 over --bg-surface. Asserted across
+    // the tree rather than against the one component the finding named, so deleting that
+    // component (as 0111 did to several) cannot quietly delete the coverage with it.
+    const hits = execSync(
+      `grep -rn 'rounded-full' app components --include=*.tsx | grep -E 'text-(amber|emerald|blue|red)-600' || true`,
+      { cwd: root, encoding: 'utf8' }
+    ).trim()
+    expect(hits, `raw palette class on a badge:\n${hits}`).toBe('')
   })
 
   it('and the raw classes they replaced really did fail', () => {

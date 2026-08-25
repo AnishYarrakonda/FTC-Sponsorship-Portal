@@ -4,7 +4,6 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { isAuthorizedCronRequest, type CronJobResult } from '@/lib/cron/authorize'
 import { runRefreshFtcRoster } from '../refresh-ftc-roster/route'
 import { runImpactRollup } from '../impact-rollup/route'
-import { runNudgeFulfillments } from '../nudge-fulfillments/route'
 
 /**
  * Consolidated daily cron — audit finding A-09-05.
@@ -16,9 +15,9 @@ import { runNudgeFulfillments } from '../nudge-fulfillments/route'
  *
  * Each job is awaited inside its own try/catch: one failure must not swallow the two
  * behind it, which is exactly what a single un-guarded chain would do. Order is
- * deliberate — roster refresh and nudges are independent, but impact-rollup reads
- * fulfillment state, so it runs after nothing that mutates it (nudges only touch
- * last_nudged_at) and two hours after the 02:00 expiry sweep has settled.
+ * deliberate: impact-rollup aggregates transactions_ledger, so it runs two hours after the
+ * 02:00 expiry sweep has settled and after the roster refresh it does not depend on.
+ * (The nudge-fulfillments job was removed with the fulfillment layer in 0111.)
  *
  * The individual routes remain live and independently invocable — this only changes what
  * the SCHEDULER calls. On Vercel Pro these can be split back into four entries and this
@@ -61,7 +60,6 @@ export async function GET(req: Request) {
 
   const outcomes: JobOutcome[] = []
   outcomes.push(await runJob('refresh-ftc-roster', runRefreshFtcRoster))
-  outcomes.push(await runJob('nudge-fulfillments', runNudgeFulfillments))
   outcomes.push(await runJob('impact-rollup', runImpactRollup))
 
   const failed = outcomes.filter((o) => !o.ok).map((o) => o.job)

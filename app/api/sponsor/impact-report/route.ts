@@ -134,16 +134,11 @@ export async function GET(req: Request) {
       'state',
       'tax_status',
       // A-12-04
-      'po_numbers',
       'fiscal_year',
       'students_reached',
       'events_hosted',
       'volunteer_hours',
-      'pledged_cents',
-      'received_cents',
-      'recognition_tier',
-      'benefits_promised',
-      'benefits_delivered',
+      'matched_cents',
       'achievements',
     ]),
   ]
@@ -157,10 +152,9 @@ export async function GET(req: Request) {
     fiscalStartMonth === 1 ? String(year) : `FY${year} (starts ${MONTH_NAMES[fiscalStartMonth - 1]})`
 
   for (const section of payload.teams ?? []) {
-    const pledged = section.fulfillments.reduce((n, f) => n + (f.amount_cents ?? 0), 0)
-    const received = section.fulfillments
-      .filter((f) => f.status === 'payment_received' || f.status === 'receipted')
-      .reduce((n, f) => n + (f.amount_cents ?? 0), 0)
+    // Net: a 'void' row is negative, so an unwound match reduces the figure rather than
+    // needing to be filtered out.
+    const matched = section.matches.reduce((n, m) => n + (m.amount_cents ?? 0), 0)
 
     lines.push(
       rowToCsv([
@@ -172,29 +166,18 @@ export async function GET(req: Request) {
         // P3. 'None' is a legitimate enum value meaning "no charitable status", not a
         // label — it was landing literally in the CSR spreadsheet's tax_status column.
         section.team.tax_status === 'None' ? '' : section.team.tax_status,
-        // A-12-04. Every PO this sponsor's AP issued against this team, and the fiscal
-        // year the pledges fall in — the two columns a finance team reconciles by.
-        Array.from(
-          new Set(section.fulfillments.map((f) => f.po_number).filter((v): v is string => !!v))
-        ).join('; '),
         fiscalYearLabel,
         section.team.students_reached,
         section.team.events_hosted,
         section.team.volunteer_hours,
-        pledged,
-        received,
-        section.recognition.tier_name,
-        section.recognition.benefits.length,
-        section.recognition.benefits.filter((b) => b.status === 'delivered').length,
+        matched,
         section.achievements.map((a) => `${a.season ?? ''} ${a.award ?? ''}`.trim()).join('; '),
       ])
     )
   }
 
   lines.push('')
-  lines.push(rowToCsv(['TOTAL pledged_cents', payload.totals.pledged_cents]))
-  lines.push(rowToCsv(['TOTAL received_cents', payload.totals.received_cents]))
-  lines.push(rowToCsv(['TOTAL outstanding_cents', payload.totals.outstanding_cents]))
+  lines.push(rowToCsv(['TOTAL matched_cents', payload.totals.matched_cents]))
   for (const note of payload.footnotes ?? []) lines.push(rowToCsv(['NOTE', note]))
 
   return new NextResponse(lines.join('\n'), {

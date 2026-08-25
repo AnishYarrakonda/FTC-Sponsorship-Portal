@@ -146,24 +146,6 @@ describe('B-04-06 — the graduation trigger has a focus ring', () => {
   })
 })
 
-describe('A-07-01 — waiving a benefit is confirmed, and the copy is TRUE', () => {
-  const src = read('components/sponsor/waive-benefit-button.tsx')
-
-  it('is wrapped in an AlertDialog naming the benefit', () => {
-    expect(src).toContain('AlertDialog')
-    expect(src).toContain('Waive “{label}”?')
-  })
-
-  it('does not claim an admin cannot reverse it', () => {
-    // record_benefit_delivery: "a waived row is the sponsor's decision and only an admin
-    // may move it again." The sponsor cannot undo it; an admin can. Saying otherwise
-    // sends a user away from support instead of towards it.
-    expect(src).toContain('You cannot undo this yourself')
-    expect(src).toMatch(/administrator has to reverse it/)
-    expect(src).not.toMatch(/cannot be undone/i)
-  })
-})
-
 describe('A-07-02 — the pitch textareas cap at the schema limit', () => {
   const src = read('components/portfolio-builder/portfolio-form.tsx')
 

@@ -2,7 +2,6 @@ import { getAuthedProfile, requireSponsorRole } from '@/lib/actions-utils'
 import { redirect } from 'next/navigation'
 import { AccountSettings } from '@/components/account/account-settings'
 import { ApprovalPolicyCard } from '@/components/sponsor/approval-policy-card'
-import { FiscalYearCard } from '@/components/sponsor/fiscal-year-card'
 import { SsoStatusCard } from '@/components/sponsor/sso-status-card'
 import { getSponsorSsoStatus, type SponsorSsoStatus } from '@/lib/sso'
 
@@ -23,12 +22,11 @@ export default async function SponsorSettingsPage() {
   // policy — both describe how the whole organization behaves, not this one account.
   let ssoStatus: SponsorSsoStatus | null = null
   // A-12-04. Null until we know the caller is an org admin.
-  let fiscalYearStartMonth: number | null = null
   try {
     const auth = await requireSponsorRole('org_admin')
     const { data: sponsor } = await auth.adminClient
       .from('sponsors')
-      .select('approval_required_above_cents, clerk_org_id, fiscal_year_start_month')
+      .select('approval_required_above_cents, clerk_org_id')
       .eq('id', auth.sponsorId)
       .single()
     const { count } = await auth.adminClient
@@ -41,7 +39,6 @@ export default async function SponsorSettingsPage() {
       eligibleApproverCount: count ?? 0,
     }
     // A-12-04
-    fiscalYearStartMonth = sponsor?.fiscal_year_start_month ?? 1
     ssoStatus = await getSponsorSsoStatus(sponsor?.clerk_org_id ?? null)
   } catch {
     // Not an org_admin (or not a sponsor at all) — the cards simply do not render.
@@ -68,9 +65,6 @@ export default async function SponsorSettingsPage() {
       )}
 
       {/* A-12-04. Org-wide, like the approval policy beside it. */}
-      {fiscalYearStartMonth !== null && (
-        <FiscalYearCard fiscalYearStartMonth={fiscalYearStartMonth} />
-      )}
 
       {ssoStatus && <SsoStatusCard status={ssoStatus} />}
 

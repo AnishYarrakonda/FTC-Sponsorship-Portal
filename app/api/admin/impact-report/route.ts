@@ -78,14 +78,12 @@ export async function GET(req: Request) {
     rowToCsv(['generated_at', payload.generated_at]),
     rowToCsv(['teams_supported', t.teams_supported]),
     rowToCsv(['sponsors_active', payload.sponsors_active]),
-    rowToCsv(['dollars_pledged_cents', t.pledged_cents]),
-    rowToCsv(['dollars_received_cents', t.received_cents]),
-    rowToCsv(['dollars_outstanding_cents', t.outstanding_cents]),
+    // 0111: one honest figure. Nothing observes whether the money arrived, so a
+    // "received" column would be an assertion the platform cannot support.
+    rowToCsv(['dollars_matched_cents', t.matched_cents]),
     rowToCsv(['students_reached', t.students_reached]),
     rowToCsv(['events_hosted', t.events_hosted]),
     rowToCsv(['volunteer_hours', t.volunteer_hours]),
-    rowToCsv(['benefits_promised', t.benefits_promised]),
-    rowToCsv(['benefits_delivered', t.benefits_delivered]),
     '',
     ...(payload.footnotes ?? []).map((n) => rowToCsv(['NOTE', n])),
   ]

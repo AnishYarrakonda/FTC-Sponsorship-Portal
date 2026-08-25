@@ -9,7 +9,6 @@ import { TokenThreadPanel } from '@/components/messages/thread-panels'
 import type { ThreadMessage } from '@/components/messages/thread'
 import { RichText } from '@/components/ui/rich-text'
 import { htmlToPlainText } from '@/lib/utils'
-import { fetchRecognitionLadder, ladderForEmail } from '@/lib/recognition'
 import { isWellFormedAccessToken, throttleTokenView } from '@/lib/token-view-guard'
 
 interface Props {
@@ -90,11 +89,6 @@ export default async function SponsorViewPage({ params }: Props) {
     .eq('submission_id', submission.id)
     .or('status.eq.released,author_role.eq.sponsor')
     .order('created_at', { ascending: true })
-
-  // The recognition ladder, through the same helper the pitch email uses so the two can
-  // never disagree. Config only — nothing here is specific to this sponsor, and a failure
-  // just hides the card rather than breaking the page.
-  const recognitionLadder = ladderForEmail(await fetchRecognitionLadder(supabase))
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const team = submission.teams as Record<string, any>
@@ -332,31 +326,6 @@ export default async function SponsorViewPage({ params }: Props) {
             </div>
           )}
         </div>
-
-        {/* 5b. What the sponsor gets back. Render-only — this page's single mutation is
-            still the decision panel, and it renders whether or not that panel is live: an
-            expired or already-decided link should still explain what was on offer. */}
-        {recognitionLadder.length > 0 && (
-          <div className="bg-card rounded-xl border p-8 shadow-sm space-y-4">
-            <h2 className="text-xl font-bold text-foreground">What your sponsorship earns</h2>
-            <div className="divide-y divide-border">
-              {recognitionLadder.map((tier) => (
-                <div key={tier.name} className="py-3 sm:flex sm:gap-6">
-                  <div className="sm:w-44 shrink-0">
-                    <p className="font-medium text-foreground">{tier.name}</p>
-                    <p className="text-sm tabular-nums text-muted-foreground">{tier.range}</p>
-                  </div>
-                  <p className="mt-1 text-sm text-muted-foreground sm:mt-0">
-                    {tier.benefits.join(' · ')}
-                  </p>
-                </div>
-              ))}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Recognition levels are indicative and are confirmed when a sponsorship is finalised.
-            </p>
-          </div>
-        )}
 
         {/* 6. Media */}
         {youtubeUrl && (

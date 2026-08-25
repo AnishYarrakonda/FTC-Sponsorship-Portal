@@ -26,9 +26,6 @@ export default async function DashboardPage() {
     { count: unreadCount },
     { data: notifications },
     { data: submissions },
-    { data: fulfillments },
-    { data: payoutProfile },
-    { data: recognitionRows }
   ] = await Promise.all([
     supabase.from('teams').select('*').eq('owner_id', user.id).order('updated_at', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('profiles').select('*').eq('id', user.id).single(),
@@ -66,27 +63,6 @@ export default async function DashboardPage() {
         }))
         return { data: data || [] }
       }),
-    // B-03-03: the `sponsors(company_name)` embed that used to be here silently resolved
-    // to null for every row — sponsors_select is is_admin() and sponsors_select_own is
-    // scoped to current_sponsor_ids(), so a coach matches neither. funding-tab then fell
-    // back to the literal string 'Sponsor', which is what the coach read at the exact
-    // moment they had to match an incoming check to a bank deposit. The identical trap is
-    // already documented on the recognition query below; names are resolved from
-    // v_sponsors_public in the resolver further down, the same way submissions do it.
-    supabase.from('funding_fulfillments').select('*').order('pledged_at', { ascending: false }),
-    supabase.from('team_payout_profiles').select('team_id, w9_uploaded_at, w9_verified_at, w9_rejected_at, w9_rejected_reason, w9_expires_at').maybeSingle(),
-    // Recognition owed. recognition_awards_select_coach scopes this to teams this coach
-    // owns; the deliveries embed rides can_read_recognition_award(). No sponsors embed —
-    // sponsors_select is admin-only since 0063 and the embed would silently return null
-    // (the same trap documented for submissions above). Names come from
-    // v_sponsors_public in the resolver below.
-    supabase
-      .from('sponsor_recognition_awards')
-      .select(
-        'id, sponsor_id, amount_cents, awarded_at, tier_name_snapshot, tier_rank_snapshot, ' +
-        'recognition_benefit_deliveries(id, benefit_type, status, proof_url, admin_void_reason, delivered_at)'
-      )
-      .order('awarded_at', { ascending: false }),
   ])
 
   // Resolve sponsor company names for this coach's own submissions. Kept out of the
@@ -107,30 +83,6 @@ export default async function DashboardPage() {
       const byId = new Map((names ?? []).map((r: any) => [r.id, r.company_name]))
       for (const s of submissions as any[]) {
         s.company_name = byId.get(s.sponsor_id) ?? undefined
-      }
-    }
-  }
-
-  // B-03-03: resolve the payer's company name for each fulfillment, from the same
-  // v_sponsors_public view the submissions resolver above uses. Unfiltered by status on
-  // purpose — a sponsor that has since gone inactive or filled its cap still has to be
-  // nameable on a payment the coach is being asked to confirm.
-  {
-    const sponsorIds = Array.from(
-      new Set((fulfillments ?? []).map((f: any) => f.sponsor_id).filter(Boolean))
-    ) as string[]
-
-    if (sponsorIds.length > 0) {
-      const { data: names } = await supabase
-        .from('v_sponsors_public')
-        .select('id, company_name')
-        .in('id', sponsorIds)
-
-      const byId = new Map((names ?? []).map((r: any) => [r.id, r.company_name]))
-      for (const f of fulfillments as any[]) {
-        // Shaped as the embed used to be, so funding-tab's `f.sponsors?.company_name`
-        // read keeps working and there is one place that knows about the fallback.
-        f.sponsors = { company_name: byId.get(f.sponsor_id) ?? null }
       }
     }
   }
@@ -174,34 +126,6 @@ export default async function DashboardPage() {
         s.appealable = !!subject?.windowOpen && !subject?.existingAppeal
         s.appeal_status = subject?.existingAppeal?.status ?? null
       }
-    }
-  }
-
-  // Sponsor company names for the recognition cards, resolved the same way submissions
-  // resolve theirs.
-  const recognitionAwards: any[] = []
-  {
-    const rows = (recognitionRows ?? []) as any[]
-    const sponsorIds = Array.from(new Set(rows.map((r) => r.sponsor_id).filter(Boolean))) as string[]
-    const byId = new Map<string, string>()
-    if (sponsorIds.length > 0) {
-      const { data: names } = await supabase
-        .from('v_sponsors_public')
-        .select('id, company_name')
-        .in('id', sponsorIds)
-      for (const n of names ?? []) byId.set(n.id as string, n.company_name as string)
-    }
-    for (const r of rows) {
-      recognitionAwards.push({
-        id: r.id,
-        amount_cents: r.amount_cents,
-        awarded_at: r.awarded_at,
-        tier_name_snapshot: r.tier_name_snapshot,
-        company_name: byId.get(r.sponsor_id) ?? null,
-        deliveries: (r.recognition_benefit_deliveries ?? []).slice().sort(
-          (a: any, b: any) => String(a.benefit_type).localeCompare(String(b.benefit_type))
-        ),
-      })
     }
   }
 
@@ -396,9 +320,6 @@ export default async function DashboardPage() {
       unreadCount={unreadCount ?? 0}
       submissions={submissions as any ?? []}
       achievements={(achievements || []) as any}
-      fulfillments={(fulfillments || []) as any}
-      payoutProfiles={payoutProfile ? [payoutProfile] : []}
-      recognitionAwards={recognitionAwards as any}
     /></>
   )
 }

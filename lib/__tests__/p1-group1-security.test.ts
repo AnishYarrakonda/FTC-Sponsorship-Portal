@@ -193,14 +193,16 @@ describe('A-02-02 — the anon actor fallthrough is closed', () => {
   })
 })
 
-describe('A-06-02 — superseded IDs and W-9s are queued, not fire-and-forget', () => {
-  it('both supersede paths enqueue instead of best-effort remove()', () => {
+describe('A-06-02 — superseded government IDs are queued, not fire-and-forget', () => {
+  it('the supersede path enqueues instead of best-effort remove()', () => {
+    // The W-9 half of this finding went with the payout subsystem (0111). The coach
+    // photo-ID half is the one that mattered anyway -- it is the government ID -- and the
+    // queue that backs it (pending_storage_deletions) was deliberately KEPT for exactly
+    // this reason when the rest of the payout tables were dropped.
     const cred = read('app/actions/credentials.ts')
-    const payout = read('app/actions/payout.ts')
     expect(cred).toContain('enqueueStorageDeletion')
-    expect(payout).toContain('enqueueStorageDeletion')
     // The old shape must be gone: an unawaited remove() whose failure is only logged.
-    expect(payout).not.toMatch(/remove\(\[currentProfile\.w9_document_path\]\)\s*\n?\s*\.catch/)
+    expect(cred).not.toMatch(/\.remove\(\[[^\]]+\]\)\s*\n?\s*\.catch/)
   })
 
   it('the nightly cron retries the queue', () => {

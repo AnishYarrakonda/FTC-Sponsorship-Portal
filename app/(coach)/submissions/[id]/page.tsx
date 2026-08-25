@@ -4,17 +4,18 @@ import { redirect, notFound } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { StatusBadge } from '@/components/ui/status-badge'
-import { AgreementStatusRow } from '@/components/agreements/agreement-status-row'
+import { MatchHandoffPanel } from '@/components/funding/match-handoff-panel'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { COACH_EDITABLE_STATUSES, isAwaitingSponsor } from '@/lib/submission-status'
 import { WithdrawPitchButton } from '@/components/coach/withdraw-pitch-button'
 import { CoachThreadPanel } from '@/components/messages/thread-panels'
 import type { ThreadMessage } from '@/components/messages/thread'
 import { cn } from '@/lib/utils'
 
-// This route had no bare detail page before this slice — only /edit. It exists now as
-// the natural home for the Agreement status row (a submission past the coach-editable
-// statuses, e.g. `approved`, has nothing sensible to "edit" but still needs somewhere to
-// show its agreement/fulfillment state and link to the sign or verification page).
+// This route had no bare detail page before — only /edit. It exists because a submission
+// past the coach-editable statuses (`approved`, say) has nothing sensible to "edit" but
+// still needs somewhere to show its outcome. Since 0111 that outcome is the whole of the
+// post-match experience: who the sponsor is, what they committed, and how to reach them.
 export default async function CoachSubmissionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const authed = await getAuthedProfile()
@@ -49,6 +50,27 @@ export default async function CoachSubmissionDetailPage({ params }: { params: Pr
   const isEditable = (COACH_EDITABLE_STATUSES as readonly string[]).includes(submission.status)
   const sponsorName = sponsor?.company_name ?? 'Sponsor'
   const amountCents = submission.reserved_amount_cents || submission.requested_amount_cents
+  const isMatched = submission.status === 'approved'
+
+  /**
+   * The sponsor's contact address, for the handoff panel only.
+   *
+   * This crosses a boundary that was closed deliberately: v_sponsors_public omits
+   * contact_email, and its COMMENT ON VIEW names that as P0-4 — a coach must not be able to
+   * enumerate sponsor contacts by browsing. So rather than loosen the view (house rule 9),
+   * the crossing is done here through the admin client, scoped to the single sponsor this
+   * coach's own approved submission is already tied to, selecting the one column. A coach
+   * with no match gets nothing, which is the pre-existing behaviour.
+   */
+  let sponsorContactEmail: string | null = null
+  if (isMatched && submission.sponsor_id) {
+    const { data: contact } = await createAdminClient()
+      .from('sponsors')
+      .select('contact_email')
+      .eq('id', submission.sponsor_id)
+      .maybeSingle()
+    sponsorContactEmail = contact?.contact_email ?? null
+  }
 
   // Read through the RLS-respecting server client: sm_select_coach already hides other
   // people's pending drafts and other coaches' threads, so there is nothing to re-filter
@@ -78,7 +100,16 @@ export default async function CoachSubmissionDetailPage({ params }: { params: Pr
         <StatusBadge status={submission.status} />
       </div>
 
-      {await AgreementStatusRow({ supabase, submissionId: id, viewerRole: 'coach' })}
+      {isMatched && (
+        <MatchHandoffPanel
+          viewer="coach"
+          counterpartyName={sponsorName}
+          counterpartyEmail={sponsorContactEmail}
+          amountCents={amountCents}
+          askedForCents={submission.requested_amount_cents}
+          teamName={team.team_name}
+        />
+      )}
 
       <Card>
         <CardHeader>

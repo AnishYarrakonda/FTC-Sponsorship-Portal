@@ -6,10 +6,7 @@ import CoachVerificationEmail from '@/emails/coach-verification-email'
 import CoachSignupWelcomeEmail from '@/emails/coach-signup-welcome'
 import CoachDenialEmail from '@/emails/coach-denial-email'
 import NotificationEmail from '@/emails/notification-email'
-import FulfillmentNudgeEmail from '@/emails/fulfillment-nudge-email'
-import FundingReceiptEmail from '@/emails/funding-receipt-email'
 import ThreadMessageEmail from '@/emails/thread-message-email'
-import type { ReceiptDocumentContext } from '@/lib/receipt-document'
 import { Resend } from 'resend'
 import { createHash } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -477,94 +474,6 @@ export async function sendWelcomeInAppNotification(
     skipEmail: true, // coach already receives sendCoachSignupWelcomeEmail
   })
 }
-
-export async function sendFulfillmentNudgeEmail(args: {
-  fulfillmentId: string
-  to: string
-  replyTo?: string
-  recipientName: string
-  audience: 'sponsor' | 'coach' | 'admin'
-  sponsorName: string
-  teamName: string
-  ftcTeamNumber: number | null
-  amountCents: number
-  status: 'pledged' | 'agreement_signed' | 'payment_sent'
-  daysOpen: number
-}): Promise<NotifyResult> {
-  const dateStr = new Date().toISOString().split('T')[0]
-  const idempotencyKey = createHash('sha256')
-    .update(args.fulfillmentId + 'nudge' + args.audience + dateStr)
-    .digest('hex')
-
-  const ctaUrl = args.audience === 'admin'
-    ? `${env.NEXT_PUBLIC_APP_URL}/reconciliation`
-    : args.audience === 'sponsor'
-    ? `${env.NEXT_PUBLIC_APP_URL}/sponsor/funding`
-    : `${env.NEXT_PUBLIC_APP_URL}/dashboard?tab=funding`
-
-  const ctaLabel = args.audience === 'sponsor' && (args.status === 'pledged' || args.status === 'agreement_signed')
-    ? 'Mark payment sent'
-    : args.audience === 'coach'
-    ? 'Confirm receipt'
-    : 'View details'
-
-  return sendViaResend(
-    'sendFulfillmentNudgeEmail',
-    {
-      from: env.RESEND_FROM_EMAIL,
-      to: args.to,
-      replyTo: args.replyTo || SUPPORT_EMAIL,
-      subject: `Update on ${args.sponsorName} sponsorship for ${args.teamName}`,
-      react: FulfillmentNudgeEmail({
-        recipientName: args.recipientName,
-        audience: args.audience,
-        sponsorName: args.sponsorName,
-        teamName: args.teamName,
-        ftcTeamNumber: args.ftcTeamNumber,
-        amountCents: args.amountCents,
-        status: args.status,
-        daysOpen: args.daysOpen,
-        ctaUrl,
-        ctaLabel,
-      }),
-    },
-    { idempotencyKey }
-  )
-}
-
-export async function sendFundingReceiptEmail(args: {
-  receiptId: string
-  receiptNumber: string
-  to: string
-  replyTo?: string
-  ctx?: ReceiptDocumentContext
-  /** Pass stored document_html to re-send immutably without re-rendering. */
-  rawHtml?: string
-  isResend?: boolean
-}): Promise<NotifyResult> {
-  const idempotencyKey = args.isResend
-    ? createHash('sha256').update(args.receiptId + 'receipt-resend' + Date.now()).digest('hex')
-    : createHash('sha256').update(args.receiptId + 'receipt').digest('hex')
-
-  // Prefer stored HTML (resend path) to avoid silently picking up template changes.
-  // Fall back to rendering from ctx when rawHtml is not supplied (first-issue path).
-  const reactElement = (!args.rawHtml && args.ctx) ? FundingReceiptEmail(args.ctx) : undefined
-  const payeeName = args.ctx?.payeeLegalName ?? 'the payee'
-
-  return sendViaResend(
-    'sendFundingReceiptEmail',
-    {
-      from: env.RESEND_FROM_EMAIL,
-      to: args.to,
-      replyTo: args.replyTo || SUPPORT_EMAIL,
-      subject: `[Receipt ${args.receiptNumber}] Contribution Acknowledgment — ${payeeName}`,
-      ...(args.rawHtml ? { html: args.rawHtml } : { react: reactElement }),
-    },
-    { idempotencyKey }
-  )
-}
-
-
 
 /**
  * Email a released Q&A message to the counterparty.

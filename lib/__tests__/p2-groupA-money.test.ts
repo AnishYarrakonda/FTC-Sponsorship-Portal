@@ -18,63 +18,34 @@ import { TERMINAL_STATUSES, COACH_EDITABLE_STATUSES, isTerminal } from '../submi
 const root = join(__dirname, '..', '..')
 const read = (p: string) => readFileSync(join(root, p), 'utf8')
 
-describe('A-04-02 — needs_legal_review gates agreement signing', () => {
-  const migration = read('supabase/migrations/0106_legal_review_gate_and_orphan_fulfillments.sql')
+describe('0111 — the agreement and fulfillment layers stay gone', () => {
+  const migration = read('supabase/migrations/0111_strip_post_match_pipeline.sql')
 
-  it('sign_agreement_atomic refuses a template flagged for legal review', () => {
-    expect(migration).toContain('IF v_template.needs_legal_review THEN')
-    expect(migration).toContain("'template_needs_legal_review'")
+  it('the signature gate is removed, not merely bypassed', () => {
+    // A-04-03 and A-04-02 both lived in record_fulfillment_transition / sign_agreement_atomic.
+    // Neither function exists now; this asserts nobody reintroduces the callee.
+    expect(migration).toContain('DROP FUNCTION IF EXISTS agreement_is_signed(uuid)')
+    expect(migration).toContain('DROP FUNCTION IF EXISTS record_fulfillment_transition')
   })
 
-  it('the gate sits AFTER the template was resolved, so it cannot mask template_not_effective', () => {
-    const effectiveAt = migration.indexOf("'template_not_effective'")
-    const legalAt = migration.indexOf("'template_needs_legal_review'")
-    expect(effectiveAt).toBeGreaterThan(-1)
-    expect(legalAt).toBeGreaterThan(effectiveAt)
+  it('the decision RPC no longer writes a fulfillment row', () => {
+    // The body in this migration was patched from a LIVE pg_get_functiondef dump. If a
+    // future edit rebuilds it from 0100 instead, the fulfillment inserts come back AND the
+    // 0101 anon-actor fix (A-02-02) silently disappears -- so both are pinned here.
+    const fn = migration.slice(
+      migration.indexOf('CREATE OR REPLACE FUNCTION public.sponsor_decide_submission_atomic'),
+      migration.indexOf('REVOKE EXECUTE ON FUNCTION public.sponsor_decide_submission_atomic')
+    )
+    expect(fn).not.toContain('funding_fulfillment')
+    expect(fn).toContain('is_trusted_server_context()')
+    expect(fn).toContain('v_prior_reserved')
   })
 
-  it('the 0099 approver-rank gate survives the rewrite', () => {
-    // Rebuilding a function body from an older migration has silently deleted later fixes
-    // three times in this repo. 0106 was patched from a live pg_get_functiondef dump; this
-    // asserts the previous fix is still in the text that will be applied.
-    expect(migration).toContain('sponsor_member_role_rank')
-    expect(migration).toContain("sponsor_member_role_rank('approver')")
-  })
-
-  it('the signer is told who can unblock it, not shown a raw error code', () => {
-    const src = read('app/actions/agreements-sign.ts')
-    expect(src).toContain("case 'template_needs_legal_review':")
-    expect(src).toMatch(/awaiting review by counsel/i)
-  })
-
-  it('the signing panel blocks rather than inviting a signature the DB will refuse', () => {
-    const panel = read('components/agreements/signing-panel.tsx')
-    expect(panel).toContain('blockedByLegalReview')
-    // The consent controls and the submit button must both be inert.
-    expect(panel).toMatch(/const controlsDisabled = [^\n]*blockedByLegalReview/)
-    expect(panel).toMatch(/const canSubmit =[\s\S]{0,160}!blockedByLegalReview/)
-    // The old copy actively invited signing; that is the bug.
-    expect(panel).not.toContain('You can sign, and the signature is legally recorded')
-  })
-})
-
-describe('A-04-03 — orphaned fulfillments cannot move money', () => {
-  const migration = read('supabase/migrations/0106_legal_review_gate_and_orphan_fulfillments.sql')
-
-  it('record_fulfillment_transition refuses every forward transition on an orphan', () => {
-    expect(migration).toContain("IF v_f.submission_id IS NULL AND p_to_status <> 'cancelled' THEN")
-    expect(migration).toContain("'submission_orphaned'")
-  })
-
-  it('cancellation is still permitted, so capacity can be released', () => {
-    // The guard is scoped to `p_to_status <> 'cancelled'` precisely so the 0095 release
-    // path below it stays reachable — an orphan that could not be cancelled would hold a
-    // sponsor's capacity forever.
-    expect(migration).toContain('funding_capacity_releases')
-  })
-
-  it('the pre-existing signature gate is still present', () => {
-    expect(migration).toContain('agreement_is_signed')
+  it('capacity can still be given back, or a dead match burns a sponsor cap forever', () => {
+    expect(migration).toContain('CREATE OR REPLACE FUNCTION public.void_match_atomic')
+    expect(migration).toContain("'void'")
+    // The compensating row must be negative; a positive one would double-count the match.
+    expect(migration).toContain('transactions_ledger_void_sign_check')
   })
 })
 
@@ -141,47 +112,6 @@ describe('B-03-12 — a dispatched pitch can be withdrawn', () => {
     // `delivered` and `opened` shipped without a badge config once already; that is how a
     // live pitch fell out of both dashboards mid-flight.
     expect(read('components/ui/status-badge.tsx')).toContain('withdrawn:')
-  })
-})
-
-describe('B-03-14 — one receipt reports one date on every surface', () => {
-  // 2026-08-22T04:16:35Z is 2026-08-21 in America/Los_Angeles. The bug was that the table
-  // rendered the local day and the document rendered the UTC day.
-  const issuedAt = '2026-08-22T04:16:35+00:00'
-  const contributionDate = '2026-08-22'
-
-  it('a timestamptz and a date column for the same day format identically', () => {
-    expect(formatTransactionDate(issuedAt)).toBe(formatTransactionDate(contributionDate))
-  })
-
-  it('the formatted value is the UTC calendar day, not the runner timezone', () => {
-    expect(formatTransactionDate(issuedAt)).toBe('Aug 22, 2026')
-    expect(toUtcCalendarDate(issuedAt)).toBe('2026-08-22')
-  })
-
-  it('a date-only string is not shifted backwards', () => {
-    // `new Date('2026-08-22')` is UTC midnight; formatting it in a negative-offset zone
-    // without timeZone:'UTC' yields Aug 21. That is the off-by-one.
-    expect(formatTransactionDate('2026-08-22')).toBe('Aug 22, 2026')
-    expect(formatTransactionDateShort('2026-08-22')).toBe('Aug 22')
-  })
-
-  it('null and malformed values degrade to a dash, never "Invalid Date"', () => {
-    expect(formatTransactionDate(null)).toBe('—')
-    expect(formatTransactionDate('not a date')).toBe('—')
-    expect(toUtcCalendarDate(undefined)).toBe('')
-  })
-
-  it('the receipts table and the receipt document use the same formatter', () => {
-    expect(read('app/(sponsor)/sponsor/funding/page.tsx')).toContain('formatTransactionDate(r.issued_at)')
-    expect(read('app/(sponsor)/sponsor/funding/page.tsx')).toContain('formatTransactionDate(r.contribution_date)')
-    expect(read('lib/receipt-document.tsx')).toContain('formatTransactionDate(ctx.issuedAt)')
-  })
-
-  it('no fulfillment surface formats dates in en-GB any more', () => {
-    for (const f of ['components/sponsor/sponsor-fulfillment-row.tsx', 'components/coach/funding-tab.tsx']) {
-      expect(read(f), f).not.toContain('en-GB')
-    }
   })
 })
 
@@ -289,34 +219,27 @@ describe('A-03-03 — the proposal branch revalidates every affected surface', (
  * and the one remaining action is not an engineering one. It is recorded in
  * prompts/_NEXT-SESSION.md as the single thing Anish must obtain from counsel.
  */
-describe('B-03-08 — an unreviewed agreement cannot be countersigned', () => {
-  const migration = read('supabase/migrations/0106_legal_review_gate_and_orphan_fulfillments.sql')
-
-  it('the DB refuses to sign while needs_legal_review is true', () => {
-    expect(migration).toContain('IF v_template.needs_legal_review THEN')
-    expect(migration).toContain("'template_needs_legal_review'")
+describe('B-03-08 — nobody invents a jurisdiction', () => {
+  /**
+   * Filed when the seeded sponsorship_agreement carried
+   *     TODO(legal): jurisdiction to be set by counsel.
+   * and nothing stopped it being executed. 0111 removed the agreement layer outright, which
+   * closes it -- but the PRINCIPLE has one artifact left: Terms of Service section 13 still
+   * says the governing law and venue "have not yet been fixed".
+   *
+   * That is the honest state and it blocks nothing. What must not happen is an engineer
+   * quietly filling in a jurisdiction to tidy the copy. This test exists to make that edit
+   * fail loudly and route it to counsel instead.
+   */
+  it('the Terms still defer governing law to counsel rather than naming one', () => {
+    const terms = read('app/legal/terms/page.tsx')
+    expect(terms).toContain('ATTORNEY REVIEW REQUIRED')
+    expect(terms).toMatch(/have not yet been fixed/)
   })
 
-  it('the gate is the ONLY thing standing between the TODO and an executed document', () => {
-    // If someone clears the flag without replacing the clause, the document executes with
-    // the placeholder in it. That is a deliberate product decision (the flag means "counsel
-    // has reviewed this"), not an oversight — but it must stay a conscious admin act.
-    const approve = read('app/actions/agreements.ts')
-    expect(approve).toContain('needs_legal_review: false')
-    expect(approve).toContain('requireAdmin')
-  })
-
-  it('no jurisdiction was fabricated into the seeded template', () => {
-    // The seeded body lives in migration 0079. If a future change writes a jurisdiction
-    // there without counsel, this fails and someone has to justify it.
-    const seed = read('supabase/migrations/0079_agreement_templates.sql')
-    expect(seed).toContain('TODO(legal)')
-    expect(seed).toContain('LEGAL REVIEW REQUIRED')
-  })
-
-  it('the signer is told it is blocked, not invited to sign anyway', () => {
-    const panel = read('components/agreements/signing-panel.tsx')
-    expect(panel).toContain('This agreement cannot be signed yet.')
-    expect(panel).not.toContain('You can sign, and the signature is legally recorded')
+  it('no sponsorship agreement template survives to be signed', () => {
+    const migration = read('supabase/migrations/0111_strip_post_match_pipeline.sql')
+    expect(migration).toContain('DROP TABLE IF EXISTS agreement_templates')
+    expect(migration).toContain('DROP FUNCTION IF EXISTS sign_agreement_atomic')
   })
 })

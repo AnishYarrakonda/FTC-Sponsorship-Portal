@@ -10,17 +10,41 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+import { execSync } from 'node:child_process'
+
 const root = join(__dirname, '..', '..')
 const read = (p: string) => readFileSync(join(root, p), 'utf8')
 
 describe('A-05-01 / A-05-02 — invited teammates are notified', () => {
-  it('the nudge cron resolves recipients through the shared union helper', () => {
-    const src = read('app/api/cron/nudge-fulfillments/route.ts')
-    expect(src).toContain('sponsorRecipientProfiles')
-    // The hand-rolled profiles-only read is the bug: profiles.sponsor_id is stamped only
-    // on the ORIGINAL account holder, so an all-invited org resolved to zero recipients —
-    // and an empty list is indistinguishable from a successful send.
-    expect(src).not.toMatch(/from\('profiles'\)[\s\S]{0,160}eq\('role', 'sponsor'\)[\s\S]{0,80}eq\('sponsor_id'/)
+  it('no surviving caller hand-rolls the sponsor-recipient read', () => {
+    // The nudge cron this originally named was removed with the fulfillment layer (0111),
+    // but the bug it encoded is general: profiles.sponsor_id is stamped only on the
+    // ORIGINAL account holder, so a hand-rolled profiles-only read resolves an all-invited
+    // org to zero recipients — and an empty recipient list is indistinguishable from a
+    // successful send. Asserted across the tree rather than against one file, so deleting
+    // the next caller cannot quietly delete the coverage too.
+    const hits = execSync(
+      "grep -rl \"eq('role', 'sponsor')\" app lib --include=*.ts --include=*.tsx || true",
+      { cwd: root, encoding: 'utf8' }
+    )
+      .split('\n')
+      .filter((f) => f && !f.includes('sponsor-recipients.ts') && !f.includes('__tests__'))
+
+    for (const f of hits) {
+      const src = read(f)
+      const handRolled =
+        /from\('profiles'\)[\s\S]{0,160}eq\('role', 'sponsor'\)[\s\S]{0,80}eq\('sponsor_id'/.test(src)
+      if (!handRolled) continue
+
+      // The bug is a profiles-only read, NOT the profiles read itself: app/actions/messages.ts
+      // legitimately reads profiles and unions sponsor_members inline, which is what the
+      // shared helper does. So the assertion is that every such reader also picks up members
+      // one way or the other -- otherwise invited teammates are silently dropped.
+      expect(
+        /sponsor_members|sponsorRecipient/.test(src),
+        `${f} reads sponsor profiles without unioning sponsor_members`
+      ).toBe(true)
+    }
   })
 
   it('admin approval fans out through the same helper', () => {

@@ -261,9 +261,12 @@ check('02.7', 'db', 'tax-documents bucket is private, 5 MB, application/pdf only
   return 'private, 5 MB, application/pdf'
 })
 
-check('02.13', 'env', 'PAYOUT_ENCRYPTION_KEY is validated in lib/env.ts', async () => {
+check('02.13', 'env', 'PAYOUT_ENCRYPTION_KEY is gone from lib/env.ts (0111 removed payouts)', async () => {
   const src = read('lib/env.ts')
-  return assert(/PAYOUT_ENCRYPTION_KEY/.test(src), 'PAYOUT_ENCRYPTION_KEY absent from lib/env.ts')
+  // Inverted by 0111: the payout/W-9 subsystem was removed, so a *required* env var that
+  // nothing reads is now a deployment hazard (it 500s a fresh clone for no reason), not a
+  // safeguard. The check stays, pointing the other way.
+  return assert(!/PAYOUT_ENCRYPTION_KEY/.test(src), 'PAYOUT_ENCRYPTION_KEY still required in lib/env.ts')
 })
 
 // ---- 03 · fulfillment UI & reconciliation ------------------------------------

@@ -15,68 +15,29 @@ import path from 'path'
 const repoRoot = path.resolve(__dirname, '../..')
 const read = (p: string) => fs.readFileSync(path.join(repoRoot, p), 'utf8')
 
-describe('B-03-01: the automatic tax receipt must use the system actor', () => {
-  const fulfillmentSrc = read('app/actions/fulfillment.ts')
-
-  it('confirmPaymentReceived passes a NULL actor, never the coach profile id', () => {
-    const call = fulfillmentSrc.match(/generateAndStoreReceipt\([^)]*\)/)
-    expect(call).not.toBeNull()
-    // issue_funding_receipt rejects any non-NULL actor whose profiles.role !== 'admin'.
-    // The coach is never an admin, so `user.id` here made the call fail 100% of the time
-    // and no receipt was ever issued by this path.
-    expect(call![0]).toContain('null')
-    expect(call![0]).not.toContain('user.id')
-  })
-
-  it('the confirm dialog surfaces a receipt-issuance warning instead of a success toast', () => {
-    const dialog = read('components/coach/confirm-receipt-dialog.tsx')
-    // The action returns { success: true, warning } when the receipt fails. The dialog
-    // branched only on res.error, so that warning was silently discarded — which is the
-    // reason this bug survived in production.
-    expect(dialog).toContain('res.warning')
-    const warningIdx = dialog.indexOf('res.warning')
-    const successIdx = dialog.indexOf("toast.success('Payment confirmed')")
-    expect(warningIdx).toBeGreaterThan(-1)
-    expect(successIdx).toBeGreaterThan(-1)
-    // The warning branch must come FIRST, or the success toast swallows it again.
-    expect(warningIdx).toBeLessThan(successIdx)
-  })
-
-  it('the admin-initiated receipt paths still pass a real admin actor', () => {
-    const receiptSrc = read('app/actions/receipt.ts')
-    expect(receiptSrc).toContain('requireAdmin')
-    expect(receiptSrc).toContain('user.id')
-  })
-})
-
-describe('B-02-01: signing a sponsorship agreement takes approver rank', () => {
-  it('signAgreement gates sponsors on approver, and leaves coaches alone', () => {
-    const src = read('app/actions/agreements-sign.ts')
+describe('B-02-01: an act that binds the sponsor org takes approver rank', () => {
+  /**
+   * Originally filed against signing a sponsorship agreement, which 0111 removed along with
+   * the rest of the e-signature layer. The finding itself is NOT moot: it was that a
+   * low-ranked org member (viewer is the default rank for JIT/SSO joiners) could take an
+   * action that commits the company's money. The act that does that today is confirming a
+   * funding decision, so the assertions move there rather than being deleted.
+   */
+  it('confirming a decision proposal is approver-gated in the action', () => {
+    const src = read('app/actions/sponsor-approvals.ts')
     expect(src).toContain("requireSponsorRole('approver')")
-    // The gate must be scoped to sponsors — a coach signs as the team owner and has no
-    // sponsor-org rank at all, so applying it unconditionally would break countersigning.
-    expect(src).toMatch(/signerRole === 'sponsor'[\s\S]{0,400}requireSponsorRole\('approver'\)/)
   })
 
-  it('the RPC failure code is mapped to a message that names the required rank', () => {
-    const src = read('app/actions/agreements-sign.ts')
-    expect(src).toContain('insufficient_org_role')
+  it('proposing is submitter-gated, so a viewer cannot even start one', () => {
+    const src = read('app/actions/sponsor-decision.ts')
+    expect(src).toContain("requireSponsorRole('submitter')")
   })
 
-  it('the sponsor sign page and the Sign now affordance are both rank-gated', () => {
-    const page = read('app/(sponsor)/sponsor/submissions/[id]/sign/page.tsx')
-    expect(page).toContain("requireSponsorRole('approver')")
-
-    const row = read('components/agreements/agreement-status-row.tsx')
-    expect(row).toContain("hasSponsorRole(sponsorMemberRole ?? null, 'approver')")
-  })
-
-  it('migration 0099 enforces the same rank in SQL, independent of the caller', () => {
-    const sql = read('supabase/migrations/0099_sign_agreement_member_rank.sql')
-    expect(sql).toContain('sponsor_member_role_rank')
-    expect(sql).toContain('insufficient_org_role')
+  it('SQL enforces the same rank independent of the caller', () => {
     // The UI and the action are conveniences; this is the gate that actually holds.
-    expect(sql).toContain('CREATE OR REPLACE FUNCTION public.sign_agreement_atomic')
+    const sql = read('supabase/migrations/0083_sponsor_roles_and_approvals.sql')
+    expect(sql).toContain('sponsor_member_role_rank')
+    expect(sql).toContain('confirm_sponsor_decision_proposal')
   })
 })
 
@@ -117,20 +78,6 @@ describe('A-04-01: sponsor decisions reconcile capacity in both directions', () 
     // v_reserved is overwritten with requested_amount_cents when nothing was reserved;
     // using it as the baseline would compute a delta of 0 and reintroduce the bug.
     expect(sql).toContain('v_prior_reserved := COALESCE(v_submission.reserved_amount_cents, 0)')
-  })
-})
-
-describe('A-06-01: receipts never carry a full EIN', () => {
-  it('the receipt context has no full-EIN field and receipts.ts never resolves one', () => {
-    const doc = read('lib/receipt-document.tsx')
-    expect(doc).not.toContain('payeeEinFull')
-
-    const receipts = read('lib/receipts.ts')
-    expect(receipts).not.toContain('payeeEinFull')
-    // The decrypting RPC must not be CALLED from the receipt render path at all: whatever
-    // it returns would be persisted to funding_receipts.document_html and emailed.
-    // (Matches an invocation, not the word — the comment explaining why still names it.)
-    expect(receipts).not.toMatch(/rpc\(\s*['"`]get_payout_ein/)
   })
 })
 

@@ -15,7 +15,6 @@ import { toast } from 'sonner'
 import Image from 'next/image'
 import Link from 'next/link'
 import type { Team, TeamAchievement } from '@/lib/supabase/types'
-import { resolveW9Status, type W9Status } from '@/lib/w9-status'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@clerk/nextjs'
 import { cn } from '@/lib/utils'
@@ -343,23 +342,6 @@ export function PortfolioTab({ team, achievements }: { team: Team, achievements:
     el.focus({ preventScroll: true })
   }
 
-  // B-03-13. This local ladder keyed on w9_document_path FIRST, so a verified team whose
-  // document had been purged under retention read as "Awaiting W-9" here while the funding
-  // tab called it verified. resolveW9Status is now the only place that decision is made.
-  const [payoutStatus, setPayoutStatus] = useState<W9Status>('not_started')
-
-  useEffect(() => {
-    const supabase = createClient()
-    supabase
-      .from('team_payout_profiles')
-      .select('legal_payee_name, w9_document_path, w9_uploaded_at, w9_verified_at, w9_rejected_at, w9_purged_at')
-      .eq('team_id', team.id)
-      // P3: .single() throws a console 406 on every load for a team with no payout
-      // profile; the absence of a row is the expected state here, not an error.
-      .maybeSingle()
-      .then(({ data }) => setPayoutStatus(resolveW9Status(data)))
-  }, [team.id])
-
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-4xl">
@@ -391,51 +373,6 @@ export function PortfolioTab({ team, achievements }: { team: Team, achievements:
               </button>
             )}
           </div>
-        </div>
-
-        {/* Payout & Tax Details Status Card */}
-        <div className="rounded-xl border border-border bg-card p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Payout &amp; tax details</h3>
-              {/* B-04-11. These five were hand-rolled with raw Tailwind palette classes
-                  while every other status badge in the app uses the --badge-* tokens.
-                  Measured over --bg-surface #FFFCF7: amber-600 3.11:1 and emerald-600
-                  3.68:1 both fail AA for this 12px text (and the finding measured the
-                  amber one at ~2.8:1 over the composited tint). The token pairs measure
-                  warning 6.32:1, success 5.24:1, pending 4.84:1, rejected 7.06:1.
-
-                  The finding named only the amber badge; the other four are the same
-                  defect in the same element and are fixed together rather than left to be
-                  refiled. */}
-              {payoutStatus === 'not_started' && (
-                <span className="rounded-full bg-muted border border-border px-2.5 py-0.5 text-xs font-medium text-muted-foreground">Not started</span>
-              )}
-              {payoutStatus === 'awaiting_upload' && (
-                <span className="rounded-full border px-2.5 py-0.5 text-xs font-medium bg-[var(--badge-warning-bg)] border-[var(--badge-warning-text)]/25 text-[var(--badge-warning-text)]">Awaiting W-9</span>
-              )}
-              {/* B-03-13. Verified, document purged. Success, not warning: the verification
-                  stands and no payment is blocked — only the copy asks for a re-upload. */}
-              {payoutStatus === 'verified_purged' && (
-                <span className="rounded-full border px-2.5 py-0.5 text-xs font-medium bg-[var(--badge-success-bg)] border-[var(--badge-success-text)]/25 text-[var(--badge-success-text)]">Verified · re-upload requested</span>
-              )}
-              {payoutStatus === 'in_review' && (
-                <span className="rounded-full border px-2.5 py-0.5 text-xs font-medium bg-[var(--badge-pending-bg)] border-[var(--badge-pending-text)]/25 text-[var(--badge-pending-text)]">In review</span>
-              )}
-              {payoutStatus === 'verified' && (
-                <span className="rounded-full border px-2.5 py-0.5 text-xs font-medium bg-[var(--badge-success-bg)] border-[var(--badge-success-text)]/25 text-[var(--badge-success-text)]">Verified</span>
-              )}
-              {payoutStatus === 'rejected' && (
-                <span className="rounded-full border px-2.5 py-0.5 text-xs font-medium bg-[var(--badge-rejected-bg)] border-[var(--badge-rejected-text)]/25 text-[var(--badge-rejected-text)]">Needs attention (rejected)</span>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Sponsors release funds to a verified legal payee and W-9. Keep your payee identity and W-9 up to date.
-            </p>
-          </div>
-          <Button asChild variant="outline" size="sm" className="shrink-0">
-            <Link href="/team/payout">Manage Payout Details</Link>
-          </Button>
         </div>
 
         {/* Section navigation */}

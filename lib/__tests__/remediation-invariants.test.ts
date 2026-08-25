@@ -175,86 +175,14 @@ describe('submission status groupings', () => {
 /**
  * Prompt 03 — Fulfillment UI Invariants
  */
-describe('fulfillment UI invariants', () => {
-  it('payment_reference / paymentReference string does NOT appear in email template, nudge cron, or sendFulfillmentNudgeEmail body', () => {
-    const root = process.cwd()
-    const emailFile = fs.readFileSync(path.join(root, 'emails/fulfillment-nudge-email.tsx'), 'utf-8')
-    const cronFile = fs.readFileSync(path.join(root, 'app/api/cron/nudge-fulfillments/route.ts'), 'utf-8')
-    const notifyFile = fs.readFileSync(path.join(root, 'lib/notify.ts'), 'utf-8')
-
-    // Brace-counted, not `^}`-anchored: a non-match used to yield '' and pass silently,
-    // and one level of indentation was all it took to produce one.
-    const sendFulfillmentNudgeEmailBody = functionBody(notifyFile, 'sendFulfillmentNudgeEmail')
-
-    expect(emailFile).not.toContain('payment_reference')
-    expect(emailFile).not.toContain('paymentReference')
-
-    expect(cronFile).not.toContain('payment_reference')
-    expect(cronFile).not.toContain('paymentReference')
-
-    expect(sendFulfillmentNudgeEmailBody).not.toContain('payment_reference')
-    expect(sendFulfillmentNudgeEmailBody).not.toContain('paymentReference')
-  })
-
-  it('no component under components/{coach,sponsor,admin} re-declares a fulfillment status array literal', () => {
-    const root = process.cwd()
-
-    function getFiles(dir: string): string[] {
-      let results: string[] = []
-      const list = fs.readdirSync(dir)
-      list.forEach((file: string) => {
-        const filePath = path.join(dir, file)
-        const stat = fs.statSync(filePath)
-        if (stat && stat.isDirectory()) {
-          results = results.concat(getFiles(filePath))
-        } else if (filePath.endsWith('.tsx') || filePath.endsWith('.ts')) {
-          results.push(filePath)
-        }
-      })
-      return results
-    }
-
-    const componentDirs = ['components/coach', 'components/sponsor', 'components/admin']
-    const arrayRegex = /\[\s*(['"])pledged\1/
-
-    for (const dirName of componentDirs) {
-      const fullDir = path.join(root, dirName)
-      if (fs.existsSync(fullDir)) {
-        const files = getFiles(fullDir)
-        for (const file of files) {
-          const content = fs.readFileSync(file, 'utf-8')
-          expect(arrayRegex.test(content)).toBe(false)
-        }
-      }
-    }
-  })
-})
-
-/**
- * Prompt 04 — Funding Receipts Migration & Policy Invariants
- */
-describe('funding receipts migration invariants', () => {
-  it('0078_funding_receipts.sql contains REVOKE EXECUTE for both new functions and no occurrence of auth.uid()', () => {
-    const root = process.cwd()
-    const sqlPath = path.join(root, 'supabase/migrations/0078_funding_receipts.sql')
-    const sqlContent = fs.readFileSync(sqlPath, 'utf-8')
-
-    expect(sqlContent).not.toContain('auth.uid()')
-    expect(sqlContent).toContain('REVOKE EXECUTE ON FUNCTION issue_funding_receipt')
-    expect(sqlContent).toContain('REVOKE EXECUTE ON FUNCTION void_funding_receipt')
-    expect(sqlContent).toContain('GRANT  EXECUTE ON FUNCTION issue_funding_receipt')
-    expect(sqlContent).toContain('GRANT  EXECUTE ON FUNCTION void_funding_receipt')
-  })
-
-  it('funding_receipts has no FOR UPDATE, FOR INSERT, or FOR DELETE policies', () => {
-    const root = process.cwd()
-    const sqlPath = path.join(root, 'supabase/migrations/0078_funding_receipts.sql')
-    const sqlContent = fs.readFileSync(sqlPath, 'utf-8')
-
-    expect(sqlContent).not.toMatch(/CREATE\s+POLICY.*FOR\s+UPDATE/i)
-    expect(sqlContent).not.toMatch(/CREATE\s+POLICY.*FOR\s+INSERT/i)
-    expect(sqlContent).not.toMatch(/CREATE\s+POLICY.*FOR\s+DELETE/i)
-  })
-})
-
-
+// The 'fulfillment UI invariants' and 'funding receipts migration invariants' blocks that
+// stood here asserted properties of the payment state machine, the nudge email/cron and the
+// funding_receipts table. Migration 0111 removed all of them: the platform never touched the
+// money, so tracking a transaction it could not observe was asserting things it could not
+// stand behind.
+//
+// Nothing is lost that still applies. The surviving equivalents:
+//   * "no component re-declares a status array literal" -> the fulfillment status union no
+//     longer exists in TS at all, which is a stronger guarantee than not duplicating it.
+//   * the 0078 REVOKE/auth.uid() checks -> 0111 drops those functions and that table, and
+//     p2-groupA-money.test.ts pins the drops so they cannot be quietly reintroduced.

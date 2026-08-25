@@ -9,7 +9,6 @@ import { execSync as execSync_ } from 'node:child_process'
 import { join } from 'node:path'
 import { submissionSchema, submissionDraftSchema } from '../schemas/submission'
 import { formatMoney, formatMoneyAmount } from '../format-money'
-import { resolveW9Status, w9AcceptsUpload, w9NeedsCoachAction } from '../w9-status'
 import { STATUS_CONFIG } from '@/components/ui/status-badge'
 
 const root = join(__dirname, '..', '..')
@@ -133,69 +132,6 @@ describe('B-03-10 — every write from the submission actions is validated', () 
   })
 })
 
-describe('B-03-13 — one predicate decides W-9 readiness on every surface', () => {
-  const base = { legal_payee_name: 'Test Team Inc' }
-
-  it('no payout profile at all', () => {
-    expect(resolveW9Status(null)).toBe('not_started')
-    expect(resolveW9Status({})).toBe('not_started')
-  })
-
-  it('profile but no document', () => {
-    expect(resolveW9Status(base)).toBe('awaiting_upload')
-  })
-
-  it('uploaded, awaiting review', () => {
-    expect(resolveW9Status({ ...base, w9_document_path: 'p', w9_uploaded_at: 'now' })).toBe('in_review')
-  })
-
-  it('rejected outranks the upload that caused it', () => {
-    expect(
-      resolveW9Status({ ...base, w9_document_path: 'p', w9_uploaded_at: 'now', w9_rejected_at: 'now' })
-    ).toBe('rejected')
-  })
-
-  it('verified with the document on file', () => {
-    expect(resolveW9Status({ ...base, w9_document_path: 'p', w9_verified_at: 'now' })).toBe('verified')
-  })
-
-  it('THE BUG: verified, document purged by retention — a distinct state, not "missing"', () => {
-    // purgeW9Document nulls w9_document_path and stamps w9_purged_at while leaving
-    // w9_verified_at. Previously: funding tab said one thing, the W-9 page said another,
-    // and the portfolio tab a third.
-    const purged = {
-      ...base,
-      w9_document_path: null,
-      w9_uploaded_at: 'earlier',
-      w9_verified_at: 'earlier',
-      w9_purged_at: 'now',
-    }
-    expect(resolveW9Status(purged)).toBe('verified_purged')
-    // The closed loop that made this a bug: the coach must still be able to upload.
-    expect(w9AcceptsUpload('verified_purged')).toBe(true)
-    expect(w9NeedsCoachAction('verified_purged')).toBe(true)
-  })
-
-  it('only the fully-verified state suppresses the upload control', () => {
-    expect(w9AcceptsUpload('verified')).toBe(false)
-    for (const s of ['not_started', 'awaiting_upload', 'rejected', 'in_review', 'verified_purged'] as const) {
-      expect(w9AcceptsUpload(s), s).toBe(true)
-    }
-  })
-
-  it('all three surfaces call the resolver instead of their own predicate', () => {
-    for (const f of [
-      'components/coach/funding-tab.tsx',
-      'app/(coach)/team/payout/w9/page.tsx',
-      'components/coach/portfolio-tab.tsx',
-    ]) {
-      expect(read(f), f).toContain('resolveW9Status')
-    }
-    // The W-9 page must not gate the upload form on w9_verified_at alone any more.
-    expect(read('app/(coach)/team/payout/w9/page.tsx')).not.toContain('isVerified={!!payoutProfile.w9_verified_at}')
-  })
-})
-
 describe('A-05-04 — one approval, one email', () => {
   it('the portal/approvals path sends only the handshake', () => {
     const src = readCode('lib/decision-followup.ts')
@@ -252,26 +188,6 @@ describe('A-07-03 — money always renders with both cents', () => {
       { cwd: root, encoding: 'utf8' }
     ).trim()
     expect(out).toBe('')
-  })
-})
-
-describe('A-07-04 — receipt statuses go through StatusBadge', () => {
-  it('issued and voided have a badge config with an icon', () => {
-    expect(STATUS_CONFIG.issued).toBeDefined()
-    expect(STATUS_CONFIG.voided).toBeDefined()
-    expect(STATUS_CONFIG.issued.icon).toBeTruthy()
-    expect(STATUS_CONFIG.voided.icon).toBeTruthy()
-  })
-
-  it('the labels are human, not the raw enum', () => {
-    expect(STATUS_CONFIG.issued.label).toBe('Issued')
-    expect(STATUS_CONFIG.voided.label).toBe('Voided')
-  })
-
-  it('the funding page no longer hand-rolls a capitalize span', () => {
-    const src = read('app/(sponsor)/sponsor/funding/page.tsx')
-    expect(src).toContain('<StatusBadge status={r.status} />')
-    expect(src).not.toContain('text-xs font-medium capitalize')
   })
 })
 
