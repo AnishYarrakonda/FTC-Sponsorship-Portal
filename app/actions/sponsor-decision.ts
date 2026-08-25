@@ -280,9 +280,12 @@ export async function recordSponsorDecision(
     // threshold, the link proposes instead of committing, and the single-use token is NOT
     // burned (create_sponsor_decision_proposal never claims it).
     if (submission?.id && requiresApproval(settlingAmount, threshold)) {
+      // p_proposed_by is NULL on purpose: an emailed bearer link has no signed-in profile
+      // behind it. The RPC handles that (the 'token' origin is exactly this case); the cast
+      // is only because the generated signature types the parameter as non-null.
       const { data: rpcResult, error } = await adminClient.rpc('create_sponsor_decision_proposal', {
         p_submission_id: submission.id,
-        p_proposed_by: null,
+        p_proposed_by: null as unknown as string,
         p_amount_cents: decision === 'partial' ? partialAmount : 0,
         p_origin: 'token',
         p_feedback: undefined,

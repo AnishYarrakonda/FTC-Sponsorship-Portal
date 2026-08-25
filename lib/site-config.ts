@@ -117,12 +117,13 @@ export const HERO_DESCRIPTION = 'The professional sponsorship pipeline for FIRST
  * number is zero, and the block hides itself entirely when every figure is zero rather
  * than advertising "$0 funded".
  *
- * This does NOT replace the "100%" / "< 24h" figures further down the page — those are
- * process claims that a live number cannot express, and they stay.
+ * dollarsMatchedCents is what sponsors COMMITTED TO, not what arrived. Since 0111 the
+ * platform does not observe payment at all, so any label for this figure must say
+ * "matched" — "funded", "raised" or "received" would be claims we cannot support.
  */
 export const PLATFORM_STATS_FALLBACK = {
   teamsSupported: 0,
-  dollarsReceivedCents: 0,
+  dollarsMatchedCents: 0,
   studentsReached: 0,
   volunteerHours: 0,
 } as const

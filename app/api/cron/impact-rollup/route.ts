@@ -109,13 +109,15 @@ export async function runImpactRollup(): Promise<CronJobResult> {
     await (supabase as any).rpc('refresh_public_platform_stats')
 
     const regenerateYear = async (year: number) => {
-      // Every sponsor with at least one non-cancelled commitment in the year.
+      // Every sponsor with at least one commitment in the year. Sourced from
+      // transactions_ledger since 0111 -- the fulfillment table is gone. A sponsor whose
+      // only match was later voided still appears here, which is correct: their report for
+      // the year should be regenerated precisely so it drops back to zero.
       const { data: rows } = await supabase
-        .from('funding_fulfillments')
+        .from('transactions_ledger')
         .select('sponsor_id')
-        .neq('status', 'cancelled')
-        .gte('pledged_at', `${year}-01-01T00:00:00.000Z`)
-        .lt('pledged_at', `${year + 1}-01-01T00:00:00.000Z`)
+        .gte('created_at', `${year}-01-01T00:00:00.000Z`)
+        .lt('created_at', `${year + 1}-01-01T00:00:00.000Z`)
 
       const sponsorIds = Array.from(
         new Set((rows ?? []).map((r) => r.sponsor_id as string).filter(Boolean))

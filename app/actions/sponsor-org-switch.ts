@@ -68,8 +68,6 @@ export async function switchActiveSponsorOrg(data: z.input<typeof switchSchema>)
     '/sponsor/dashboard',
     '/sponsor/submissions',
     '/sponsor/approvals',
-    '/sponsor/funding',
-    '/sponsor/recognition',
     '/sponsor/impact',
     '/sponsor/inbox',
     '/sponsor/members',

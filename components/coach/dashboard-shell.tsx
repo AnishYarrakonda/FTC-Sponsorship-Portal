@@ -34,7 +34,7 @@ import { InboxTab } from './inbox-tab'
 import { AccountSettings } from '@/components/account/account-settings'
 import { updateTeam, requestTeamVerificationReview } from '@/app/actions/team'
 import { toast } from 'sonner'
-import type { Team, Notification, Submission, Sponsor, TeamAchievement, SubmissionSummary } from '@/lib/supabase/types'
+import type { Team, Notification, Sponsor, TeamAchievement, SubmissionSummary } from '@/lib/supabase/types'
 
 /**
  * The dashboard projection (app/(coach)/dashboard/page.tsx) carries one field the

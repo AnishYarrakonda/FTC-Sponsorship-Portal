@@ -43,7 +43,6 @@ export const USER_PARTITIONED_BUCKETS = [
   'pitch-storage',
   'visual-pitch-items',
   'pitch-media',
-  'tax-documents',
 ] as const
 
 /** Supabase Storage caps `list()` at 100 objects per call. */
@@ -184,67 +183,7 @@ export async function sweepUnpurgedCredentials(
   return { scanned: rows?.length ?? 0, purged, failed }
 }
 
-/**
- * Destroy a team's W-9 and record that it happened.
- * 
- * Like purgeCoachCredentials, this does storage first, then updates the pointer.
- * This is only called when an admin explicitly deletes it or during account deletion,
- * because W-9s are kept as business records otherwise.
- */
-export async function purgeTeamW9(
-  admin: AdminClient,
-  teamId: string,
-  path: string | null | undefined
-): Promise<{ purged: boolean; error?: string }> {
-  if (path) {
-    const { error } = await admin.storage.from('tax-documents').remove([path])
-    if (error) {
-      console.error(`[retention] W-9 file delete failed for team ${teamId}`, error)
-      Sentry.captureException(
-        new Error(`[retention] W-9 file delete failed for team ${teamId}: ${error.message}`)
-      )
-      // Leave the pointer intact so tonight's sweep or retry can find this row again.
-      return { purged: false, error: error.message }
-    }
-  }
-
-  const { error: updateError } = await admin
-    .from('team_payout_profiles')
-    .update({
-      w9_document_path: null,
-      w9_purged_at: new Date().toISOString(),
-    })
-    .eq('team_id', teamId)
-
-  if (updateError) {
-    console.error(`[retention] W-9 pointer clear failed for team ${teamId}`, updateError)
-    Sentry.captureException(
-      new Error(`[retention] W-9 pointer clear failed for team ${teamId}: ${updateError.message}`)
-    )
-    return { purged: false, error: updateError.message }
-  }
-
-  return { purged: true }
-}
-
-// ─── Superseded-file deletion queue (A-06-02) ────────────────────────────────────
-
-/**
- * Why this exists at all.
- *
- * The purge paths above are careful: storage first, pointer second, so a failure leaves
- * a row the nightly sweep finds again. The *supersede* paths are not, and cannot be —
- * when a coach uploads a replacement ID, the pointer must move to the new file, and the
- * old path is then referenced by nothing. `remove([old]).catch(console.error)` was the
- * whole cleanup. One transient storage error and a government ID is retained forever,
- * invisible to `sweepUnpurgedCredentials` (which only walks live pointers) and to every
- * compliance report.
- *
- * So the path is written down before it stops being reachable, and retried until the
- * object is confirmed gone.
- */
-
-export type StorageDeletionReason = 'superseded_credentials' | 'superseded_w9'
+export type StorageDeletionReason = 'superseded_credentials'
 
 /**
  * Record a superseded object, then try to delete it immediately.
@@ -378,15 +317,6 @@ async function isPathStillLive(admin: AdminClient, bucket: string, path: string)
       .from('profiles')
       .select('id')
       .eq('coach_credentials_url', path)
-      .limit(1)
-    return (data?.length ?? 0) > 0
-  }
-
-  if (bucket === 'tax-documents') {
-    const { data } = await admin
-      .from('team_payout_profiles')
-      .select('team_id')
-      .eq('w9_document_path', path)
       .limit(1)
     return (data?.length ?? 0) > 0
   }

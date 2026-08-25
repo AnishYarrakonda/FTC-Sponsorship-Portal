@@ -25,7 +25,6 @@ import type { Database } from '@/lib/supabase/types'
 // in the reserve/settle path reads it. funding_cap_cents and status stay off this list.
 export const ORG_ADMIN_WRITABLE_SPONSOR_COLUMNS = [
   'approval_required_above_cents',
-  'fiscal_year_start_month',
 ] as const
 
 export type OrgAdminWritableSponsorColumn = (typeof ORG_ADMIN_WRITABLE_SPONSOR_COLUMNS)[number]

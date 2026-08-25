@@ -41,11 +41,6 @@ const deleteAccountSchema = z.object({
   acknowledgeCommitments: z.boolean().optional(),
 })
 
-/**
- * B-03-16. Non-terminal fulfillment statuses — a commitment still in motion. `receipted`
- * and `cancelled` are terminal and need no warning.
- */
-const IN_FLIGHT_FULFILLMENT_STATUSES = ['pledged', 'agreement_signed', 'payment_sent', 'payment_received'] as const
 
 export async function updateProfile(data: { fullName: string }) {
   const result = updateProfileSchema.safeParse(data)
@@ -223,10 +218,13 @@ export async function deleteAccount(data: {
    * B-03-16. Deleting the Clerk user fires `user.deleted`, which removes the profile and
    * lets the database cascade take the team and its submissions with it. That cascade is
    * safe for capacity (the 0067 BEFORE DELETE trigger gives reservations back, and
-   * detect_capacity_drift stays at zero) and the ESIGN record survives because the
-   * signature row snapshots signer_legal_name / signer_email / typed_name. What it did
-   * NOT do was tell anybody: a coach could leave with an executed agreement and a sponsor
-   * who had actually mailed a cheque, and the sponsor would learn nothing.
+   * detect_capacity_drift stays at zero). What it did NOT do was tell anybody: a coach
+   * could leave right after a sponsor agreed to fund them — possibly after that sponsor
+   * had already mailed a cheque — and the sponsor would learn nothing.
+   *
+   * Since 0111 a "live commitment" is an APPROVED submission with a positive net in
+   * transactions_ledger. There is no fulfillment state machine any more, and a void is a
+   * negative ledger row, so netting is both the simplest and the correct test.
    *
    * This is a hard warning rather than a block. Refusing deletion outright would make a
    * user's ability to leave the platform contingent on a third party's payment workflow,
@@ -235,17 +233,47 @@ export async function deleteAccount(data: {
    * on the way out.
    */
   const adminClient = createAdminClient()
-  const { data: liveFulfillments } = await adminClient
-    .from('funding_fulfillments')
-    .select('id, sponsor_id, amount_cents, status, submission_id, teams:team_id(team_name, owner_id)')
-    .in('status', [...IN_FLIGHT_FULFILLMENT_STATUSES])
 
-  const ownCommitments = (liveFulfillments ?? []).filter(
-    (f) => (f.teams as { owner_id?: string } | null)?.owner_id === user.id
-  )
+  const { data: ownTeams } = await adminClient
+    .from('teams')
+    .select('id, team_name')
+    .eq('owner_id', user.id)
+
+  const ownTeamIds = (ownTeams ?? []).map((t) => t.id)
+  const teamNameById = new Map((ownTeams ?? []).map((t) => [t.id, t.team_name as string]))
+
+  type Commitment = { submissionId: string; sponsorId: string; teamName: string; amountCents: number }
+  const ownCommitments: Commitment[] = []
+
+  if (ownTeamIds.length > 0) {
+    const { data: ledgerRows } = await adminClient
+      .from('transactions_ledger')
+      .select('submission_id, sponsor_id, team_id, amount_cents')
+      .in('team_id', ownTeamIds)
+
+    // Net per submission: a match this coach's sponsor already voided is not a live
+    // commitment and must not produce a warning or a notification.
+    const netBySubmission = new Map<string, Commitment>()
+    for (const row of ledgerRows ?? []) {
+      const key = row.submission_id
+      if (!key || !row.sponsor_id || !row.team_id) continue
+      const existing = netBySubmission.get(key)
+      if (existing) {
+        existing.amountCents += row.amount_cents ?? 0
+      } else {
+        netBySubmission.set(key, {
+          submissionId: key,
+          sponsorId: row.sponsor_id,
+          teamName: teamNameById.get(row.team_id) ?? 'A team you sponsor',
+          amountCents: row.amount_cents ?? 0,
+        })
+      }
+    }
+    for (const c of netBySubmission.values()) if (c.amountCents > 0) ownCommitments.push(c)
+  }
 
   if (ownCommitments.length > 0 && !parsed.data.acknowledgeCommitments) {
-    const total = ownCommitments.reduce((sum, f) => sum + (f.amount_cents ?? 0), 0)
+    const total = ownCommitments.reduce((sum, c) => sum + c.amountCents, 0)
     return {
       requiresCommitmentAcknowledgement: true,
       commitmentCount: ownCommitments.length,
@@ -259,21 +287,20 @@ export async function deleteAccount(data: {
   }
 
   // Notify the sponsor side BEFORE the profile disappears — afterwards the team name and
-  // the fulfillment's link back to a submission are gone.
+  // the ledger row's link back to a submission are gone.
   for (const commitment of ownCommitments) {
-    if (!commitment.sponsor_id) continue
-    const teamName = (commitment.teams as { team_name?: string } | null)?.team_name ?? 'A team you sponsor'
-    const recipients = await sponsorRecipientProfiles(adminClient, commitment.sponsor_id)
+    const teamName = commitment.teamName
+    const recipients = await sponsorRecipientProfiles(adminClient, commitment.sponsorId)
     for (const recipient of recipients) {
       await createInAppNotification({
         recipientId: recipient.id,
         type: 'general',
         title: `${teamName} has left the platform`,
         body:
-          `The coach for ${teamName} has deleted their account while a sponsorship commitment of ` +
-          `${((commitment.amount_cents ?? 0) / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} ` +
-          `was still in progress (status: ${commitment.status}). No further payment should be sent. ` +
-          'Cancel the commitment from your Funding page to release the reserved capacity, or contact support.',
+          `The coach for ${teamName} has deleted their account after you agreed to fund them ` +
+          `${(commitment.amountCents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}. ` +
+          'No further payment should be sent. Contact support to have the match voided, which ' +
+          'releases the capacity it is holding against your cap.',
       })
     }
   }
@@ -285,7 +312,7 @@ export async function deleteAccount(data: {
     entity_id: user.id,
     metadata: {
       in_flight_commitments: ownCommitments.length,
-      in_flight_total_cents: ownCommitments.reduce((sum, f) => sum + (f.amount_cents ?? 0), 0),
+      in_flight_total_cents: ownCommitments.reduce((sum, c) => sum + c.amountCents, 0),
       acknowledged: parsed.data.acknowledgeCommitments === true,
     },
   })

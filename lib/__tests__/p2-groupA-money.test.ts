@@ -137,10 +137,13 @@ describe('B-03-16 — leaving with money in flight warns both sides', () => {
     expect(src).toContain('requiresCommitmentAcknowledgement')
   })
 
-  it('only non-terminal fulfillments count — receipted and cancelled are done', () => {
-    expect(src).toContain('IN_FLIGHT_FULFILLMENT_STATUSES')
-    expect(src).not.toMatch(/IN_FLIGHT_FULFILLMENT_STATUSES = \[[^\]]*'receipted'/)
-    expect(src).not.toMatch(/IN_FLIGHT_FULFILLMENT_STATUSES = \[[^\]]*'cancelled'/)
+  it('only LIVE commitments count — a voided match must not warn or notify', () => {
+    // The fulfillment status list this used to check went with 0111. The equivalent test
+    // now is that the ledger is NETTED per submission: a void is a negative row, so a match
+    // the sponsor already unwound sums to zero and drops out. Without the netting a coach
+    // would be warned about, and a sponsor notified of, a commitment that no longer exists.
+    expect(src).toContain('netBySubmission')
+    expect(src).toMatch(/amountCents > 0/)
   })
 
   it('the sponsor is notified BEFORE the Clerk user is deleted', () => {
@@ -201,24 +204,6 @@ describe('A-03-03 — the proposal branch revalidates every affected surface', (
   })
 })
 
-/**
- * B-03-08 — the governing-law clause. Phase 4 item 1.
- *
- * Section 11 of the effective `sponsorship_agreement` reads
- * `TODO(legal): jurisdiction to be set by counsel.` The P1 sweep deliberately did not
- * invent a jurisdiction, and that call stands: the executed record attests to the exact
- * bytes shown, SHA-256'd as evidence, so fabricating a governing-law clause into an
- * ESIGN/UETA document would be worse than the gap.
- *
- * What the P1 sweep got wrong was letting the signer proceed anyway. A-04-02 showed the
- * gate was always the intent — migration 0079's own header says an attorney must review
- * the seeded body "and an admin must clear the flag before this platform relies on it in a
- * real transaction". 0106 enforces it and the signing panel blocks.
- *
- * The item is therefore CLOSED as: the platform cannot execute an unreviewed agreement,
- * and the one remaining action is not an engineering one. It is recorded in
- * prompts/_NEXT-SESSION.md as the single thing Anish must obtain from counsel.
- */
 describe('B-03-08 — nobody invents a jurisdiction', () => {
   /**
    * Filed when the seeded sponsorship_agreement carried

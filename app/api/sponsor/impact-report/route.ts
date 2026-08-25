@@ -6,10 +6,6 @@ import type { SponsorImpactPayload } from '@/lib/impact-report/build'
 import { writeAudit } from '@/lib/audit'
 
 /** A-12-04. Label only; the fiscal-year maths itself lives in fiscal_year_of() (0110). */
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-]
 import { createZip, safeZipSegment, type ZipEntry } from '@/lib/zip'
 import { safeMediaUrl } from '@/lib/safe-url'
 
@@ -94,12 +90,6 @@ export async function GET(req: Request) {
   // A-12-04. Read live rather than from the snapshot: the snapshot is an immutable record
   // of the FIGURES, while which fiscal year to label them under is a presentation choice
   // the sponsor can correct without invalidating the report.
-  const { data: sponsorRow } = await supabase
-    .from('sponsors')
-    .select('fiscal_year_start_month')
-    .eq('id', scopedSponsorId)
-    .maybeSingle()
-  const fiscalYearStartMonth = sponsorRow?.fiscal_year_start_month ?? 1
 
   if (format === 'json') {
     return NextResponse.json(payload, {
@@ -143,14 +133,6 @@ export async function GET(req: Request) {
     ]),
   ]
 
-  /**
-   * A-12-04. The sponsor's fiscal year, not the calendar year the snapshot is filed under.
-   * A reporting label only — see migration 0110 for why it is not a budget.
-   */
-  const fiscalStartMonth = fiscalYearStartMonth ?? 1
-  const fiscalYearLabel =
-    fiscalStartMonth === 1 ? String(year) : `FY${year} (starts ${MONTH_NAMES[fiscalStartMonth - 1]})`
-
   for (const section of payload.teams ?? []) {
     // Net: a 'void' row is negative, so an unwound match reduces the figure rather than
     // needing to be filtered out.
@@ -166,7 +148,6 @@ export async function GET(req: Request) {
         // P3. 'None' is a legitimate enum value meaning "no charitable status", not a
         // label — it was landing literally in the CSR spreadsheet's tax_status column.
         section.team.tax_status === 'None' ? '' : section.team.tax_status,
-        fiscalYearLabel,
         section.team.students_reached,
         section.team.events_hosted,
         section.team.volunteer_hours,

@@ -11,7 +11,6 @@ import {
   Bell,
   Settings,
   GraduationCap,
-  Award,
 } from 'lucide-react'
 import {
   PortalBrand,
@@ -31,8 +30,6 @@ const NAV_ITEMS = [
   { label: 'Portfolio', href: '/dashboard?tab=portfolio',  icon: BookOpen,        tabs: ['portfolio', 'ledger'],              badge: false },
   { label: 'Pitches',   href: '/dashboard?tab=pitches',    icon: FileText,        tabs: ['pitches', 'submissions', 'drafts'], badge: false },
   { label: 'Sponsors',  href: '/dashboard?tab=sponsors',   icon: Building2,       tabs: ['sponsors', 'find-sponsors'],        badge: false },
-  { label: 'Recognition', href: '/dashboard?tab=recognition', icon: Award,        tabs: ['recognition'],                      badge: false },
-  { label: 'Funding',   href: '/dashboard?tab=funding',    icon: BookOpen,        tabs: ['funding', 'finances', 'money'],     badge: false },
   { label: 'Inbox',     href: '/dashboard?tab=inbox',      icon: Bell,            tabs: ['inbox'],                            badge: true  },
 ] as const
 

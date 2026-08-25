@@ -98,10 +98,6 @@ export function SponsorDashboardShell({
         </div>
 
         <div className="flex items-center gap-3">
-          <Link href="/sponsor/funding" className={cn(buttonVariants({ variant: 'outline' }), 'gap-2 border-border bg-card shadow-sm')}>
-            <Wallet className="h-4 w-4" />
-            Funding
-          </Link>
           <Link href="/sponsor/submissions" className={cn(buttonVariants(), 'gap-2 shadow-sm')}>
             <Inbox className="h-4 w-4" />
             Review Queue ({pendingCount})
@@ -158,11 +154,6 @@ export function SponsorDashboardShell({
                 icon={FileText}
                 title="No sponsorship requests yet"
                 description="Approved team pitches will appear here as soon as an admin dispatches them to you — you'll also get an email."
-                action={
-                  <Link href="/sponsor/funding" className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}>
-                    Review your funding cap
-                  </Link>
-                }
               />
             )}
           </div>

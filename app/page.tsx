@@ -32,12 +32,12 @@ async function loadPlatformStats() {
     const supabase = await createClient()
     const { data } = await supabase
       .from('public_platform_stats')
-      .select('teams_supported, dollars_received_cents, students_reached, volunteer_hours')
+      .select('teams_supported, dollars_matched_cents, students_reached, volunteer_hours')
       .maybeSingle()
     if (!data) return PLATFORM_STATS_FALLBACK
     return {
       teamsSupported: (data.teams_supported as number) ?? 0,
-      dollarsReceivedCents: (data.dollars_received_cents as number) ?? 0,
+      dollarsMatchedCents: (data.dollars_matched_cents as number) ?? 0,
       studentsReached: (data.students_reached as number) ?? 0,
       volunteerHours: (data.volunteer_hours as number) ?? 0,
     }
@@ -69,7 +69,7 @@ export default async function HomePage() {
   const stats = await loadPlatformStats()
   const hasLiveStats =
     stats.teamsSupported > 0 ||
-    stats.dollarsReceivedCents > 0 ||
+    stats.dollarsMatchedCents > 0 ||
     stats.studentsReached > 0 ||
     stats.volunteerHours > 0
 
@@ -120,13 +120,19 @@ export default async function HomePage() {
                 Start pitching
               </Link>
             </div>
+            {/* These are COMMITMENTS, not measurements. "100%" is true by construction —
+                the admin dispatch gate is the product. The second tile used to read
+                "< 24h — Average turnaround", stated as an observed average when the platform
+                had 28 lifetime requests behind it; a sponsor who asks how it was measured
+                deserves an answer, so it is now stated as the target it actually is. Do not
+                restore a measured figure here without a real number to back it. */}
             <CharcoalCard className="flex flex-col justify-center">
-              <div className="text-sm font-mono text-text-muted uppercase tracking-wider mb-2">Platform Metrics</div>
+              <div className="text-sm font-mono text-text-muted uppercase tracking-wider mb-2">How we operate</div>
               <div className="text-5xl md:text-6xl font-medium tracking-tight text-white mb-2">100%</div>
-              <div className="text-lg text-charcoal-foreground/70 mb-10">Of pitches read by a human admin before dispatch.</div>
+              <div className="text-lg text-charcoal-foreground/70 mb-10">Of pitches are read by a human admin before any sponsor sees them.</div>
 
-              <div className="text-5xl md:text-6xl font-medium tracking-tight text-white mb-2">&lt; 24h</div>
-              <div className="text-lg text-charcoal-foreground/70">Average turnaround for review and URL signing.</div>
+              <div className="text-5xl md:text-6xl font-medium tracking-tight text-white mb-2">1 day</div>
+              <div className="text-lg text-charcoal-foreground/70">Our target turnaround for reviewing a submitted pitch.</div>
             </CharcoalCard>
           </div>
         </AccentSection>
@@ -140,8 +146,10 @@ export default async function HomePage() {
             </p>
             <dl className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
               {[
-                ['Teams funded', stats.teamsSupported.toLocaleString('en-US')],
-                ['Reached teams', `$${(stats.dollarsReceivedCents / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })}`],
+                ['Teams matched', stats.teamsSupported.toLocaleString('en-US')],
+                // "Matched", never "funded" or "raised": this is what sponsors committed to,
+                // and nothing on the platform observes whether the money arrived.
+                ['Sponsorship matched', `$${(stats.dollarsMatchedCents / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })}`],
                 ['Students reached', stats.studentsReached.toLocaleString('en-US')],
                 ['Volunteer hours', stats.volunteerHours.toLocaleString('en-US')],
               ].map(([label, value]) => (

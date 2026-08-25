@@ -101,27 +101,28 @@ describe('A-12-01 — SUPERSEDED: now BUILT', () => {
   })
 })
 
-describe('A-12-04 — SUPERSEDED: now BUILT', () => {
+describe('A-12-04 — BUILT in 0110, then REMOVED in 0111', () => {
   /**
-   * This block used to assert there was no `po_number` column, on the reasoning that
-   * half-building the feature would leave money state in two shapes. Anish answered it in
-   * the Phase 4 close: build it end-to-end.
+   * Short life. The finding asked for PO numbers and a fiscal-year boundary; 0110 built
+   * both; 0111 removed the fulfillment and receipt surfaces they existed to annotate. A PO
+   * number is a reference for a payment the platform no longer records, so keeping the
+   * column would have been money state in exactly the two shapes this finding warned about.
    *
-   * The "two shapes" concern was real and is what shaped the design rather than being
-   * overridden by it — migration 0110 adds the PO number and the fiscal-year BOUNDARY but
-   * deliberately does NOT bucket funding caps by year, so `funding_cap_cents` remains the
-   * single enforcement point for Capacity Integrity. See phase4-enterprise-decisions.test.ts.
+   * What survives, and is the part that always mattered: funding caps were never bucketed
+   * by year, so funding_cap_cents remains the single enforcement point for Capacity
+   * Integrity. That is asserted here against the live schema rather than the migration,
+   * because it is a property of the system and not of one file.
    */
-  it('the PO number exists and reaches the CSR report', () => {
-    expect(read('lib/supabase/types.ts')).toContain('po_number')
-    expect(read('supabase/migrations/0110_po_numbers_and_fiscal_year.sql')).toContain(
-      'ADD COLUMN IF NOT EXISTS po_number text'
-    )
+  it('the PO number and fiscal-year column are gone, not half-present', () => {
+    const types = read('lib/supabase/types.ts')
+    expect(types).not.toContain('po_number')
+    expect(types).not.toContain('fiscal_year_start_month')
   })
 
-  it('funding caps were NOT bucketed by year — capacity keeps one source of truth', () => {
-    const migration = read('supabase/migrations/0110_po_numbers_and_fiscal_year.sql')
-    expect(migration).not.toMatch(/UPDATE\s+sponsors\s+SET\s+funding_used_cents/i)
-    expect(migration).toContain('fiscal_year_start_month')
+  it('funding caps are still not bucketed by year — one source of truth for capacity', () => {
+    const types = read('lib/supabase/types.ts')
+    expect(types).toContain('funding_cap_cents')
+    // A per-year cap column would be the drift this finding was really about.
+    expect(types).not.toMatch(/funding_cap_cents_\d{4}|funding_cap_by_year/)
   })
 })

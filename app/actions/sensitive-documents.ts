@@ -25,7 +25,10 @@ import { SENSITIVE_DOCUMENT_URL_TTL_SECONDS } from '@/lib/sensitive-documents'
  * question that gets asked afterwards.
  */
 const mintSchema = z.object({
-  kind: z.enum(['coach_credential', 'w9']),
+  // 0111 removed the W-9 subsystem; the coach photo ID is the only sensitive document
+  // left. Kept as a single-member enum rather than dropped so the audit rows stay
+  // self-describing and adding a second kind later is a one-line change.
+  kind: z.enum(['coach_credential']),
   subjectId: z.string().uuid(),
 })
 
@@ -55,28 +58,13 @@ export async function mintSensitiveDocumentUrl(
    * a path — otherwise this action would be an arbitrary-object read oracle for any admin,
    * across every bucket, which is a much bigger capability than the queue needs.
    */
-  let bucket: string
-  let path: string | null = null
-
-  if (kind === 'coach_credential') {
-    const { data: row } = await adminClient
-      .from('profiles')
-      .select('coach_credentials_url')
-      .eq('id', subjectId)
-      .maybeSingle()
-    bucket = 'coach-credentials'
-    path = row?.coach_credentials_url ?? null
-  } else {
-    // Keyed on team_id, matching adminVerifyW9 / adminRejectW9 — a team has at most one
-    // payout profile, and team_id is the id every other payout action is addressed by.
-    const { data: row } = await adminClient
-      .from('team_payout_profiles')
-      .select('w9_document_path')
-      .eq('team_id', subjectId)
-      .maybeSingle()
-    bucket = 'tax-documents'
-    path = row?.w9_document_path ?? null
-  }
+  const { data: row } = await adminClient
+    .from('profiles')
+    .select('coach_credentials_url')
+    .eq('id', subjectId)
+    .maybeSingle()
+  const bucket = 'coach-credentials'
+  const path: string | null = row?.coach_credentials_url ?? null
 
   if (!path) {
     // Covers both "no such subject" and "the document was purged by the retention job".
@@ -96,7 +84,7 @@ export async function mintSensitiveDocumentUrl(
   await writeAudit(adminClient, {
     actor_id: user.id,
     action: 'sensitive_document_viewed',
-    entity_type: kind === 'coach_credential' ? 'profiles' : 'teams',
+    entity_type: 'profiles',
     entity_id: subjectId,
     metadata: { kind, bucket, ttl_seconds: SENSITIVE_DOCUMENT_URL_TTL_SECONDS },
   })

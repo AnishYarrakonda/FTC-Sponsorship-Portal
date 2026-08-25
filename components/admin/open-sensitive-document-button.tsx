@@ -21,7 +21,7 @@ export function OpenSensitiveDocumentButton({
   subjectId,
   label = 'Open Externally',
 }: {
-  kind: 'coach_credential' | 'w9'
+  kind: 'coach_credential'
   subjectId: string
   label?: string
 }) {

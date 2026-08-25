@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { BackButton } from '@/components/ui/back-button'
 
 export const metadata: Metadata = {
@@ -54,8 +53,9 @@ export default function TermsOfServicePage() {
         {/* ATTORNEY REVIEW REQUIRED */}
         <h2>7. Our Role — Facilitator, Not Fiduciary</h2>
         <p>
-          FTC Pitfund introduces teams to sponsors and tracks the state of a sponsorship commitment
-          from pitch to payment. The platform is not a party to any sponsorship, is not an agent of
+          FTC Pitfund introduces teams to sponsors and records that a sponsor agreed to fund a
+          team. It does not track, verify, or document what happens after that. The platform is
+          not a party to any sponsorship, is not an agent of
           either the sponsor or the team, is not a fiduciary to either party, and is not a
           broker-dealer, charity, or fiscal sponsor.
         </p>
@@ -64,34 +64,25 @@ export default function TermsOfServicePage() {
         <h2>8. How Funds Move</h2>
         <p>
           <strong>The platform never receives, holds, escrows, or transmits sponsorship funds.</strong>{' '}
-          Payment is made directly by the sponsor to the team or its fiscal host, outside the
-          platform. The platform records what the parties tell it about that payment; a record here
-          is not proof that payment occurred and creates no obligation on the platform to pay
-          anyone.
+          Payment is arranged and made directly between the sponsor and the team or its fiscal
+          host, entirely outside the platform. The platform does not record, track, or verify
+          whether a payment was ever made, and nothing shown on the platform is evidence that one
+          was. The platform has no obligation to pay anyone.
         </p>
 
         {/* ATTORNEY REVIEW REQUIRED */}
-        <h2>9. The Sponsorship Agreement</h2>
+        <h2>9. Terms Between a Sponsor and a Team</h2>
         <p>
-          Each funded sponsorship is governed by the Sponsorship Agreement executed between the
-          sponsor and the team. A specimen of the current Sponsorship Agreement is available at{' '}
-          <Link href="/legal/agreement">/legal/agreement</Link>. Where these Terms and an executed
-          Sponsorship Agreement conflict as to the sponsorship itself, the Sponsorship Agreement
-          governs; these Terms continue to govern your use of the platform.
+          Any agreement about a sponsorship &mdash; its amount, what the sponsor receives in
+          return, when it is paid, and on what conditions &mdash; is made directly between the
+          sponsor and the team. The platform provides no contract, offers no template, and is not
+          a party to, witness to, or record of whatever the two of you agree. Acceptance recorded
+          on the platform is an introduction and a stated intention, not a binding commitment by
+          either side, and creates no obligation enforceable through the platform.
         </p>
 
         {/* ATTORNEY REVIEW REQUIRED */}
-        <h2>10. Electronic Signatures</h2>
-        <p>
-          By using the platform's signing flow, you consent to conduct transactions electronically
-          and agree that a typed name submitted through that flow is a legally binding signature
-          under the U.S. Electronic Signatures in Global and National Commerce Act (ESIGN) and
-          applicable state UETA law. You may request a copy of any document you have signed, and you
-          may withdraw your consent to transact electronically prospectively by contacting us.
-        </p>
-
-        {/* ATTORNEY REVIEW REQUIRED */}
-        <h2>11. No Warranty; Limitation of Liability</h2>
+        <h2>10. No Warranty; Limitation of Liability</h2>
         <p>
           The platform is provided "as is." We do not guarantee that any team will receive funding,
           that any sponsor will respond, or that any payment will be made. To the fullest extent
@@ -102,7 +93,7 @@ export default function TermsOfServicePage() {
         </p>
 
         {/* ATTORNEY REVIEW REQUIRED */}
-        <h2>12. Indemnification</h2>
+        <h2>11. Indemnification</h2>
         <p>
           You agree to indemnify and hold the platform harmless from claims arising out of your
           misuse of sponsorship funds, your misrepresentation of any information provided to the
@@ -110,7 +101,7 @@ export default function TermsOfServicePage() {
         </p>
 
         {/* ATTORNEY REVIEW REQUIRED */}
-        <h2>13. Governing Law and Venue</h2>
+        <h2>12. Governing Law and Venue</h2>
         <p>
           The governing law and exclusive venue for these Terms have not yet been fixed. They
           will be set to the jurisdiction in which the platform&rsquo;s operator is established,
@@ -120,7 +111,7 @@ export default function TermsOfServicePage() {
         </p>
 
         {/* ATTORNEY REVIEW REQUIRED */}
-        <h2>14. Changes to These Terms</h2>
+        <h2>13. Changes to These Terms</h2>
         <p>
           We may update these Terms from time to time. If we make a material change, we will notify
           you through the platform or by email before it takes effect. Your continued use of the

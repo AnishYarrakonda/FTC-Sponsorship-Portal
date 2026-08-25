@@ -42,15 +42,21 @@ export default function HandshakeEmail({
             <strong>{amountDisplay}</strong>.
           </Text>
 
+          {/* This email IS the handoff. Replies are cross-wired (see sendHandshakeEmail in
+              lib/notify.ts), so "reply to this email" reaches the other party directly and is
+              the shortest path to the two of them talking. Nothing further happens on the
+              platform, and the copy should not imply that it does. */}
           {isSponsor ? (
             <Text style={text}>
-              To complete the transaction, please reply to this email with your preferred payment method.
-              The team coach ({coachEmail}) will send W-9 and payment instructions.
+              From here it&apos;s between the two of you. Reply to this email to reach the team&apos;s
+              coach ({coachEmail}) directly and arrange payment &mdash; most sponsors ask the team for
+              a W-9 and payment instructions at this point.
             </Text>
           ) : (
             <Text style={text}>
-              To complete the transaction, reply to this email with your team&apos;s W-9 and preferred payment
-              instructions. A copy of this message has been sent to {sponsorName}.
+              From here it&apos;s between the two of you. Reply to this email to reach {sponsorName}
+              directly &mdash; they will usually need a W-9 and your payment instructions before their
+              finance team can release the funds.
             </Text>
           )}
 
@@ -59,6 +65,13 @@ export default function HandshakeEmail({
             <Text style={{ ...text, margin: '4px 0 0' }}><strong>Team:</strong> {teamLabel}</Text>
             <Text style={{ ...text, margin: '4px 0 0' }}><strong>Amount Agreed:</strong> {amountDisplay}</Text>
           </Section>
+
+          {/* Stated once, plainly. Both parties are about to move real money and neither
+              should be waiting on this platform to do something. */}
+          <Text style={{ ...text, fontSize: '13px', color: '#64748b' }}>
+            FTC Pitfund never receives, holds or transfers money, and does not track whether
+            payment has been made. Everything from here happens directly between you.
+          </Text>
 
           <Text style={text}>— The FTC Pitfund team</Text>
           <Hr style={hr} />
