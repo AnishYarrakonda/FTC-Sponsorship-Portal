@@ -91,27 +91,3 @@ export const CREDENTIAL_MIMES: readonly AllowedDocMime[] = ['application/pdf', '
 export const IMAGE_MIMES: readonly AllowedImageMime[] = ['image/jpeg', 'image/png', 'image/webp']
 
 
-/**
- * Tax-document upload policy (W-9). PDF only, 5 MB.
- *
- * Lives here rather than in app/actions/auth.ts because it is a pure rule with no server
- * dependency, and importing it from that `'use server'` module drags in `server-only`
- * through the audit helper. `tests/e2e/payout-w9.spec.ts` imported it that way and could
- * not be COLLECTED at all — Playwright failed on the whole file, so every payout/W-9
- * security-boundary test in it had been silently absent from the suite. That is the same
- * failure class as B-04-12: a test that cannot run reads as a test that passed.
- */
-export const MAX_TAX_DOC_FILE_SIZE = 5 * 1024 * 1024
-export const ALLOWED_TAX_DOC_MIMES = ['application/pdf'] as const
-
-export async function validateTaxDocumentFile(
-  file: File
-): Promise<{ ext: string; error?: never } | { ext?: never; error: string }> {
-  const result = await validateUploadedFile(file, {
-    allowedMimes: ALLOWED_TAX_DOC_MIMES,
-    maxBytes: MAX_TAX_DOC_FILE_SIZE,
-    label: 'Tax document',
-  })
-  if (result.error !== undefined) return { error: result.error }
-  return { ext: result.ext }
-}

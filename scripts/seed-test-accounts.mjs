@@ -16,8 +16,17 @@
  *   NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY  — Supabase DB seeding (bypasses RLS)
  *   CLERK_SECRET_KEY                                     — Clerk Backend SDK (create/delete test users)
  *
- * Test accounts use Clerk's `+clerk_test` email convention so they're deterministic
- * and email verification can be satisfied with the static test code 424242.
+ * Test accounts default to Clerk's `+clerk_test` email convention so they're deterministic
+ * and email verification can be satisfied with the static test code 424242. Those addresses
+ * are on `example.com`, which is RFC-2606 reserved and accepts NO mail — so nothing the app
+ * sends can be observed with them.
+ *
+ * For manual QA of the email flows, set TEST_EMAIL_BASE to a real inbox:
+ *   TEST_EMAIL_BASE=you@gmail.com I_UNDERSTAND_THIS_IS_PRODUCTION=1 node scripts/seed-test-accounts.mjs
+ *
+ * This script DELETES rows. It refuses to run against a non-local Supabase unless
+ * I_UNDERSTAND_THIS_IS_PRODUCTION=1 is set, and always prints the target host and the
+ * row counts it is about to destroy.
  */
 
 import { createClient } from '@supabase/supabase-js'
@@ -118,6 +127,38 @@ const ACCOUNTS = {
     fullName: 'Dev Sponsor Two',
     role: 'sponsor',
   },
+}
+
+// ─── Real-email mode ─────────────────────────────────────────────────────────
+// The `+clerk_test@example.com` addresses above are deterministic and let E2E satisfy
+// verification with the static code 424242 — but `example.com` is RFC-2606 reserved and
+// accepts no mail, so NOTHING sent by the app can ever be observed with them.
+//
+// Set TEST_EMAIL_BASE to a real inbox to seed deliverable addresses instead:
+//   TEST_EMAIL_BASE=you@gmail.com node scripts/seed-test-accounts.mjs
+// `coach+clerk_test@example.com` then becomes `you+coach@gmail.com`. Gmail delivers every
+// plus-alias to the one inbox, so all nine accounts land in one place, still distinguishable.
+//
+// Leave it unset for E2E. Clerk's Backend API creates users pre-verified either way, so
+// real-email mode still logs in without a code — it just makes password-reset and every
+// app-sent notification actually arrive.
+const TEST_EMAIL_BASE = process.env.TEST_EMAIL_BASE?.trim()
+
+if (TEST_EMAIL_BASE) {
+  const [base, domain] = TEST_EMAIL_BASE.split('@')
+  if (!base || !domain) {
+    console.error(`TEST_EMAIL_BASE must be a full address like you@gmail.com (got: ${TEST_EMAIL_BASE})`)
+    process.exit(1)
+  }
+  if (base.includes('+')) {
+    console.error(`TEST_EMAIL_BASE must not already contain a "+" alias (got: ${TEST_EMAIL_BASE})`)
+    process.exit(1)
+  }
+  for (const account of Object.values(ACCOUNTS)) {
+    // 'coach+clerk_test@example.com' -> 'coach'
+    const slug = account.email.split('@')[0].replace('+clerk_test', '')
+    account.email = `${base}+${slug}@${domain}`
+  }
 }
 
 const ALL_EMAILS = Object.values(ACCOUNTS).map(a => a.email)
@@ -297,9 +338,55 @@ async function uploadPlaceholderCredential(path) {
   else log(`Uploaded placeholder credential  [${path}]`)
 }
 
+// ─── Pre-flight guard ────────────────────────────────────────────────────────
+// This script DELETES rows and Clerk users. `DATABASE_URL` / the Supabase URL in
+// .env.local point at PRODUCTION, and until now nothing stopped a stray run from
+// wiping it. Today that is survivable because production holds only fixtures; the
+// moment a real coach signs up it is not.
+//
+// A local Supabase runs on localhost; anything else is a hosted project. Hosted targets
+// must be confirmed explicitly.
+async function preflightGuard() {
+  const host = new URL(SUPABASE_URL).host
+  const isLocal = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(host)
+
+  console.log(`  Target Supabase : ${host}${isLocal ? '  (local)' : '  ⚠ REMOTE / HOSTED'}`)
+  console.log(`  Email mode      : ${TEST_EMAIL_BASE ? `real inbox → ${TEST_EMAIL_BASE}` : '+clerk_test@example.com (no mail delivered)'}`)
+
+  // Show what is about to be destroyed, so the number is seen before the deletes, not after.
+  const counts = []
+  for (const table of ['profiles', 'submissions', 'teams', 'sponsors']) {
+    const { count, error } = await admin.from(table).select('*', { count: 'exact', head: true })
+    counts.push(`${table}=${error ? '?' : count}`)
+  }
+  console.log(`  Existing rows   : ${counts.join('  ')}`)
+
+  if (isLocal) return
+
+  if (process.env.I_UNDERSTAND_THIS_IS_PRODUCTION !== '1') {
+    console.error(`
+❌  REFUSING TO RUN.
+
+    This targets a HOSTED Supabase project (${host}), not a local one, and this script
+    deletes profiles, submissions, teams, sponsors and their Clerk users.
+
+    If that is genuinely what you want, re-run with:
+
+      I_UNDERSTAND_THIS_IS_PRODUCTION=1 node scripts/seed-test-accounts.mjs
+
+    If it is not, point NEXT_PUBLIC_SUPABASE_URL at a local stack first.
+`)
+    process.exit(1)
+  }
+
+  console.warn('\n  ⚠  Proceeding against a HOSTED project — I_UNDERSTAND_THIS_IS_PRODUCTION=1 is set.\n')
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
   console.log('\n🚀  FTC Portal — test account seeder (Clerk)\n')
+
+  await preflightGuard()
 
   // 1. Wipe
   await wipeUsers()
@@ -553,56 +640,50 @@ async function main() {
   if (teamErr) throw new Error(`teams insert failed: ${teamErr.message}`)
   log(`Created team "Dev Test Team"  [id: ${team.id}]`)
 
-  // 8. Print credentials summary
+  // 8. Print credentials summary — generated from ACCOUNTS, never hardcoded.
+  // A previous version printed literal `+clerk_test@example.com` strings, so in
+  // real-email mode it confidently reported addresses that were not the ones created.
+  const LABELS = {
+    coach:           ['COACH', 'verified, owns team "Dev Test Team" (#99999)'],
+    admin:           ['ADMIN', 'full admin'],
+    sponsor:         ['SPONSOR', 'org_admin of "dev testing"  ($5,000 cap, active)'],
+    sponsorMember:   ['SPONSOR SUBMITTER', 'submitter of "dev testing"'],
+    sponsorViewer:   ['SPONSOR VIEWER', 'viewer of "dev testing" - read-only'],
+    sponsorApprover: ['SPONSOR APPROVER', 'approver of "dev testing" - second signature'],
+    sponsor2:        ['SPONSOR 2', 'org_admin of "dev testing 2" - a SEPARATE org'],
+    reviewer:        ['REVIEWER', 'admin, admin_level = reviewer'],
+    denialCoach:     ['DENIAL COACH', 'unverified, credentials uploaded'],
+  }
+
+  console.log('\n' + '='.repeat(74))
+  console.log('  TEST ACCOUNT CREDENTIALS')
+  console.log('='.repeat(74))
+  for (const [key, account] of Object.entries(ACCOUNTS)) {
+    const [label, note] = LABELS[key] ?? [key, '']
+    console.log(`\n  ${label}`)
+    console.log(`    Email:    ${account.email}`)
+    console.log(`    Password: ${account.password}`)
+    if (note) console.log(`    Note:     ${note}`)
+  }
+  console.log('\n' + '='.repeat(74))
+
+  if (TEST_EMAIL_BASE) {
+    console.log(`
+  REAL-EMAIL MODE. Everything the app sends to these accounts arrives at
+  ${TEST_EMAIL_BASE} - filter by the +alias to tell them apart.
+  Password reset works. Verification codes come by real email, NOT 424242.`)
+  } else {
+    console.log(`
+  These are +clerk_test@example.com addresses: NO mail is ever delivered to them.
+  Email verification uses the static Clerk code 424242.
+  To test real delivery, re-run with TEST_EMAIL_BASE=you@gmail.com`)
+  }
+
   console.log(`
-╔══════════════════════════════════════════════════════════════╗
-║               TEST ACCOUNT CREDENTIALS (Clerk)               ║
-╠══════════════════════════════════════════════════════════════╣
-║  COACH                                                        ║
-║    Email:    coach+clerk_test@example.com                    ║
-║    Password: CoachTest123!                                    ║
-║    Status:   verified ✓  |  Team: Dev Test Team (#99999)     ║
-╠══════════════════════════════════════════════════════════════╣
-║  ADMIN                                                        ║
-║    Email:    admin+clerk_test@example.com                    ║
-║    Password: AdminTest123!                                    ║
-╠══════════════════════════════════════════════════════════════╣
-║  SPONSOR (org_admin of "dev testing")                         ║
-║    Email:    sponsor+clerk_test@example.com                  ║
-║    Password: SponsorTest123!                                  ║
-║    Company:  dev testing  ($5,000 cap, active)               ║
-╠══════════════════════════════════════════════════════════════╣
-║  SPONSOR SUBMITTER (submitter of "dev testing")                ║
-║    Email:    sponsor-member+clerk_test@example.com            ║
-║    Password: SponsorMemberTest123!                             ║
-╠══════════════════════════════════════════════════════════════╣
-║  SPONSOR VIEWER (viewer of "dev testing")                     ║
-║    Email:    sponsor-viewer+clerk_test@example.com             ║
-║    Password: SponsorViewerTest123!                              ║
-╠══════════════════════════════════════════════════════════════╣
-║  SPONSOR APPROVER (approver of "dev testing")                 ║
-║    Email:    sponsor-approver+clerk_test@example.com           ║
-║    Password: SponsorApproverTest123!                             ║
-╠══════════════════════════════════════════════════════════════╣
-║  SPONSOR 2 (org_admin of "dev testing 2" — separate org)      ║
-║    Email:    sponsor2+clerk_test@example.com                  ║
-║    Password: Sponsor2Test123!                                  ║
-╠══════════════════════════════════════════════════════════════╣
-║  REVIEWER (admin, admin_level = reviewer)                     ║
-║    Email:    reviewer+clerk_test@example.com                  ║
-║    Password: ReviewerTest123!                                  ║
-╠══════════════════════════════════════════════════════════════╣
-║  DENIAL COACH (unverified, credentials uploaded)              ║
-║    Email:    denial-coach+clerk_test@example.com              ║
-║    Password: DenialCoachTest123!                               ║
-╚══════════════════════════════════════════════════════════════╝
-
-Email verification (if prompted): use the Clerk test code 424242.
-
-Next steps:
-  1. Log in as coach → create a submission/portfolio targeting "dev testing"
-  2. Log in as admin → approve the submission
-  3. Check sponsor inbox / email to confirm delivery
+  Next steps:
+    1. Log in as coach   -> build the portfolio, submit a pitch to "dev testing"
+    2. Log in as admin   -> approve it in the moderation queue, then dispatch
+    3. Log in as sponsor -> accept in full, or counter-offer for less
 `)
 }
 

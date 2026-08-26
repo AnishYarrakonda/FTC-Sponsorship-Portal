@@ -15,7 +15,6 @@ import { getClientIp } from '@/lib/actions-utils'
 import { mapDbError } from '@/lib/errors'
 import {
   validateUploadedFile,
-  validateTaxDocumentFile as validateTaxDocumentFileImpl,
 } from '@/lib/file-validation'
 import * as Sentry from '@sentry/nextjs'
 import {
@@ -91,21 +90,6 @@ export async function validateCredentialFile(
 }
 
 
-
-/**
- * Validates size, MIME allowlist, and magic bytes for W-9s.
- * Returns the canonical extension (pdf).
- */
-/**
- * Re-exported from lib/file-validation.ts, which is where the rule now lives. Every export
- * of a `'use server'` file must be an async server action, so this stays a thin async
- * wrapper rather than a bare `export { ... }`.
- */
-export async function validateTaxDocumentFile(
-  file: File
-): Promise<{ ext: string; error?: never } | { ext?: never; error: string }> {
-  return validateTaxDocumentFileImpl(file)
-}
 
 // ---------------------------------------------------------------------------
 // Coach profile provisioning (shared by signup wizard + /complete-profile)

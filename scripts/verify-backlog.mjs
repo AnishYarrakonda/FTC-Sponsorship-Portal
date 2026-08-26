@@ -77,16 +77,51 @@ const skip = (why) => {
  * `-At -F'|'` keeps parsing trivial; every check below asserts on shape, never on
  * formatting, so the crude delimiter is safe.
  */
+// Sticky: once the database is known unreachable, every later check skips instantly instead
+// of paying the connect timeout again. Without this, ~40 checks x 8s is a five-minute hang
+// that looks exactly like a wedged script — which is how a blocked port got misdiagnosed
+// twice as "Supabase is down" and then as "connection exhaustion".
+let DB_UNREACHABLE = null
+
 async function sql(query) {
   if (!ENV.DATABASE_URL) skip('DATABASE_URL not set in .env.local')
   if (!PSQL) skip('psql not found (brew install libpq)')
-  const { stdout } = await execFileAsync(PSQL, [ENV.DATABASE_URL, '-At', '-F', '|', '-c', query], {
-    maxBuffer: 32 * 1024 * 1024,
-  })
-  return stdout
-    .split('\n')
-    .filter((l) => l.length > 0)
-    .map((l) => l.split('|'))
+  if (DB_UNREACHABLE) skip(DB_UNREACHABLE)
+
+  try {
+    const { stdout } = await execFileAsync(
+      PSQL,
+      [ENV.DATABASE_URL, '-At', '-F', '|', '-c', query],
+      {
+        maxBuffer: 32 * 1024 * 1024,
+        // psql itself honours PGCONNECT_TIMEOUT; the outer timeout is the backstop for the
+        // case where it is already connected and the query, not the connect, is what hangs.
+        env: { ...process.env, PGCONNECT_TIMEOUT: '8' },
+        timeout: 20_000,
+      }
+    )
+    return stdout
+      .split('\n')
+      .filter((l) => l.length > 0)
+      .map((l) => l.split('|'))
+  } catch (err) {
+    const detail = `${err.stderr || ''}${err.message || ''}`
+    const isConnFailure =
+      err.killed ||
+      err.code === 'ETIMEDOUT' ||
+      /timeout expired|could not connect|Connection refused|no route to host|server closed the connection/i.test(
+        detail
+      )
+    if (isConnFailure) {
+      DB_UNREACHABLE =
+        'database unreachable — outbound port 5432 is commonly blocked on school/corporate ' +
+        'Wi-Fi. Verify with: curl -sS --connect-timeout 8 telnet://<pooler-host>:5432 ; ' +
+        'if 443 works and 5432 times out, it is the network, not Supabase. Use the Supabase ' +
+        'dashboard SQL editor, or run this from a different network.'
+      skip(DB_UNREACHABLE)
+    }
+    throw err
+  }
 }
 
 /** Single scalar from a query, as a string. */
