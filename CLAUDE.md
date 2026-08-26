@@ -30,9 +30,11 @@ both parties get each other's contact details and settle up directly. Next.js 16
 `prompts/_NEXT-SESSION.md` is the live handoff; read it first.
 
 **The app is code-complete.** Everything remaining before launch is accounts, DNS and
-dashboards, enumerated in **`docs/LAUNCH-CHECKLIST.md`** (authoritative), with
-`docs/GO-LIVE-CUTOVER.md` for the ordered DNS/Clerk sequence and `docs/PURCHASE-CHECKLIST.md`
-for the team-captain version. Launch costs **$0** — the team already owns `exodiusftc.com`.
+dashboards, enumerated in **`docs/LAUNCH-CHECKLIST.md`**, which is now the SINGLE authoritative
+launch doc (`GO-LIVE-CUTOVER.md` and `PURCHASE-CHECKLIST.md` were folded into it and deleted
+2026-08-26). The app gets its **own domain** — `exodiusftc.com` is the team WEBSITE and is not
+involved. Launch costs ~$28: a domain plus **Vercel Pro, which their terms require** because
+soliciting donations is commercial use.
 
 `prompts/revamp/` holds the 18 sequential enterprise-readiness prompts (funding fulfillment,
 W-9s, e-sign, sponsor orgs, SSO, CSR reporting, accessibility). **All 18 are shipped and

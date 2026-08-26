@@ -1,209 +1,222 @@
-# Launch checklist — everything left before this is a real, running product
+# Pitfund — the only launch document
 
-**Status as of 2026-08-25.** The application itself is finished: 591 unit tests pass,
-typecheck and lint are clean, the build is green, `verify-backlog` is 41 pass / 1 fail / 0 skip,
-and the current code is deployed and smoke-tested in production. **No feature work remains.**
+**Rewritten 2026-08-26.** This replaces `GO-LIVE-CUTOVER.md` and `PURCHASE-CHECKLIST.md`, both
+deleted. If another document disagrees with this one, this one is right.
 
-Everything below is money, accounts, DNS, and dashboards. It is ordered so that nothing blocks
-on something later in the list.
+The app is **code-complete and deployed**. Nothing on this list is programming.
 
-**Total cost: $0.** There is nothing to buy. See §2.
-
-| Section | What | Who | Time |
-|---|---|---|---|
-| §0 | ~~Push the code~~ ✅ **closed** — pushed and `main` fast-forwarded | Anish | done |
-| §1 | Team identity, vault, ownership | captain + mentor | 30 min |
-| §2 | Purchases | nobody — $0 | — |
-| §3 | DNS records at GoDaddy | GoDaddy holder | 10 min + wait |
-| §4 | Clerk production instance | Anish | 15 min + wait |
-| §5 | Vercel environment + redeploy | Anish | 5 min |
-| §6 | Clear production test data | Anish | 5 min |
-| §7 | Optional services | Anish | 20 min |
-| §8 | Verification | Anish | 30 min |
-| §9 | Ongoing ownership | mentor | forever |
-| §10 | Deliberately deferred | — | — |
+|  | What | Who | When | Cost |
+|---|---|---|---|---|
+| **Part A** | Test every flow by hand | Anish | **now — no card needed** | $0 |
+| **Part B** | Buy two things, then cut over | Anish + captain's card | the team meeting | ~$29 |
+| **Part C** | Keep it alive | whoever owns it | forever | $20/mo |
 
 ---
 
-## §0 — ✅ CLOSED 2026-08-25 — the code is pushed and `main` is deployable
+## What you are buying, and why
 
-Everything used to live on one laptop, and `main` used to be pre-migration-`0111` — it queried
-eleven tables that no longer exist in production, so deploying it would have broken the site
-instantly. Both problems are fixed. `main` and `feat/strip-post-match-pipeline` now point at the
-same commit, and that commit is the code running in production.
+| Service | Verdict | Cost |
+|---|---|---|
+| **Domain** (`pitfund.org`) | Required — the app needs its own | **$8.49/yr** |
+| **Vercel Pro** | **Required by their terms, not by capacity** | **$20/mo** |
+| Supabase | Free tier — deliberate, see Part C | $0 |
+| Clerk | Free tier — 50,000 users, custom domain included | $0 |
+| Resend | Free tier — 3,000 emails/mo | $0 |
 
-Repo: **`ExodiusFTC/FTC-Pitfund-Source-Code`** (private, owned by the *organisation*, not by
-Anish personally — one succession problem you do not have).
+**Total to launch: $28.49, then $20/month.**
 
-Confirm at any time:
+**Why Vercel Pro is not optional.** Vercel's fair-use policy states that *"Hobby teams are
+restricted to non-commercial personal use only"* and explicitly names **"Asking for Donations"**
+as commercial usage. A platform whose purpose is soliciting sponsorship money is commercial under
+that definition regardless of the platform never touching funds. Staying on Hobby risks the
+account being paused — which is how a site dies silently on a Tuesday.
+
+Pro is **$20/month flat**, including one deploying seat and $20 of usage credit. **Viewer seats
+are free and unlimited**, so the mentor and other students get dashboard access at no cost. Only
+add a paid seat when a second person genuinely needs to deploy.
+
+**`exodiusftc.com` is the team website and is not involved.** The only overlap with the app is a
+shared team email address used to create the admin account.
+
+---
+
+# PART A — Test everything now
+
+Nothing here costs money. Do it before the meeting so the only thing left is typing a card
+number.
+
+## A1. Your nine test accounts
+
+Already seeded and live. Every one delivers real email to
+**anish.yarrakonda456@gmail.com** — filter by the `+alias` to tell them apart.
+
+Sign in at **https://ftc-sponsorship-portal.vercel.app/login**
+
+| Role | Email | Password |
+|---|---|---|
+| Coach *(verified, owns "Dev Test Team" #99999)* | `anish.yarrakonda456+coach@gmail.com` | `CoachTest123!` |
+| Admin | `anish.yarrakonda456+admin@gmail.com` | `AdminTest123!` |
+| Sponsor — **org_admin** of "dev testing" | `anish.yarrakonda456+sponsor@gmail.com` | `SponsorTest123!` |
+| Sponsor — **submitter** | `anish.yarrakonda456+sponsor-member@gmail.com` | `SponsorMemberTest123!` |
+| Sponsor — **viewer** (read-only) | `anish.yarrakonda456+sponsor-viewer@gmail.com` | `SponsorViewerTest123!` |
+| Sponsor — **approver** (2nd signature) | `anish.yarrakonda456+sponsor-approver@gmail.com` | `SponsorApproverTest123!` |
+| Sponsor 2 — separate company | `anish.yarrakonda456+sponsor2@gmail.com` | `Sponsor2Test123!` |
+| Reviewer *(admin, limited level)* | `anish.yarrakonda456+reviewer@gmail.com` | `ReviewerTest123!` |
+| Denial coach *(unverified, awaiting review)* | `anish.yarrakonda456+denial-coach@gmail.com` | `DenialCoachTest123!` |
+
+> **Four of these are the same company on purpose.** `sponsor`, `sponsor-member`,
+> `sponsor-viewer` and `sponsor-approver` all belong to **"dev testing"** at different permission
+> ranks. That is the sponsor multi-user feature. `sponsor2` is a *different* company, and exists
+> so you can prove one sponsor cannot see another's data.
+
+To recreate them at any time:
 
 ```bash
-git fetch origin
-git rev-list --count origin/main..HEAD                                 # 0 = in sync
-git show main:supabase/migrations/0111_strip_post_match_pipeline.sql | head -1
+I_UNDERSTAND_THIS_IS_PRODUCTION=1 \
+TEST_EMAIL_BASE=anish.yarrakonda456@gmail.com \
+node scripts/seed-test-accounts.mjs
 ```
 
-Two traps this closed, both of which lied silently rather than erroring:
+The script refuses to run against a hosted database without that first variable, and prints the
+row counts it is about to delete. Drop `TEST_EMAIL_BASE` and it reverts to
+`@example.com` addresses, which receive no mail — that is the mode the automated tests need.
 
-- **The remotes pointed at the repo's old name** (`FTC-Matchmaker-Source-Code`). GitHub
-  redirected every push, so it worked and nothing warned. Redirects hold only until someone else
-  claims the abandoned name. Both remotes now use the current URL.
-- **`git rev-list --count origin/main..HEAD` reads a local cache, not GitHub.** Straight after
-  pushing it reported a 23-commit gap that did not exist, because only the `exodius` tracking ref
-  had been refreshed. **`git fetch` first, every time**, or the number is stale by however long
-  it has been since the last fetch.
+## A2. Walk these thirteen flows
 
-Good news: the repo is under the **ExodiusFTC organisation**, not a personal account, so
-ownership already survives Anish leaving. That is one succession problem you do not have.
+Tick each. If one fails, stop and tell me what you saw — do not work around it.
 
----
+**Coach**
+- [ ] **1.** Sign up as a brand-new coach → verification code arrives by email → upload a photo ID → lands on "awaiting verification"
+- [ ] **2.** As **admin**, verify that coach → the **coach receives a verification email**
+- [ ] **3.** As coach, fill in the team portfolio — story, budget, achievements — and save
 
-## §1 — Team identity and ownership (the part that actually decides survival)
+**Pitching**
+- [ ] **4.** As coach, submit a pitch to **"dev testing"** → **admin receives a new-submission alert email**
+- [ ] **5.** As **admin**, open the moderation queue → approve → dispatch → **the sponsor receives the pitch email**
+- [ ] **6.** As **sponsor**, open that email, accept **in full** → **both sides get a "Match Made" email containing each other's contact details**
 
-Every service is currently registered to **Anish personally**. When he leaves for college the
-project dies with his access. That is the default outcome unless it is changed.
+**Money edges**
+- [ ] **7.** Submit a second pitch, accept it for **less than asked** (counter-offer) → the sponsor's remaining capacity reflects the smaller amount
+- [ ] **8.** Submit a third, **decline** it → the coach is notified and no capacity is consumed
 
-Do this **before** creating anything new, because redoing it later is much harder:
+**Sponsor multi-user — the part you asked about**
+- [ ] **9.** Sign in as **sponsor-member** (submitter) → propose a decision → sign in as **sponsor-approver** → approve it. Neither can do both halves alone
+- [ ] **10.** Sign in as **sponsor-viewer** → confirm you **cannot** approve, edit, or change anything
+- [ ] **11.** Sign in as **sponsor2** → confirm you see **nothing** belonging to "dev testing"
 
-1. **A team email address** — `tech@exodiusftc.com` or a dedicated Gmail. Nobody's personal
-   login. The domain already exists, so a mailbox on it is straightforward.
-2. **A password vault** — Bitwarden is free. Every credential and every recovery code goes in.
-3. **Access for two current students plus one adult mentor.** The mentor is the load-bearing
-   part: students turn over every year, the mentor is the only continuity the team has.
-4. **Re-register or add the team identity as a second owner on every service in §9.** Any
-   service with exactly one owner is a countdown timer.
-5. **Find out who controls the GoDaddy account**, since §3 cannot happen without it. Check the
-   domain's renewal date and that the card on file is valid.
+**Admin recovery + account**
+- [ ] **12.** As admin, void a match at `/admin/capacity` → the sponsor's capacity comes back, and the page reports **zero drift**
+- [ ] **13.** Sign out → "forgot password" → **the reset email arrives** → set a new password → sign in with it
 
----
+## A3. Also click around
 
-## §2 — What to buy: nothing
+Open every sidebar item in all three portals and confirm nothing 404s or renders blank.
 
-| Thought | Reality |
-|---|---|
-| Buy a domain (~$12/yr) | **The team already owns `exodiusftc.com`.** The app goes at `pitfund.exodiusftc.com` — a subdomain, free |
-| Verify an email sending domain | **Already done.** SPF, DKIM and SES feedback MX are live and production email works today |
-| Vercel Pro | Not needed. Hobby covers this scale — see §10 |
-| Supabase Pro | Not yet — see §10 |
-| Payment processing | Never. The platform does not touch money by design |
-| E-signature | Never. Removed in `0111` |
-
-**What you need instead of a credit card is the GoDaddy login.**
+> A page returning HTTP 200 is **not** proof it rendered — error boundaries return 200 too. If a
+> page looks empty or wrong, open the browser console (F12) and send me what is red.
 
 ---
 
-## §3 — DNS at GoDaddy
+# PART B — Purchase day (~45 minutes, plus DNS waiting)
 
-⚠️ **Do not let GoDaddy or Vercel move the domain's nameservers.** Vercel's own CLI suggests
-it. The team's public website runs on Netlify from the same DNS zone — moving nameservers takes
-the team site offline until every record is rebuilt. **Add individual records only.**
+Do these **in order**. Later steps depend on earlier ones existing.
 
-GoDaddy → My Products → exodiusftc.com → DNS → Manage Zones. Add three records:
+### B1. Buy Vercel Pro — *2 min, $20/mo*
 
-| Type | Name / Host | Value | TTL |
-|---|---|---|---|
-| `CNAME` | `pitfund` | `d0b957cc64a8c9ba.vercel-dns-017.com.` | 1 hour |
-| `TXT` | `_dmarc` | `v=DMARC1; p=none; rua=mailto:exodiusftc@gmail.com; fo=1; adkim=r; aspf=r` | **600** |
-| `TXT` | `_dmarc.send` | `v=DMARC1; p=none; rua=mailto:exodiusftc@gmail.com; fo=1; adkim=r; aspf=r` | **600** |
+vercel.com → your project → **Settings → Billing → Upgrade to Pro**. Team card.
 
-**Both DMARC records are required** — a policy on `send.` does not protect the parent apex, and
-an apex with no DMARC is a spoofing target regardless. `p=none` means monitor-only, which is
-deliberate: a misconfiguration must not silently bin real mail. Keep TTL at 600 during the ramp
-so rollback is fast. The staged ramp to `p=quarantine` then `p=reject` is in
-`docs/email-deliverability.md` §3 and §11.
+This also converts your personal scope into a **Team**, which is what you hand to someone else
+when you graduate.
 
-Verify — **one record type per `dig` query**, or it silently returns misleading results:
+### B2. Buy the domain — *3 min, $8.49*
 
-```bash
-dig +short pitfund.exodiusftc.com      CNAME
-dig +short _dmarc.exodiusftc.com       TXT
-dig +short _dmarc.send.exodiusftc.com  TXT
-curl -sI https://pitfund.exodiusftc.com | head -1   # expect HTTP/2 200
-curl -sI https://exodiusftc.com        | head -1   # team site must still be alive
-```
+**Buy it at Vercel**, not at a registrar: [vercel.com/domains](https://vercel.com/domains/search?q=pitfund.org)
 
----
+Buying it at Vercel means the DNS configures itself and there are no nameservers to move. If you
+buy it elsewhere you inherit a whole class of DNS problems for no benefit.
 
-## §4 — Clerk production instance
+`pitfund.com` is taken. **`pitfund.org` is available at $8.49/yr** and `.org` reads as
+non-profit to corporate CSR departments, which is what you are. Alternatives if you prefer:
+`pitfund.app` ($9.99), `getpitfund.com` / `joinpitfund.com` ($11.25).
 
-**This must happen before the first real coach signs up.** Development-mode accounts
-**cannot be migrated** to production — everyone who signs up beforehand has to sign up again.
-Right now that number is zero, so the cost is zero. It only goes up.
+### B3. Tell me — *I do this part*
 
-Clerk creates production instances **through the dashboard only**; there is no API, so this
-step can never be automated.
+Message me the domain you bought. I will:
+- attach it to the Vercel project
+- point `NEXT_PUBLIC_APP_URL` at it
+- add the Clerk and Resend DNS records once you paste them (B4, B5)
+- set the environment variables and redeploy
 
-1. Clerk dashboard → instance dropdown (top-left, says "Development") → **Create production
-   instance** → **Clone settings from development**.
-2. Application domain: **`pitfund.exodiusftc.com`**.
-3. Clerk's **Domains** page lists ~5 DNS records — hosts like `clerk`, `accounts`, `clkmail`,
-   `clk._domainkey`, `clk2._domainkey`. **Values are unique to your instance — copy them from
-   the dashboard.** Add each at GoDaddy.
-4. Wait for **verified**. Usually under an hour; Clerk warns up to 48.
-5. **Re-set the password policy — it does not clone.** 12+ chars, upper, lower, number. The
-   app's Zod schemas deliberately do not validate passwords; Clerk owns that rule, so skipping
-   this silently downgrades to Clerk's weaker default.
-6. **Register the new instance with Supabase** → Supabase dashboard → Authentication →
-   Third-party auth → add the **production** Clerk instance.
-   **This is the step that goes wrong.** Skip it and every page loads but renders empty,
-   because RLS rejects every row. It looks exactly like a data bug and is a config bug.
-7. **Create the webhook** → endpoint `https://pitfund.exodiusftc.com/api/webhooks/clerk`,
-   events **`user.deleted`** and **`user.updated`**. Copy the new `whsec_…` for §5.
+### B4. Create the Clerk production instance — *15 min + DNS wait*
 
----
+**This is the only step that cannot be automated at all.** Clerk has no API for it, and
+**development accounts cannot be migrated** — anyone who signs up before this must sign up again.
+Right now that number is zero. It only goes up.
 
-## §5 — Vercel environment and redeploy
+*(You already have a Clerk **development** instance. That is what `pk_test_` means. There is
+nothing to "create" there.)*
 
-Four variables. All four, or the app half-switches and breaks.
+1. dashboard.clerk.com → instance dropdown, top-left, says **"Development"** → **Create
+   production instance** → **Clone settings from development**
+2. Application domain: **your new domain**
+3. Clerk's **Domains** page now lists about five DNS records — hosts like `clerk`, `accounts`,
+   `clkmail`, `clk._domainkey`, `clk2._domainkey`. **The values are unique to your instance.**
+   Copy them and paste them to me — I will add them with `vercel dns add`
+4. Wait for **verified**. Usually under an hour; Clerk warns it can take up to 48
+5. **Re-set the password policy — it does NOT clone.** 12+ characters, upper, lower, number. The
+   app deliberately does not validate passwords itself; Clerk owns that rule, so skipping this
+   silently downgrades you to Clerk's weaker default
+6. **Register the new instance with Supabase**: Supabase dashboard → **Authentication →
+   Third-party auth** → add the **production** Clerk instance.
+   **This is the step that goes wrong.** Skip it and every page loads but renders completely
+   empty, because the database rejects every row. It looks exactly like a data bug and is a
+   config bug
+7. Create the webhook: endpoint `https://<your-domain>/api/webhooks/clerk`, events
+   **`user.deleted`** and **`user.updated`**. Copy the `whsec_…` value and send it to me
 
-| Variable | New value |
-|---|---|
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | `pk_live_…` |
-| `CLERK_SECRET_KEY` | `sk_live_…` |
-| `CLERK_WEBHOOK_SIGNING_SECRET` | `whsec_…` from §4.7 |
-| `NEXT_PUBLIC_APP_URL` | `https://pitfund.exodiusftc.com` |
+### B5. Move email to the new domain — *5 min*
 
-```bash
-for v in NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY CLERK_SECRET_KEY \
-         CLERK_WEBHOOK_SIGNING_SECRET NEXT_PUBLIC_APP_URL; do
-  vercel env rm "$v" production --yes && vercel env add "$v" production
-done
-vercel deploy --prod --yes
-```
+resend.com → **Domains → Add Domain** → your new domain. Resend generates three records:
 
-`NEXT_PUBLIC_APP_URL` is load-bearing: **every link in every outgoing email is built from it.**
-Env changes do not take effect until you redeploy, and there is no Git integration — pushing to
-`main` deploys nothing.
+| Host | Type | Purpose |
+|---|---|---|
+| `send` | `TXT` | SPF |
+| `resend._domainkey` | `TXT` | DKIM |
+| `send` | `MX` | bounce feedback |
 
----
+Paste them to me. I will add them and update `RESEND_FROM_EMAIL` to `noreply@<your-domain>`.
 
-## §6 — Clear the production test data
+I will also add a `_dmarc` TXT record — that is the one record Resend does not generate, and its
+absence is the single failing check in the verification suite today.
 
-Production currently holds **only test data**: one `admin+clerk_test@example.com` profile linked
-to a *development* Clerk id that will be meaningless after §4, three "dev testing" sponsors, and
-one orphaned `transactions_ledger` row for **$2,000** with `submission_id = NULL` that
-`void_match_atomic` cannot reverse (a void needs a submission to point at).
+**Rotate the Resend API key while you are in there** (Settings → API Keys). The current key was
+printed into a chat transcript. It's low risk and the transcript is local, but you are creating a
+new domain anyway, so it costs nothing to generate a fresh key and revoke the old one.
 
-**Supabase Free has no automatic backups. Dump first.**
+### B6. Wipe the test data — *5 min*
+
+**Do this last**, once everything else works. It deletes the nine test accounts and their data.
+
+⚠️ **Supabase Free has no backups. Take a dump first.**
 
 ```bash
 /opt/homebrew/opt/libpq/bin/pg_dump "$DATABASE_URL" > ~/pitfund-preLaunch-$(date +%F).sql
 ```
 
-> **If `psql`/`pg_dump` hangs with `timeout expired`, you are probably on a network that blocks
-> outbound port 5432.** This is common on school, corporate and some home ISP networks, and it
-> happened on this project on 2026-08-25. Confirm it in one command — if 443 succeeds and 5432
-> times out against the *same host*, it is the network, not Supabase:
+> **If that hangs with `timeout expired`, your network blocks outbound port 5432.** Confirmed on
+> your current network on 2026-08-26. Check it in one command — if 443 works and 5432 times out
+> against the *same host*, it is the network, not Supabase:
 >
 > ```bash
 > curl -sS --connect-timeout 8 telnet://aws-1-us-east-1.pooler.supabase.com:5432 ; echo "5432 exit=$?"
 > curl -sS --connect-timeout 8 https://aws-1-us-east-1.pooler.supabase.com >/dev/null ; echo "443 exit=$?"
 > ```
 >
-> Exit `28` means timeout. **Workaround: use the Supabase dashboard's SQL editor**, which runs
-> over HTTPS and is unaffected. Everything in this section works there — but the dashboard
-> cannot `pg_dump`, so take the backup from a different network (phone hotspot works) before
-> running the deletes.
+> Exit `28` means blocked. **Use a phone hotspot for the dump.** The deletes below can be pasted
+> into the Supabase dashboard SQL editor instead, which runs over HTTPS — but the dashboard
+> cannot produce a backup, so take the dump from the hotspot first.
+
+Then, in the Supabase SQL editor:
 
 ```sql
 BEGIN;
@@ -211,73 +224,92 @@ DELETE FROM transactions_ledger;
 UPDATE sponsors SET funding_used_cents = 0;
 DELETE FROM sponsors WHERE company_name ILIKE 'dev testing%';
 DELETE FROM notifications;
-DELETE FROM profiles WHERE email LIKE '%clerk_test@example.com';
+DELETE FROM profiles WHERE email LIKE 'anish.yarrakonda456+%';
 SELECT count(*) AS drift_rows FROM detect_capacity_drift();  -- must be 0
 COMMIT;
 ```
 
-`transactions_ledger` is append-only **by design** — a reversal is a compensating negative row,
-never a delete. This is the one legitimate exception: clearing fixtures before launch, not
-reversing a business record. After this, the rule is absolute.
+`transactions_ledger` is **append-only by design** — a reversal is normally a compensating
+negative row, never a delete. Clearing fixtures before launch is the one legitimate exception.
+After this, the rule is absolute.
 
-Then create the real admin — sign up normally at `/signup`, then:
+Also delete the nine test users in the **Clerk dashboard**, or they can still sign in.
+
+Then create the real admin: sign up normally at `/signup`, then in the SQL editor:
 
 ```sql
-UPDATE profiles SET role = 'admin' WHERE email = 'you@exodiusftc.com';
+UPDATE profiles SET role = 'admin' WHERE email = 'the-team-email@example.com';
 ```
 
----
-
-## §7 — Services that are not blocking but should be done
-
-| # | What | Why | Effort |
-|---|---|---|---|
-| 1 | **FIRST API credentials** — register at `frc-events.firstinspires.org`, set `FIRST_API_USERNAME` + `FIRST_API_TOKEN` in Vercel | Neither is set today, so coach verification runs entirely on the **FTCScout fallback**. Both are optional in `lib/env.ts`, so nothing errors — it just quietly uses the less authoritative source | 15 min |
-| 2 | **Resend webhook → `email.complained`** | The handling code is already written and **inert** until Resend actually sends the event. Until then a spam complaint is invisible | 5 min |
-| 3 | **UptimeRobot** on `https://pitfund.exodiusftc.com/api/health` | Free. Tells you the site is down before a sponsor does, and the 5-minute ping keeps the app warm | 5 min |
-| 4 | **Watch Sentry** | Already wired. Someone has to actually look at it | ongoing |
-
----
-
-## §8 — Verification before announcing it to anyone
+### B7. Final verification
 
 ```bash
-npm run typecheck && npm run lint && npm test && npm run build
-node scripts/verify-backlog.mjs     # 17.3 (DMARC) should now pass → 42/42
-curl -s https://pitfund.exodiusftc.com/api/health
+npm run verify:all
 ```
 
 Then by hand, on the real domain:
 
-1. Coach: sign up → verify email → build a team → submit a pitch.
-2. Admin: approve → dispatch. **Confirm the sponsor email arrives and its links point at
-   `pitfund.exodiusftc.com`**, not `vercel.app`.
-3. Sponsor: accept in full. On a second pitch, **counter-offer a smaller amount**.
-4. Confirm both sides get the handshake email with each other's contact details.
-5. Admin: void a match at `/admin/capacity`; confirm the sponsor's capacity returns.
-6. `/admin/capacity` → drift is zero.
-7. Check the login page is served from **`accounts.pitfund.exodiusftc.com`**, not
-   `desired-guppy-89.clerk.accounts.dev`. That is the proof §4 took effect.
-8. Click every sidebar item in all three portals for dead links.
-9. `mail-tester.com` — send one real message from production. **9/10 is the pass bar**; any
-   point lost to SPF, DKIM, DMARC or reverse DNS is a hard fail regardless of total.
+- [ ] `https://<your-domain>` loads
+- [ ] The login page is served from **`accounts.<your-domain>`**, not `…clerk.accounts.dev`. That is the proof B4 worked
+- [ ] Send one pitch end-to-end. **Confirm the email links point at your domain, not `vercel.app`**
+- [ ] `/admin/capacity` reports zero drift
+- [ ] Send one message through [mail-tester.com](https://mail-tester.com) — **9/10 is the pass bar**, and any point lost to SPF, DKIM, DMARC or reverse DNS is a hard fail regardless of the total
 
 ---
 
-## §9 — Ongoing, forever
+# PART C — Keeping it alive
 
-**Monthly (5 minutes):** check Sentry for new errors · check `/admin/capacity` shows zero drift
-· confirm the domain is not drifting toward expiry.
+### Set up once, free
 
-**Yearly:** bump `CURRENT_SEASON` in `lib/site-config.ts` · confirm the domain auto-renewed ·
-confirm the named adult owner is still involved with the team.
+- **UptimeRobot** on `https://<your-domain>/api/health` — tells you the site is down before a
+  sponsor does, and the 5-minute ping keeps the app warm, which removes the landing page's
+  one-off ~2s cold start
+- **FIRST API credentials** at `frc-events.firstinspires.org` → set `FIRST_API_USERNAME` and
+  `FIRST_API_TOKEN`. Without them coach verification silently falls back to FTCScout, a less
+  authoritative source. Nothing errors, which is exactly why it is easy to miss
+- **Resend webhook** → add the `email.complained` event. The handling code exists and is inert
+  until Resend actually sends it, so a spam complaint is currently invisible
 
-**Never disable the 02:00 cron.** `/api/cron/expire-submissions` releases sponsor capacity *and*
-is the **Supabase keepalive** — Supabase pauses free projects after 7 days without database
-traffic. If it stops, the entire site goes down a week later, silently. Vercel Hobby runs only
-**2** scheduled jobs and ignores extras without warning, which is how three jobs sat dead in
-production for months. **A new cron job goes inside `daily-maintenance`, not into
-`vercel.json`.**
+### The three things that will actually kill this
+
+1. **Never disable the 02:00 cron.** `/api/cron/expire-submissions` releases sponsor capacity
+   *and* is the **Supabase keepalive** — Supabase pauses free projects after 7 days without
+   database traffic. If it stops, the whole site goes down a week later, silently.
+2. **The domain expiring.** Turn on auto-renew and keep a valid card on file.
+3. **Everyone losing access** because every account is in one student's name. Vercel Pro makes
+   this a solved problem — transferring team ownership is a documented dashboard flow — but
+   somebody has to actually do it.
+
+### Supabase Free — what you are accepting
+
+Deliberate, and revisitable in one click (Settings → Billing → Upgrade, $25/mo, no migration).
+
+| Limit | What happens |
+|---|---|
+| **No backups** | Data loss is unrecoverable. This is the real reason to upgrade |
+| **500 MB database** | The database goes **read-only** — automatic enforcement, not a warning. Every write starts failing. You are nowhere near this |
+| **7-day idle pause** | Held off by the 02:00 cron. See above |
+
+**Upgrade when the first real sponsorship goes through**, because from that moment losing the
+data is a genuine incident rather than an inconvenience.
+
+### Resend Free — the ceiling to watch
+
+3,000/month, but **100/day**, and the daily cap is the one that bites. Roughly 6 emails per pitch
+across its whole lifecycle, so ~50 approvals in one day is the ceiling. Normal operation is
+nowhere close; a coordinated outreach push could be. At the cap, a send **fails and is not
+retried** — it goes to Sentry and the email is simply lost. Resend Pro is $20/mo and removes the
+daily cap.
+
+### Monthly, 5 minutes
+
+Check Sentry for new errors · confirm `/admin/capacity` shows zero drift · confirm the domain
+is not drifting toward expiry.
+
+### Yearly
+
+Bump `CURRENT_SEASON` in `lib/site-config.ts` · confirm the domain auto-renewed · confirm the
+named adult mentor is still involved.
 
 **If nobody on the team can code, do nothing — that is a legitimate strategy.** A correctly
 configured app that nobody touches runs for years. **Do not accept automated dependency-update
@@ -285,31 +317,27 @@ pull requests** if nobody can evaluate them; merging one can break the build.
 
 ---
 
-## §10 — Deliberately deferred, with the reasoning
+## Deliberately not doing, with reasons
 
-| Item | Decision | Revisit when |
-|---|---|---|
-| **Supabase Pro ($25/mo)** — Free has **no automatic backups**, and we store sponsor funding commitments and an audit log | **Start free.** A weekly `pg_dump` to a private repo is a free substitute | The first real sponsorship goes through and losing the data would be a genuine incident. **This is the first thing worth paying for — ahead of Vercel Pro** |
-| **Vercel Pro ($20 per member/mo)** — Hobby is nominally non-commercial, and this moves money while earning none | **Stay on Hobby.** Two owners is $40/mo = $480/yr, forty times everything else combined | Vercel objects, or the team gets a real budget |
-| **Resend paid ($20/mo)** — free is 3,000/month but **100/day** | Free | A dispatch day approaches 100 emails. **This is the first hard technical ceiling in the stack** |
-| **Terms §12 governing law** — still says jurisdiction "not yet fixed" | Ship as-is. It is honest, blocks no code, and is a fill-in-the-blank once the team knows its legal entity | The team formalises an entity |
-| **Removing unused features** — `appeals.ts` (789 lines), `messages.ts`, sponsor orgs, all built against zero traffic | **Leave them.** Tested code nobody visits costs ~nothing; another destructive migration has real risk. `0111` nearly disabled the capacity check | Never, unless something blocks |
-| **Migrating off Clerk** — the only real vendor lock-in; accounts live in Clerk and password hashes cannot be exported | **Keep Clerk.** The escape hatch is already built: `profiles` is the identity of record and `clerk_user_id` is a thin bridge | Clerk changes pricing. Swapping means one column and three SQL helpers, not a rewrite |
+| Item | Decision |
+|---|---|
+| **Removing unused features** — `appeals.ts` (789 lines), messaging | **Leave them.** Tested code nobody visits costs ~nothing; another destructive migration has real risk. `0111` nearly disabled the capacity check |
+| **Making the landing page static** | Would cut a one-time 2.3s cold start, but requires moving auth redirects into middleware — the most breakage-prone area of this codebase. UptimeRobot solves it for free. Revisit after launch |
+| **Terms governing law** — still says jurisdiction "not yet fixed" | Ship as-is. Honest, blocks nothing, fill-in-the-blank once the team has a legal entity |
+| **Migrating off Clerk** — the only real vendor lock-in | **Keep Clerk.** The escape hatch is built: `profiles` is the identity of record and `clerk_user_id` is a thin bridge |
 
 ---
 
 ## The honest summary
 
 The bottleneck is not the software and never was. Every pitch is read by a human admin before
-dispatch — that is a core mandate, not an accident — so **the moderation queue is the real
-constraint at scale**, and no infrastructure fixes it. Adding an admin is one `UPDATE`.
+dispatch — a core mandate, not an accident — so **the moderation queue is the real constraint at
+scale**, and no amount of infrastructure fixes it. Adding another admin is one `UPDATE`.
 
-What can actually kill this project, in order:
+What is verified as of 2026-08-26: typecheck clean, 591/591 unit tests passing, lint 0 errors,
+production build green, `knip` reporting no dead files or unused dependencies, all production
+deployments `Ready`, live health `{"ok":true,"service":"up","db":"ok"}`.
 
-1. **The laptop dying before §0 is done.**
-2. The domain expiring — it takes down the team website too.
-3. Everyone losing access because accounts were in one student's name.
-4. The 02:00 cron being disabled, and Supabase pausing a week later.
-5. A dead payment card.
-
-None of those require a programmer to prevent.
+What is **not** verified, and cannot be until purchase day: the Clerk production instance, and
+anything that depends on a domain that does not exist yet. Part B is written to be followed
+mechanically for exactly that reason.

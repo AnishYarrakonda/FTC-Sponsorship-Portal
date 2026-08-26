@@ -80,19 +80,18 @@ next-env.d.ts
 # conformance statement, and a statement with no auditable record behind it is
 # a claim, not evidence. It lists accessibility gaps, not security ones.
 !/docs/accessibility-audit.md
-# The handoff set. These are the succession plan: what to buy, how to launch,
-# how to operate, and how to hand the project to whoever comes next. They were
-# written 2026-08-25 and sat UNTRACKED for a full session because `/docs/*`
-# swallowed them and `git add -A` reports success while skipping ignored paths —
-# exactly the "status is lying to you" failure this block warns about.
+# The handoff set. LAUNCH-CHECKLIST.md is the single authoritative launch doc
+# (GO-LIVE-CUTOVER.md and PURCHASE-CHECKLIST.md were folded into it and deleted
+# on 2026-08-26 — three docs that could disagree with each other was the problem).
+# These sat UNTRACKED for a full session because `/docs/*` swallowed them and
+# `git add -A` reports success while skipping ignored paths — exactly the
+# "status is lying to you" failure this block warns about.
 #
 # They contain procedure, public DNS values and env var NAMES. No secrets, no
 # vulnerability disclosure. docs/verification-backlog.md is deliberately NOT
 # here: it enumerates past P0s and belongs on the ignored side of the line.
 !/docs/LAUNCH-CHECKLIST.md
-!/docs/GO-LIVE-CUTOVER.md
 !/docs/RUNBOOK.md
-!/docs/PURCHASE-CHECKLIST.md
 *QA-REPORT*.md
 *QA-FINDINGS*.md
 *REMEDIATION*.md

@@ -29,16 +29,17 @@ The app never touches money. It is an introduction service with a moderation que
 | Logins | **Clerk** | Nobody can sign in |
 | Email | **Resend** | Pitches stop reaching sponsors; nobody is told why |
 | Error alerts | **Sentry** | You stop finding out about problems |
-| The domain | **GoDaddy** (`exodiusftc.com`) | Everything — this app *and* the team's public website |
+| The domain | **Vercel** (the app's own domain) | The app becomes unreachable |
 
-The app runs at **`pitfund.exodiusftc.com`**. The team's public site runs on **Netlify** at the
-apex `exodiusftc.com`, from the same domain and the same GoDaddy DNS zone. **Anything that
-affects the domain affects both.** In particular, never move the domain's nameservers to Vercel
-or Netlify — add individual records only.
+**The app has its own domain, bought through Vercel**, so its DNS is self-contained and there
+are no nameservers to move. `exodiusftc.com` is the team's **public website** (Netlify) and is
+unrelated to this app — changes here cannot affect it, and vice versa. That separation is
+deliberate: an earlier plan put the app on a subdomain of the team site, which coupled the two
+for no benefit.
 
-Credentials are in the team password vault. If they are not, fix that today — see
-`docs/PURCHASE-CHECKLIST.md`. If the app has not been launched yet, the complete remaining list
-is `docs/LAUNCH-CHECKLIST.md`, and the DNS/Clerk sequence is `docs/GO-LIVE-CUTOVER.md`.
+Credentials belong in the team password vault. If they are not there, fix that today.
+**`docs/LAUNCH-CHECKLIST.md` is the single launch document** — what to buy, how to cut over, and
+how to keep it running.
 
 ---
 
@@ -185,8 +186,8 @@ touches keeps running for years. The things that will actually kill it are, in o
 3. The 02:00 cron being disabled or its secret rotated, and Supabase pausing a week later.
 4. A dead payment card.
 
-None of those require a programmer to prevent. All four are covered in
-`docs/PURCHASE-CHECKLIST.md`.
+None of those require a programmer to prevent. All four are covered in Part C of
+`docs/LAUNCH-CHECKLIST.md`.
 
 **Do not accept automated dependency-update pull requests** if nobody can evaluate them.
 Merging one can break the build. The version running today will keep serving indefinitely.
